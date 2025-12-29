@@ -307,48 +307,14 @@ export function renderChat() {
   }
 
   function handleWebSocketMessage(data) {
-    if (data.type === 'agent_message_start') {
-      isStreaming = true;
-      currentStreamMessageId = data.messageId || `msg-${Date.now()}`;
+    // Handle ACP JSON-RPC format
+    if (data.jsonrpc === '2.0') {
+      handleAcpMessage(data);
+      return;
+    }
 
-      store.addMessage(session.id, {
-        id: currentStreamMessageId,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date().toISOString()
-      });
-      renderMessages();
-
-    } else if (data.type === 'agent_message_delta') {
-      const messages = store.get('messages')[session.id] || [];
-      const msgIndex = messages.findIndex(m => m.id === currentStreamMessageId);
-
-      if (msgIndex >= 0) {
-        store.updateMessage(session.id, currentStreamMessageId, {
-          content: messages[msgIndex].content + (data.delta || '')
-        });
-        renderMessages();
-      }
-
-    } else if (data.type === 'agent_message_end') {
-      isStreaming = false;
-      currentStreamMessageId = null;
-      renderMessages();
-
-    } else if (data.type === 'tool_call') {
-      store.addEvent({
-        timestamp: Date.now(),
-        type: 'tool_call',
-        data
-      });
-      renderEvents();
-
-      // If approvals required, show in approvals tab
-      if (data.requiresApproval) {
-        renderApprovals();
-      }
-
-    } else if (data.type === 'error') {
+    // Legacy format support (if any)
+    if (data.type === 'error') {
       showToast('Error', data.message || 'Unknown error', 'error');
       store.addEvent({
         timestamp: Date.now(),
@@ -357,6 +323,173 @@ export function renderChat() {
       });
       renderEvents();
     }
+  }
+
+  // Handle ACP protocol messages
+  function handleAcpMessage(msg) {
+    const method = msg.method;
+    const params = msg.params || {};
+
+    // Log all ACP messages for debugging
+    store.addEvent({
+      timestamp: Date.now(),
+      type: method || 'response',
+      data: msg
+    });
+    renderEvents();
+
+    if (method === 'session/update') {
+      handleSessionUpdate(params);
+    } else if (method === 'session/request_permission') {
+      handlePermissionRequest(params);
+    } else if (method === 'session/exit') {
+      handleSessionExit(params);
+    } else if (method === 'session/error') {
+      showToast('Error', params.message || 'Unknown error', 'error');
+    } else if (msg.result) {
+      // Response to a request (e.g., session/prompt completed)
+      if (msg.result.stopReason) {
+        isStreaming = false;
+        currentStreamMessageId = null;
+        renderMessages();
+      }
+    } else if (msg.error) {
+      showToast('Error', msg.error.message || 'Unknown error', 'error');
+    }
+  }
+
+  // Handle session/update notifications from ACP
+  function handleSessionUpdate(params) {
+    const update = params.update;
+    if (!update) return;
+
+    const updateType = update.sessionUpdate;
+
+    switch (updateType) {
+      case 'agent_message_chunk': {
+        // Start streaming if not already
+        if (!isStreaming) {
+          isStreaming = true;
+          currentStreamMessageId = `msg-${Date.now()}`;
+          store.addMessage(session.id, {
+            id: currentStreamMessageId,
+            role: 'assistant',
+            content: '',
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        // Extract text from content block
+        const content = update.content;
+        if (content && content.type === 'text' && content.text) {
+          const messages = store.get('messages')[session.id] || [];
+          const currentMsg = messages.find(m => m.id === currentStreamMessageId);
+          if (currentMsg) {
+            store.updateMessage(session.id, currentStreamMessageId, {
+              content: currentMsg.content + content.text
+            });
+          }
+        }
+        renderMessages();
+        break;
+      }
+
+      case 'agent_thought_chunk': {
+        // Could display thoughts differently, for now treat like message
+        const content = update.content;
+        if (content && content.type === 'text' && content.text) {
+          // Optionally log thoughts
+          console.log('Agent thought:', content.text);
+        }
+        break;
+      }
+
+      case 'tool_call': {
+        // New tool call started
+        store.addEvent({
+          timestamp: Date.now(),
+          type: 'tool_call',
+          data: {
+            toolCallId: update.toolCallId,
+            title: update.title,
+            kind: update.kind,
+            status: update.status
+          }
+        });
+        renderEvents();
+        break;
+      }
+
+      case 'tool_call_update': {
+        // Tool call status update
+        store.addEvent({
+          timestamp: Date.now(),
+          type: 'tool_call_update',
+          data: {
+            toolCallId: update.toolCallId,
+            title: update.title,
+            kind: update.kind,
+            status: update.status,
+            content: update.content
+          }
+        });
+        renderEvents();
+        break;
+      }
+
+      case 'plan': {
+        // Agent planning
+        store.addEvent({
+          timestamp: Date.now(),
+          type: 'plan',
+          data: update.entries
+        });
+        renderEvents();
+        break;
+      }
+
+      case 'current_mode_update': {
+        // Mode changed
+        console.log('Mode changed to:', update.currentModeId);
+        break;
+      }
+
+      default:
+        console.log('Unknown session update type:', updateType, update);
+    }
+  }
+
+  // Handle permission requests from agent
+  function handlePermissionRequest(params) {
+    const { toolCallId, toolCall, options } = params;
+
+    // Store pending approval
+    store.addEvent({
+      timestamp: Date.now(),
+      type: 'permission_request',
+      data: {
+        toolCallId,
+        toolCall,
+        options,
+        pending: true
+      }
+    });
+
+    // Show in approvals tab
+    renderApprovals();
+
+    // Switch to approvals tab
+    switchTab('approvals');
+    inspector.setAttribute('data-open', 'true');
+  }
+
+  // Handle session exit
+  function handleSessionExit(params) {
+    isStreaming = false;
+    currentStreamMessageId = null;
+    showToast('Session Ended', `Exit code: ${params.code}`, 'info');
+    connectionStatus.textContent = 'Disconnected';
+    connectionStatus.className = 'chip chip--sm chip--danger';
   }
 
   // Session list
@@ -435,53 +568,95 @@ export function renderChat() {
     renderEvents();
   });
 
-  // Approvals rendering
+  // Approvals rendering (ACP permission_request format)
   function renderApprovals() {
     const approvalsList = container.querySelector('#approvals-list');
     const events = store.get('inspector').events;
-    const pendingApprovals = events.filter(e => e.type === 'tool_call' && e.data.requiresApproval && !e.data.approved);
+    // Filter for pending ACP permission requests
+    const pendingApprovals = events.filter(e =>
+      e.type === 'permission_request' && e.data.pending
+    );
 
     if (pendingApprovals.length === 0) {
       approvalsList.innerHTML = '<p class="meta">No pending approvals</p>';
       return;
     }
 
-    approvalsList.innerHTML = pendingApprovals.map(approval => `
-      <div class="approval-card" data-event-id="${approval.timestamp}">
-        <div class="kicker mb-2">${approval.data.toolName || 'Tool Call'}</div>
-        <pre class="mono mb-4" style="font-size: 12px;">${JSON.stringify(approval.data.params, null, 2)}</pre>
-        <div class="cluster">
-          <button class="btn btn--primary btn--sm" data-action="approve">Approve</button>
-          <button class="btn btn--secondary btn--sm" data-action="deny">Deny</button>
-        </div>
-      </div>
-    `).join('');
+    approvalsList.innerHTML = pendingApprovals.map(approval => {
+      const { toolCallId, toolCall, options } = approval.data;
+      const title = toolCall?.title || 'Tool Call';
 
+      // Render options as buttons
+      const optionButtons = (options || []).map(opt => {
+        const isAllow = opt.kind?.includes('allow');
+        const btnClass = isAllow ? 'btn--primary' : 'btn--secondary';
+        return `<button class="btn ${btnClass} btn--sm" data-action="select-option" data-option-id="${opt.optionId}">${opt.name}</button>`;
+      }).join('');
+
+      return `
+        <div class="approval-card" data-tool-call-id="${toolCallId}">
+          <div class="kicker mb-2">${title}</div>
+          ${toolCall?.rawInput ? `<pre class="mono mb-4" style="font-size: 12px;">${JSON.stringify(toolCall.rawInput, null, 2)}</pre>` : ''}
+          <div class="cluster">
+            ${optionButtons || `
+              <button class="btn btn--primary btn--sm" data-action="approve">Approve</button>
+              <button class="btn btn--secondary btn--sm" data-action="deny">Deny</button>
+            `}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Handle option selection
+    approvalsList.querySelectorAll('[data-action="select-option"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const card = btn.closest('.approval-card');
+        const toolCallId = card.dataset.toolCallId;
+        const optionId = btn.dataset.optionId;
+        handlePermissionResponse(toolCallId, optionId);
+      });
+    });
+
+    // Fallback approve/deny buttons
     approvalsList.querySelectorAll('[data-action="approve"]').forEach(btn => {
       btn.addEventListener('click', () => {
         const card = btn.closest('.approval-card');
-        const eventId = card.dataset.eventId;
-        handleApproval(eventId, true);
+        const toolCallId = card.dataset.toolCallId;
+        // Find allow_once option or use first allow option
+        const events = store.get('inspector').events;
+        const permEvent = events.find(e => e.data.toolCallId === toolCallId);
+        const allowOption = permEvent?.data.options?.find(o => o.kind === 'allow_once')
+          || permEvent?.data.options?.find(o => o.kind?.includes('allow'));
+        handlePermissionResponse(toolCallId, allowOption?.optionId || 'allow');
       });
     });
 
     approvalsList.querySelectorAll('[data-action="deny"]').forEach(btn => {
       btn.addEventListener('click', () => {
         const card = btn.closest('.approval-card');
-        const eventId = card.dataset.eventId;
-        handleApproval(eventId, false);
+        const toolCallId = card.dataset.toolCallId;
+        handlePermissionResponse(toolCallId, null); // null = cancel
       });
     });
   }
 
-  function handleApproval(eventId, approved) {
+  function handlePermissionResponse(toolCallId, optionId) {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
-        type: 'approval_response',
-        eventId,
-        approved
+        type: 'permission_response',
+        toolCallId,
+        optionId // null means cancel/deny
       }));
-      showToast('Sent', approved ? 'Approval granted' : 'Approval denied', 'success');
+
+      // Mark as handled in store
+      const events = store.get('inspector').events;
+      const eventIdx = events.findIndex(e => e.data.toolCallId === toolCallId);
+      if (eventIdx >= 0) {
+        events[eventIdx].data.pending = false;
+        events[eventIdx].data.response = optionId ? 'approved' : 'denied';
+      }
+
+      showToast('Sent', optionId ? 'Permission granted' : 'Permission denied', 'success');
       renderApprovals();
     }
   }
