@@ -1,20 +1,36 @@
 # Aperture
 
-**Production-ready WebSocket + HTTP gateway for @zed-industries/claude-code-acp**
+**Production-ready WebSocket + HTTP gateway for ACP agents (Claude Code + Codex)**
 
-Aperture exposes the stdio-based ACP (Agent Communication Protocol) agent from `@zed-industries/claude-code-acp` over WebSocket and HTTP (Server-Sent Events), making it suitable for running on a VPS and accessible from web clients, mobile apps, and other remote consumers.
+Aperture exposes stdio-based ACP (Agent Communication Protocol) agents over WebSocket and HTTP (Server-Sent Events), making them suitable for running on a VPS and accessible from web clients, mobile apps, and other remote consumers.
+
+## Supported Agents
+
+- **Claude Code** (`@zed-industries/claude-code-acp`) - Claude AI assistant for coding
+- **Codex** (`@zed-industries/codex-acp`) - OpenAI Codex for code generation
 
 ## What is this?
 
-- **Gateway**: Aperture is a TypeScript/Node.js server that spawns `claude-code-acp` child processes and bridges stdio JSON-RPC to WebSocket/HTTP
-- **Production-ready**: Includes authentication, rate limiting, session management, idle timeouts, and comprehensive error handling
-- **Docker-first**: Designed to run in containers with persistent storage for Claude Code authentication
+- **Multi-Agent Gateway**: TypeScript/Node.js server that spawns ACP agent child processes (claude-code-acp, codex-acp) and bridges stdio JSON-RPC to WebSocket/HTTP
+- **Zed-like Auth**: Explicit per-session authentication - no accidental API billing from ambient environment variables
+- **Production-ready**: Bearer token auth, rate limiting, session management, idle timeouts, encrypted credential storage
+- **Docker-first**: Designed for VPS deployment with persistent volumes for agent state
 
 ## What this is NOT
 
-- This is not a replacement for Claude Code CLI or claude-code-acp
-- This is not affiliated with Anthropic (it's a community tool)
-- This does not bypass Claude's authentication or terms of service
+- Not a replacement for Claude Code CLI, claude-code-acp, or codex-acp
+- Not affiliated with Anthropic or OpenAI
+- Does not bypass authentication or terms of service
+
+## Why This Architecture?
+
+**Problem**: Long-running services with ambient `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` environment variables can accidentally bill API usage when you meant to use a subscription, or mix credentials across sessions.
+
+**Solution**: Aperture follows Zed's external agent semantics:
+- **No auto-forwarding** of provider API keys from gateway environment
+- **Explicit per-session auth** - you choose API billing or subscription for each session
+- **Credential isolation** - stored credentials are encrypted and session-scoped
+- **Hosted mode guardrails** - prevents unsupported auth methods (e.g., ChatGPT login on remote VPS)
 
 ## Architecture
 
@@ -24,59 +40,68 @@ Aperture exposes the stdio-based ACP (Agent Communication Protocol) agent from `
 └──────┬──────┘
        │ HTTP/WebSocket + Bearer auth
        ▼
-┌─────────────────────────────────────────┐
-│          Aperture Gateway               │
-│  ┌─────────────────────────────────┐   │
-│  │     Fastify HTTP Server          │   │
-│  │  - Authentication middleware      │   │
-│  │  - Rate limiting                  │   │
-│  │  - Session management             │   │
-│  └──────────┬──────────────────────┘   │
-│             │                            │
-│  ┌──────────▼──────────────────────┐   │
-│  │   Session Manager                │   │
-│  │  - Spawn/terminate sessions       │   │
-│  │  - Max sessions limit             │   │
-│  │  - Idle timeout tracking          │   │
-│  └──────────┬──────────────────────┘   │
-│             │                            │
-│  ┌──────────▼──────────────────────┐   │
-│  │   Session (1 per client)         │   │
-│  │  ┌────────────────────────────┐ │   │
-│  │  │ claude-code-acp (child)    │ │   │
-│  │  │  - stdio JSON-RPC           │ │   │
-│  │  │  - ACP protocol             │ │   │
-│  │  └────────────────────────────┘ │   │
-│  │  - stdin write mutex             │   │
-│  │  - stdout line reader            │   │
-│  │  - pending request map           │   │
-│  └──────────────────────────────────┘   │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                 Aperture Gateway                         │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │  Fastify HTTP Server                            │    │
+│  │  - Bearer token auth                            │    │
+│  │  - Rate limiting                                │    │
+│  │  - Credential store (AES-256-GCM encrypted)     │    │
+│  └────────────────┬────────────────────────────────┘    │
+│                   │                                      │
+│  ┌────────────────▼──────────────────────────────┐      │
+│  │  Session Manager                               │      │
+│  │  - Agent backend selection (Claude | Codex)    │      │
+│  │  - Auth validation (hosted mode enforcement)   │      │
+│  │  - Credential resolution (inline | stored)     │      │
+│  └────────────────┬──────────────────────────────┘      │
+│                   │                                      │
+│  ┌────────────────▼──────────────────────────────┐      │
+│  │  Session (per client)                          │      │
+│  │  ┌──────────────────────────────────────┐     │      │
+│  │  │  Agent Backend (spawns child)        │     │      │
+│  │  │  - ClaudeBackend → claude-code-acp   │     │      │
+│  │  │  - CodexBackend  → codex-acp         │     │      │
+│  │  └──────────────────────────────────────┘     │      │
+│  │  - stdio JSON-RPC framing (newline-delimited) │      │
+│  │  - stdin write mutex (no interleaving)        │      │
+│  │  - stdout line reader                         │      │
+│  │  - pending request map (with timeout)         │      │
+│  └────────────────────────────────────────────────┘      │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ## Features
 
-- **WebSocket transport**: Bidirectional JSON-RPC communication
-- **HTTP transport**:
-  - REST API for session management
-  - Server-Sent Events (SSE) for streaming responses
-  - Request/response via POST with timeout
-- **Authentication**: Bearer token required for all endpoints (except health checks)
-- **Session management**:
-  - Create/delete sessions
-  - Max concurrent sessions limit
-  - Idle session timeout
-- **Security**:
-  - Max message size enforcement
-  - Rate limiting
-  - No secrets in logs
-- **Claude Code CLI integration**:
-  - Auto-detection of installed CLI
-  - CLAUDE_CODE_EXECUTABLE override support
-  - Vendored CLI fallback (as used by Zed)
-- **Authentication modes**:
-  - API key mode (ANTHROPIC_API_KEY)
-  - Subscription mode (Claude Pro/Max via ~/.claude)
+### Multi-Agent Support
+- **Claude Code**: Full support for interactive (subscription) and API key modes
+- **Codex**: API key mode (hosted mode enforces this; ChatGPT login doesn't work remotely)
+- Agent selection via `agent` parameter in session creation
+
+### Authentication Modes (Per-Session)
+- **Interactive**: Use persisted credentials from `~/.claude` or `~/.codex` (subscription)
+- **API Key**: Explicit API billing mode with key from:
+  - `inline`: Provided in request body
+  - `stored`: Retrieved from encrypted credential store
+  - `none`: No API key (interactive mode)
+
+### Security
+- **No auto-forwarding**: `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in gateway environment are **IGNORED**
+- **Encrypted credential storage**: AES-256-GCM with scrypt key derivation
+- **Environment variable whitelist**: Session `env` validated; `*_API_KEY` rejected unless `auth.mode=api_key`
+- **Bearer token auth**: Required for all endpoints (except health checks)
+- **Rate limiting**: Configurable per-window limits
+- **Hosted mode**: Enforces API key auth for Codex (ChatGPT login unsupported remotely)
+
+### Transports
+- **WebSocket**: Bidirectional JSON-RPC
+- **HTTP POST**: Send request, await response with timeout
+- **Server-Sent Events (SSE)**: Stream all agent messages
+
+### Operations
+- Session lifecycle: create, status, delete, list
+- Credential management: store, list, delete (encrypted)
+- Health/readiness checks
 
 ## Quick Start
 
@@ -89,151 +114,289 @@ Aperture exposes the stdio-based ACP (Agent Communication Protocol) agent from `
    cp .env.example .env
    ```
 
-2. **Edit `.env`** and set your required token:
+2. **Edit `.env`**:
    ```bash
+   # Required
    APERTURE_API_TOKEN=your-secret-token-here
+
+   # Hosted mode (default: true, enforces API keys for Codex)
+   HOSTED_MODE=true
+
+   # Enable stored credentials (optional, 32+ chars)
+   CREDENTIALS_MASTER_KEY=your-very-long-random-master-key-here
    ```
 
-3. **Choose authentication mode**:
-
-   **Option A: API Key Mode (API billing)**
-   ```bash
-   # Add to .env:
-   ANTHROPIC_API_KEY=sk-ant-...
-   ```
-
-   **Option B: Subscription Mode (Claude Pro/Max)**
-   ```bash
-   # Leave ANTHROPIC_API_KEY unset in .env
-   # After starting, you'll need to authenticate once (see below)
-   ```
-
-4. **Start the gateway**:
+3. **Start the gateway**:
    ```bash
    docker-compose up -d
    ```
 
-5. **If using subscription mode, authenticate** (one-time):
-   ```bash
-   docker exec -it aperture-gateway bash
-   # Inside container:
-   claude
-   # Then use /login command and follow prompts
-   # Exit when done (Ctrl+D or /exit)
-   ```
-
-6. **Verify it's running**:
+4. **Verify**:
    ```bash
    curl http://localhost:8080/healthz
    # {"status":"ok"}
-
-   curl http://localhost:8080/readyz
-   # {"status":"ready","claudePath":"/usr/local/bin/claude"}
    ```
 
-### Local Development
+### Session Examples
+
+#### Claude Code - Interactive (Subscription)
+
+Uses your Claude Pro/Max subscription via persisted `~/.claude` credentials.
+
+**Prerequisites**: One-time login (if not already done):
+```bash
+docker exec -it aperture-gateway bash
+claude
+# Inside Claude CLI: /login
+# Follow browser OAuth, then /exit
+```
+
+**Create session**:
+```bash
+curl -X POST http://localhost:8080/v1/sessions \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "claude_code",
+    "auth": {
+      "mode": "interactive",
+      "apiKeyRef": "none"
+    }
+  }'
+```
+
+**Response**:
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "agent": "claude_code",
+  "status": {
+    "id": "550e8400-...",
+    "agent": "claude_code",
+    "authMode": "interactive",
+    "running": true,
+    "pendingRequests": 0,
+    "lastActivityTime": 1704067200000,
+    "idleMs": 0
+  }
+}
+```
+
+#### Claude Code - API Key (Inline)
+
+Uses API billing with key provided in request.
 
 ```bash
-npm install
-npm install -g @zed-industries/claude-code-acp
+curl -X POST http://localhost:8080/v1/sessions \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "claude_code",
+    "auth": {
+      "mode": "api_key",
+      "providerKey": "anthropic",
+      "apiKeyRef": "inline",
+      "apiKey": "sk-ant-your-api-key-here"
+    }
+  }'
+```
 
-# Set environment
-cp .env.example .env
-# Edit .env with your APERTURE_API_TOKEN
+#### Codex - API Key (Stored Credential)
 
-# Run in dev mode
-npm run dev
+First, store the credential:
+```bash
+curl -X POST http://localhost:8080/v1/credentials \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "openai",
+    "label": "Production OpenAI Key",
+    "apiKey": "sk-your-openai-key-here"
+  }'
+```
 
-# Or build and run
-npm run build
-npm start
+Response:
+```json
+{
+  "id": "abc123def456",
+  "provider": "openai",
+  "label": "Production OpenAI Key",
+  "createdAt": 1704067200000
+}
+```
+
+Then create Codex session:
+```bash
+curl -X POST http://localhost:8080/v1/sessions \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "codex",
+    "auth": {
+      "mode": "api_key",
+      "providerKey": "openai",
+      "apiKeyRef": "stored",
+      "storedCredentialId": "abc123def456"
+    }
+  }'
+```
+
+#### Codex - Interactive (Non-Hosted Mode Only)
+
+⚠️ **Warning**: Codex interactive mode (ChatGPT login) does not work for remote projects. Only use this locally.
+
+```bash
+# Requires HOSTED_MODE=false in .env
+curl -X POST http://localhost:8080/v1/sessions \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "codex",
+    "auth": {
+      "mode": "interactive",
+      "apiKeyRef": "none"
+    }
+  }'
+```
+
+If `HOSTED_MODE=true` (default), this returns:
+```json
+{
+  "error": "Failed to create session",
+  "message": "Codex interactive mode (ChatGPT login) is not supported in hosted environments. Please use auth.mode=\"api_key\" with an OpenAI API key."
+}
 ```
 
 ## API Reference
 
-All endpoints (except `/healthz` and `/readyz`) require authentication:
-
-```
-Authorization: Bearer <your-token>
-```
-
 ### Health & Readiness
 
 #### GET /healthz
-
 Always returns 200 OK.
 
 ```bash
 curl http://localhost:8080/healthz
 ```
 
-Response:
-```json
-{"status":"ok"}
-```
-
 #### GET /readyz
-
-Verifies that the gateway can spawn child processes and locate Claude Code executable.
+Verifies runtime, child spawn capability, and agent availability.
 
 ```bash
 curl http://localhost:8080/readyz
 ```
 
-Response (ready):
+Response:
 ```json
 {
-  "status":"ready",
-  "claudePath":"/usr/local/bin/claude"
+  "status": "ready",
+  "claudePath": "/usr/local/bin/claude"
 }
 ```
 
-Response (not ready):
+### Credential Management
+
+#### POST /v1/credentials
+Store an encrypted credential.
+
+**Request**:
 ```json
 {
-  "status":"not ready",
-  "errors":["claude-code-acp not found in PATH"]
+  "provider": "anthropic" | "openai",
+  "label": "My Production Key",
+  "apiKey": "sk-ant-..."
 }
 ```
+
+**Response (201 Created)**:
+```json
+{
+  "id": "abc123...",
+  "provider": "anthropic",
+  "label": "My Production Key",
+  "createdAt": 1704067200000
+}
+```
+
+Note: API key is NOT returned.
+
+#### GET /v1/credentials
+List all stored credentials (without API keys).
+
+```bash
+curl http://localhost:8080/v1/credentials \
+  -H "Authorization: Bearer your-token"
+```
+
+**Response**:
+```json
+{
+  "credentials": [
+    {
+      "id": "abc123",
+      "provider": "anthropic",
+      "label": "Production Key",
+      "createdAt": 1704067200000
+    }
+  ],
+  "total": 1
+}
+```
+
+#### DELETE /v1/credentials/:id
+Delete a stored credential.
+
+```bash
+curl -X DELETE http://localhost:8080/v1/credentials/abc123 \
+  -H "Authorization: Bearer your-token"
+```
+
+**Response (204 No Content)**
 
 ### Session Management
 
 #### POST /v1/sessions
+Create a new agent session.
 
-Creates a new session (spawns a `claude-code-acp` child process).
-
-```bash
-curl -X POST http://localhost:8080/v1/sessions \
-  -H "Authorization: Bearer your-token" \
-  -H "Content-Type: application/json" \
-  -d '{}'
+**Request Body**:
+```typescript
+{
+  agent?: "claude_code" | "codex",  // default: "claude_code"
+  auth?: {
+    mode: "interactive" | "api_key",
+    providerKey?: "anthropic" | "openai",  // auto-derived from agent
+    apiKeyRef?: "inline" | "stored" | "none",
+    apiKey?: string,  // only when apiKeyRef="inline"
+    storedCredentialId?: string  // only when apiKeyRef="stored"
+  },
+  env?: Record<string, string>  // whitelisted env vars (NO *_API_KEY unless auth.mode=api_key)
+}
 ```
 
-Optional: Override API key per session:
-```bash
-curl -X POST http://localhost:8080/v1/sessions \
-  -H "Authorization: Bearer your-token" \
-  -H "Content-Type: application/json" \
-  -d '{"anthropicApiKey":"sk-ant-..."}'
-```
+**Defaults**:
+- `agent`: `"claude_code"`
+- `auth.mode`: `"interactive"`
+- `auth.apiKeyRef`: `"none"`
+- `auth.providerKey`: auto-derived (`"anthropic"` for Claude, `"openai"` for Codex)
 
-Response (201 Created):
+**Response (201 Created)**:
 ```json
 {
-  "id":"550e8400-e29b-41d4-a716-446655440000",
-  "status":{
-    "id":"550e8400-e29b-41d4-a716-446655440000",
-    "running":true,
-    "pendingRequests":0,
-    "lastActivityTime":1704067200000,
-    "idleMs":0
+  "id": "550e8400-...",
+  "agent": "claude_code",
+  "status": {
+    "id": "550e8400-...",
+    "agent": "claude_code",
+    "authMode": "interactive",
+    "running": true,
+    "pendingRequests": 0,
+    "lastActivityTime": 1704067200000,
+    "idleMs": 0
   }
 }
 ```
 
 #### GET /v1/sessions/:id
-
-Gets session status.
+Get session status.
 
 ```bash
 curl http://localhost:8080/v1/sessions/<session-id> \
@@ -241,8 +404,7 @@ curl http://localhost:8080/v1/sessions/<session-id> \
 ```
 
 #### DELETE /v1/sessions/:id
-
-Terminates a session.
+Terminate a session.
 
 ```bash
 curl -X DELETE http://localhost:8080/v1/sessions/<session-id> \
@@ -250,8 +412,7 @@ curl -X DELETE http://localhost:8080/v1/sessions/<session-id> \
 ```
 
 #### GET /v1/sessions
-
-Lists all active sessions.
+List all active sessions.
 
 ```bash
 curl http://localhost:8080/v1/sessions \
@@ -261,77 +422,57 @@ curl http://localhost:8080/v1/sessions \
 ### JSON-RPC Communication
 
 #### POST /v1/sessions/:id/rpc
+Send a JSON-RPC message.
 
-Sends a JSON-RPC message to the session.
+- If message has `id` (request): waits for response, returns it
+- If no `id` (notification): returns 202 Accepted immediately
 
-- If the message has an `id` (request), waits for response and returns it
-- If no `id` (notification), returns 202 Accepted immediately
-
-**Request example** (with id):
-```bash
-curl -X POST http://localhost:8080/v1/sessions/<session-id>/rpc \
-  -H "Authorization: Bearer your-token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": {
-      "jsonrpc":"2.0",
-      "method":"tools/list",
-      "id":1
-    }
-  }'
-```
-
-Response (200 OK):
+**Request**:
 ```json
 {
-  "jsonrpc":"2.0",
-  "result":{"tools":[...]},
-  "id":1
+  "message": {
+    "jsonrpc": "2.0",
+    "method": "tools/list",
+    "id": 1
+  }
 }
 ```
 
-**Notification example** (no id):
-```bash
-curl -X POST http://localhost:8080/v1/sessions/<session-id>/rpc \
-  -H "Authorization: Bearer your-token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": {
-      "jsonrpc":"2.0",
-      "method":"progress/notify",
-      "params":{"status":"working"}
-    }
-  }'
+**Response (200 OK)** for requests:
+```json
+{
+  "jsonrpc": "2.0",
+  "result": { "tools": [...] },
+  "id": 1
+}
 ```
 
-Response (202 Accepted):
+**Response (202 Accepted)** for notifications:
 ```json
-{"status":"accepted"}
+{
+  "status": "accepted"
+}
 ```
 
 #### GET /v1/sessions/:id/events
-
-Server-Sent Events (SSE) stream of all messages from the session.
+Server-Sent Events stream of all agent messages.
 
 ```bash
 curl -N http://localhost:8080/v1/sessions/<session-id>/events \
   -H "Authorization: Bearer your-token"
 ```
 
-Output:
+**Output**:
 ```
 data: {"type":"connected"}
 
-data: {"jsonrpc":"2.0","method":"progress/notify","params":{...}}
+data: {"jsonrpc":"2.0","method":"progress","params":{...}}
 
 data: {"jsonrpc":"2.0","result":{...},"id":1}
-
-data: {"type":"exit","code":0,"signal":null}
 ```
 
 #### WebSocket /v1/sessions/:id/ws
-
-Bidirectional WebSocket connection for real-time JSON-RPC.
+Bidirectional WebSocket for real-time JSON-RPC.
 
 **Using `websocat`**:
 ```bash
@@ -339,185 +480,157 @@ websocat ws://localhost:8080/v1/sessions/<session-id>/ws \
   --header "Authorization: Bearer your-token"
 ```
 
-Send (one JSON object per line):
+**Send** (one JSON object per line):
 ```json
 {"jsonrpc":"2.0","method":"tools/list","id":1}
 ```
 
-Receive:
+**Receive**:
 ```json
 {"jsonrpc":"2.0","result":{"tools":[...]},"id":1}
 ```
 
-**Using JavaScript**:
-```javascript
-const ws = new WebSocket('ws://localhost:8080/v1/sessions/<session-id>/ws', {
-  headers: {
-    'Authorization': 'Bearer your-token'
-  }
-});
+## Authentication Explained
 
-ws.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  console.log('Received:', message);
-};
+### Why This Approach?
 
-ws.send(JSON.stringify({
-  jsonrpc: '2.0',
-  method: 'tools/list',
-  id: 1
-}));
-```
-
-## Authentication Strategy
-
-Aperture supports two authentication modes for Claude Code:
-
-### API Key Mode (API Billing)
-
-If `ANTHROPIC_API_KEY` is set (either in gateway env or per-session), Claude Code will use **API billing** instead of subscription usage. This means:
-
-- Requests are billed to your Anthropic API account
-- No browser-based login required
-- Suitable for automated/headless environments
-
-**To use**:
+**Old Problem** (pre-refactor):
 ```bash
-# In .env:
+# Gateway environment has:
 ANTHROPIC_API_KEY=sk-ant-...
+
+# Create session → automatically uses API billing
+# Even if you wanted subscription usage!
+# No way to control it per-session
 ```
 
-Or per-session:
+**New Solution** (Zed-like):
 ```bash
-curl -X POST http://localhost:8080/v1/sessions \
-  -H "Authorization: Bearer your-token" \
-  -d '{"anthropicApiKey":"sk-ant-..."}'
+# Gateway environment API keys are IGNORED
+# ANTHROPIC_API_KEY=...  ← IGNORED
+# OPENAI_API_KEY=...     ← IGNORED
+
+# You explicitly choose per session:
+{
+  "auth": {
+    "mode": "interactive",  // Use subscription
+    "apiKeyRef": "none"
+  }
+}
+
+# OR:
+{
+  "auth": {
+    "mode": "api_key",      // Use API billing
+    "apiKeyRef": "inline",
+    "apiKey": "sk-ant-..."
+  }
+}
 ```
 
-### Subscription Mode (Claude Pro/Max)
+### Authentication Modes
 
-If `ANTHROPIC_API_KEY` is **not set**, Claude Code will use your **Claude Pro or Max subscription** instead. This requires:
+#### Interactive Mode
+- **What**: Uses persisted credentials from agent's home directory
+- **Claude Code**: `~/.claude` (from `claude` CLI `/login`)
+- **Codex**: `~/.codex` (from Codex CLI login)
+- **Billing**: Counts against subscription (Pro/Max)
+- **Setup**: One-time login required (see examples above)
+- **Hosted Mode**:
+  - Claude: ✅ Allowed (requires `docker exec` login once)
+  - Codex: ❌ Blocked (ChatGPT login doesn't work for remote projects)
 
-1. One-time authentication via Claude Code CLI
-2. Persistent storage of `~/.claude` directory
+#### API Key Mode
+- **What**: Explicitly use API key for billing
+- **Billing**: Charged to API account (pay-per-token)
+- **Sources**:
+  - `inline`: Key in request body (less secure, but convenient)
+  - `stored`: Key from encrypted credential store (more secure)
+- **Hosted Mode**: ✅ Always allowed
 
-**To use**:
+### Credential Storage
 
-1. Do NOT set `ANTHROPIC_API_KEY` in `.env`
+When `CREDENTIALS_MASTER_KEY` is set:
+- Credentials stored encrypted with AES-256-GCM
+- Master key must be ≥32 characters
+- Stored at `/data/credentials.json.enc` (persisted via Docker volume)
+- List credentials without exposing keys
+- Per-provider storage (anthropic, openai)
 
-2. Ensure the Docker volume persists `~/.claude`:
-   ```yaml
-   volumes:
-     - claude-data:/home/app/.claude
-   ```
+When `CREDENTIALS_MASTER_KEY` is NOT set:
+- Stored credentials disabled
+- Only `apiKeyRef="inline"` available for API key mode
 
-3. Authenticate once (interactive):
-   ```bash
-   docker exec -it aperture-gateway bash
-   # Inside container:
-   claude
-   # Use /login and follow browser-based OAuth flow
-   ```
+### Hosted Mode
 
-4. Authentication persists across container restarts (thanks to the volume)
+**`HOSTED_MODE=true`** (default for VPS):
+- **Codex**: Requires `auth.mode="api_key"` (blocks interactive)
+- **Claude**: Allows both modes
+- **Why**: ChatGPT login for Codex doesn't work on remote projects
 
-**Important**:
-- If you were previously logged in via Console (PAYG API), you may need to run `/logout` then `/login` to switch to subscription mode
-- Headless subscription login can be tricky because it may require opening a local browser
-- For remote VPS deployment, consider:
-  - SSH port forwarding to access browser flow
-  - Using API key mode instead
-  - Pre-authenticating before deploying to VPS
+**`HOSTED_MODE=false`** (local development):
+- Both agents allow interactive mode
+- ChatGPT login may still fail for Codex (depends on project location)
 
-## Claude Code CLI Installation
+## Environment Variables
 
-Aperture attempts to detect and use the Claude Code CLI (`claude`) on startup. The CLI is used by `claude-code-acp` via the `CLAUDE_CODE_EXECUTABLE` environment variable.
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `APERTURE_API_TOKEN` | ✅ Yes | - | Bearer token for gateway authentication |
+| `HOSTED_MODE` | No | `true` | Enforce API key auth for Codex |
+| `CREDENTIALS_MASTER_KEY` | No | - | Enable encrypted credential storage (≥32 chars) |
+| `CREDENTIALS_STORE_PATH` | No | `/data/credentials.json.enc` | Path to encrypted credentials file |
+| `PORT` | No | `8080` | Server port |
+| `HOST` | No | `0.0.0.0` | Server host |
+| `LOG_LEVEL` | No | `info` | Log level (trace, debug, info, warn, error) |
+| `MAX_CONCURRENT_SESSIONS` | No | `50` | Max simultaneous sessions |
+| `SESSION_IDLE_TIMEOUT_MS` | No | `600000` | Session idle timeout (10 min) |
+| `MAX_MESSAGE_SIZE_BYTES` | No | `262144` | Max JSON-RPC message size (256KB) |
+| `RPC_REQUEST_TIMEOUT_MS` | No | `300000` | Timeout for RPC requests (5 min) |
+| `RATE_LIMIT_MAX` | No | `100` | Max requests per window |
+| `RATE_LIMIT_WINDOW_MS` | No | `60000` | Rate limit window (1 min) |
+| `CLAUDE_CODE_EXECUTABLE` | No | auto | Path to Claude CLI (auto-detected) |
+| `AUTO_INSTALL_CLAUDE_CLI` | No | `false` | Auto-install Claude CLI if missing |
 
-### Official Installation Methods
-
-Aperture will inform you if Claude Code CLI is not found. You can install it using:
-
-**macOS / Linux / WSL**:
-```bash
-curl -fsSL https://claude.ai/install.sh | bash
-```
-
-**Or via Homebrew** (macOS):
-```bash
-brew install --cask claude-code
-```
-
-**Or via npm** (any platform with Node 18+):
-```bash
-npm install -g @anthropic-ai/claude-code
-```
-
-**Windows PowerShell**:
-```powershell
-irm https://claude.ai/install.ps1 | iex
-```
-
-**Windows CMD**:
-```cmd
-curl -fsSL https://claude.ai/install.cmd -o install.cmd && install.cmd && del install.cmd
-```
-
-### How Aperture Uses the CLI
-
-1. On startup, Aperture checks if `claude` is in PATH via `claude --version`
-2. If not found and `AUTO_INSTALL_CLAUDE_CLI=true` is set, attempts automatic installation using official installers
-3. Re-checks after installation attempt
-4. If found, sets `CLAUDE_CODE_EXECUTABLE` env var when spawning `claude-code-acp`
-5. If not found, logs a warning but continues (claude-code-acp will use its vendored CLI as fallback, just like Zed does)
-
-**Auto-install** (optional):
-```bash
-# In .env:
-AUTO_INSTALL_CLAUDE_CLI=true
-```
-
-When enabled, Aperture will automatically install Claude Code CLI on first startup if it's not found. This uses the official platform-specific installers.
-
-**Manual override**:
-```bash
-# In .env:
-CLAUDE_CODE_EXECUTABLE=/custom/path/to/claude
-```
+**IMPORTANT**: `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in gateway environment are **IGNORED**. Use per-session auth instead.
 
 ## VPS Deployment
 
 ### Prerequisites
-
-- Docker & Docker Compose installed
-- Domain name (optional, but recommended for TLS)
-- Reverse proxy (NGINX, Traefik, Caddy) for TLS termination
+- Docker & Docker Compose
+- Domain + TLS certificate (recommended)
+- Reverse proxy (NGINX, Traefik, Caddy)
 
 ### Deployment Steps
 
-1. **Clone the repo on your VPS**:
-   ```bash
-   git clone <repo-url>
-   cd aperture
-   ```
-
-2. **Configure environment**:
+1. **Set up environment**:
    ```bash
    cp .env.example .env
-   nano .env  # Set APERTURE_API_TOKEN and other configs
+   nano .env
    ```
 
-3. **Build and start**:
+   Critical variables:
+   ```bash
+   APERTURE_API_TOKEN=<generate-strong-token>
+   HOSTED_MODE=true
+   CREDENTIALS_MASTER_KEY=<generate-32+-char-key>
+   ```
+
+2. **Start services**:
    ```bash
    docker-compose up -d
    ```
 
-4. **Verify health**:
+3. **One-time Claude login** (if using interactive mode):
    ```bash
-   curl http://localhost:8080/healthz
+   docker exec -it aperture-gateway bash
+   claude
+   # /login
+   # Follow OAuth flow
+   # /exit
    ```
 
-5. **Set up reverse proxy** (example with NGINX):
-
+4. **Configure reverse proxy** (NGINX example):
    ```nginx
    upstream aperture {
        server localhost:8080;
@@ -537,26 +650,47 @@ CLAUDE_CODE_EXECUTABLE=/custom/path/to/claude
            proxy_set_header Connection "upgrade";
            proxy_set_header Host $host;
            proxy_set_header X-Real-IP $remote_addr;
-           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-           proxy_set_header X-Forwarded-Proto $scheme;
        }
    }
    ```
 
-6. **Reload NGINX**:
+5. **Verify**:
    ```bash
-   sudo nginx -t
-   sudo systemctl reload nginx
+   curl https://aperture.yourdomain.com/healthz
    ```
 
 ### Security Recommendations
 
-- **Never expose Aperture directly to the internet without TLS**
-- Use a reverse proxy (NGINX/Traefik) with TLS certificates (Let's Encrypt)
-- Consider using a Zero Trust tunnel (Cloudflare Tunnel, Tailscale, etc.)
-- Rotate `APERTURE_API_TOKEN` regularly
-- Monitor logs for suspicious activity
-- Keep Docker images updated
+- ✅ Use TLS/HTTPS (required for production)
+- ✅ Strong `APERTURE_API_TOKEN` (≥32 random chars)
+- ✅ Strong `CREDENTIALS_MASTER_KEY` (≥32 random chars)
+- ✅ Keep `HOSTED_MODE=true` on VPS
+- ✅ Firewall: only expose reverse proxy port (443)
+- ✅ Regular backups of Docker volumes
+- ✅ Monitor logs for suspicious activity
+- ❌ Never expose port 8080 directly to internet
+
+### Volume Management
+
+```bash
+# Backup credentials
+docker run --rm \
+  -v aperture-credentials-data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/credentials-backup.tar.gz -C /data .
+
+# Backup Claude auth
+docker run --rm \
+  -v aperture-claude-data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/claude-backup.tar.gz -C /data .
+
+# Restore (example)
+docker run --rm \
+  -v aperture-credentials-data:/data \
+  -v $(pwd):/backup \
+  alpine tar xzf /backup/credentials-backup.tar.gz -C /data
+```
 
 ### Upgrades
 
@@ -568,168 +702,184 @@ docker-compose build
 docker-compose up -d
 ```
 
-### Logs
-
-```bash
-# View logs
-docker-compose logs -f
-
-# Export logs
-docker-compose logs > aperture.log
-```
-
-### Volumes
-
-The `claude-data` volume persists Claude Code authentication:
-
-```bash
-# Backup
-docker run --rm -v aperture-claude-data:/data -v $(pwd):/backup alpine tar czf /backup/claude-data-backup.tar.gz -C /data .
-
-# Restore
-docker run --rm -v aperture-claude-data:/data -v $(pwd):/backup alpine tar xzf /backup/claude-data-backup.tar.gz -C /data
-```
-
 ## Troubleshooting
+
+### "Claude Code interactive mode requires one-time login"
+
+**Symptom**: Session created but agent can't authenticate.
+
+**Solution**:
+```bash
+docker exec -it aperture-gateway bash
+claude
+# Inside Claude CLI:
+# /login
+# Follow browser OAuth flow
+# /exit
+```
+
+This persists credentials in `~/.claude` (Docker volume).
+
+### "Codex interactive mode is not supported in hosted environments"
+
+**Symptom**: 400 error when creating Codex session with `auth.mode="interactive"`.
+
+**Why**: ChatGPT login doesn't work for remote projects in most cases.
+
+**Solutions**:
+1. Use API key mode:
+   ```json
+   {
+     "agent": "codex",
+     "auth": {
+       "mode": "api_key",
+       "apiKeyRef": "inline",
+       "apiKey": "sk-your-openai-key"
+     }
+   }
+   ```
+
+2. For local development only: Set `HOSTED_MODE=false` in `.env`
+
+### "Credential storage not enabled"
+
+**Symptom**: 503 error when accessing `/v1/credentials` endpoints.
+
+**Solution**: Set `CREDENTIALS_MASTER_KEY` in `.env`:
+```bash
+CREDENTIALS_MASTER_KEY=your-very-long-random-master-key-here-at-least-32-characters
+```
+
+Must be ≥32 characters. Restart gateway after setting.
+
+### "API key required but not provided"
+
+**Symptom**: Session creation fails with this error.
+
+**Cause**: Using `auth.mode="api_key"` but:
+- `apiKeyRef="inline"` without `apiKey`
+- `apiKeyRef="stored"` with invalid `storedCredentialId`
+
+**Solution**: Provide valid API key:
+```json
+{
+  "auth": {
+    "mode": "api_key",
+    "apiKeyRef": "inline",
+    "apiKey": "sk-ant-..."  // ← Add this
+  }
+}
+```
+
+### "Environment variable X not allowed in interactive mode"
+
+**Symptom**: Session creation fails when passing `env` with API keys.
+
+**Cause**: Security safeguard - `*_API_KEY` env vars are blocked in interactive mode.
+
+**Solution**: Either:
+1. Remove the `*_API_KEY` from `env` object
+2. Use `auth.mode="api_key"` instead
 
 ### "claude-code-acp not found in PATH"
 
-**Cause**: The `@zed-industries/claude-code-acp` package is not installed.
+**Symptom**: Sessions fail to start.
 
-**Solution**:
+**Solution**: Rebuild Docker image (should auto-install):
+```bash
+docker-compose down
+docker-compose build
+docker-compose up -d
+```
+
+Or install manually:
 ```bash
 npm install -g @zed-industries/claude-code-acp
 ```
 
-Or rebuild the Docker image (it should install it automatically).
+### "codex-acp not found in PATH"
 
-### "Claude Code CLI not found"
-
-**Symptom**: Warning on startup: `⚠️ Claude Code CLI not found`
-
-**Impact**: Not critical - claude-code-acp will use its vendored CLI
-
-**Solution** (optional, for best results):
-Install Claude Code CLI using one of the official methods above.
-
-### Claude Code install fails
-
-**Symptom**: Install script fails when running `curl -fsSL https://claude.ai/install.sh | bash`
-
-**Common causes**:
-- Network issues
-- Insufficient permissions
-- Unsupported platform
-
-**Solution**:
-1. Try alternative install methods (Homebrew, npm)
-2. Check install script logs
-3. Manually download and install from https://claude.ai/download
-
-### Headless subscription login issues
-
-**Symptom**: Can't complete `/login` flow on remote VPS (no browser)
-
-**Solutions**:
-
-**Option 1: SSH port forwarding**
+**Solution**: Install manually or verify Dockerfile includes it:
 ```bash
-# From local machine:
-ssh -L 8080:localhost:8080 user@your-vps
-
-# Then access http://localhost:8080 on your local browser
+npm install -g @zed-industries/codex-acp
+npm install -g @openai/codex
 ```
 
-**Option 2: Pre-authenticate locally**
-1. Install Claude Code CLI on your local machine
-2. Run `claude` and authenticate with `/login`
-3. Copy `~/.claude` directory to VPS
-4. Place it in the Docker volume path
-
-**Option 3: Use API key mode instead**
-Set `ANTHROPIC_API_KEY` to bypass subscription login entirely.
-
-### Message framing errors
+### Message Framing Errors
 
 **Symptom**: "JSON-RPC messages must not contain embedded newlines"
 
-**Cause**: Trying to send a JSON-RPC message with literal newlines in the JSON
+**Cause**: Sending pretty-printed JSON instead of single-line.
 
-**Solution**: Ensure you're sending single-line JSON. The protocol is newline-delimited, so each message must be a single line:
-
+**Solution**: Send JSON as single line:
 ```bash
-# ✅ Correct (single line):
+# ✅ Correct:
 {"jsonrpc":"2.0","method":"test","id":1}
 
-# ❌ Wrong (pretty-printed):
+# ❌ Wrong:
 {
   "jsonrpc": "2.0",
-  "method": "test",
-  "id": 1
+  "method": "test"
 }
 ```
 
-### Session timeout / idle disconnect
+### Session Timeout / Idle Disconnect
 
-**Symptom**: Session terminates after period of inactivity
+**Symptom**: Session terminates after inactivity.
 
-**Cause**: Default idle timeout is 10 minutes
+**Cause**: Default idle timeout is 10 minutes.
 
-**Solution**: Adjust timeout in `.env`:
+**Solution**: Adjust in `.env`:
 ```bash
 SESSION_IDLE_TIMEOUT_MS=1800000  # 30 minutes
 ```
 
 Or send periodic keepalive messages.
 
-### Max sessions reached
+## Migration from Old Version
 
-**Symptom**: "Maximum concurrent sessions (50) reached"
+### Breaking Changes
 
-**Solution**:
-1. Delete idle sessions via DELETE `/v1/sessions/:id`
-2. Increase limit in `.env`:
-   ```bash
-   MAX_CONCURRENT_SESSIONS=100
+1. **Session Creation API Changed**
+
+   **Before**:
+   ```json
+   {
+     "anthropicApiKey": "sk-ant-..."
+   }
    ```
 
-### Authentication errors
+   **After**:
+   ```json
+   {
+     "agent": "claude_code",
+     "auth": {
+       "mode": "api_key",
+       "apiKeyRef": "inline",
+       "apiKey": "sk-ant-..."
+     }
+   }
+   ```
 
-**Symptom**: 401 Unauthorized
+2. **Environment Variables No Longer Auto-Forwarded**
 
-**Causes**:
-- Missing `Authorization` header
-- Wrong token
-- Token has spaces/newlines
+   **Before**: `ANTHROPIC_API_KEY` in gateway `.env` → automatically used by all sessions
 
-**Solution**:
-```bash
-# Correct format:
-curl -H "Authorization: Bearer your-token-here" ...
-```
+   **After**: Gateway env API keys are IGNORED → use per-session auth
 
-Ensure your `.env` has:
-```bash
-APERTURE_API_TOKEN=your-token-here
-```
+3. **Default Behavior Changed**
 
-## Environment Variables
+   **Before**: Default to API billing if `ANTHROPIC_API_KEY` set
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `APERTURE_API_TOKEN` | ✅ Yes | - | Bearer token for gateway authentication |
-| `ANTHROPIC_API_KEY` | No | - | Anthropic API key (enables API billing mode) |
-| `PORT` | No | 8080 | Server port |
-| `HOST` | No | 0.0.0.0 | Server host |
-| `LOG_LEVEL` | No | info | Log level (trace, debug, info, warn, error) |
-| `MAX_CONCURRENT_SESSIONS` | No | 50 | Max number of concurrent sessions |
-| `SESSION_IDLE_TIMEOUT_MS` | No | 600000 | Session idle timeout (ms) |
-| `MAX_MESSAGE_SIZE_BYTES` | No | 262144 | Max JSON-RPC message size (bytes) |
-| `RPC_REQUEST_TIMEOUT_MS` | No | 300000 | Timeout for RPC requests with id (ms) |
-| `RATE_LIMIT_MAX` | No | 100 | Max requests per window |
-| `RATE_LIMIT_WINDOW_MS` | No | 60000 | Rate limit window (ms) |
-| `CLAUDE_CODE_EXECUTABLE` | No | auto | Path to Claude Code CLI (auto-detected if not set) |
-| `AUTO_INSTALL_CLAUDE_CLI` | No | false | Auto-install Claude CLI if not found on startup |
+   **After**: Default to interactive mode (subscription)
+
+### Migration Steps
+
+1. **Update client code** to use new session creation API
+2. **Remove** `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` from gateway `.env` (optional, but they're ignored anyway)
+3. **Add** `CREDENTIALS_MASTER_KEY` if using stored credentials
+4. **Set** `HOSTED_MODE=true` for VPS deployments
+5. **Test** session creation with new auth structure
 
 ## Testing
 
@@ -742,7 +892,17 @@ npm run test:watch
 
 # Type checking
 npm run type-check
+
+# Lint
+npm run lint
 ```
+
+Tests cover:
+- Agent backend auth validation
+- Hosted mode enforcement
+- Credential encryption/storage
+- Environment variable whitelist
+- JSON-RPC parsing and validation
 
 ## Development
 
@@ -750,14 +910,19 @@ npm run type-check
 # Install dependencies
 npm install
 
-# Run in dev mode (with auto-reload)
+# Install ACP agents
+npm install -g @zed-industries/claude-code-acp
+npm install -g @zed-industries/codex-acp
+npm install -g @openai/codex
+
+# Run in dev mode
 npm run dev
 
 # Build
 npm run build
 
-# Lint
-npm run lint
+# Start production
+npm start
 ```
 
 ## License
@@ -770,6 +935,6 @@ Issues and pull requests welcome!
 
 ## Acknowledgments
 
-- Built for [@zed-industries/claude-code-acp](https://www.npmjs.com/package/@zed-industries/claude-code-acp)
-- Inspired by Zed's ACP adapter architecture
-- Uses [Claude Code CLI](https://claude.ai/download)
+- Built for [@zed-industries/claude-code-acp](https://www.npmjs.com/package/@zed-industries/claude-code-acp) and [@zed-industries/codex-acp](https://www.npmjs.com/package/@zed-industries/codex-acp)
+- Auth semantics inspired by [Zed's external agent architecture](https://github.com/zed-industries/zed)
+- Uses [Claude Code CLI](https://claude.ai/download) and OpenAI Codex
