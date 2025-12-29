@@ -1,9 +1,14 @@
 import { randomUUID } from 'crypto';
 import type { Config } from './config.js';
-import { Session, type SessionOptions } from './session.js';
+import { Session } from './session.js';
+import { getAgentBackend } from './agents/index.js';
+import type { SessionAuth, AgentType, SessionConfig } from './agents/index.js';
+import type { CredentialStore } from './credentials.js';
 
 export interface CreateSessionOptions {
-  anthropicApiKey?: string;
+  agent?: AgentType;
+  auth?: SessionAuth;
+  env?: Record<string, string>;
 }
 
 /**
@@ -13,10 +18,12 @@ export class SessionManager {
   private sessions: Map<string, Session> = new Map();
   private config: Config;
   private claudeCodeExecutable?: string;
+  private credentialStore?: CredentialStore;
 
-  constructor(config: Config, claudeCodeExecutable?: string) {
+  constructor(config: Config, claudeCodeExecutable?: string, credentialStore?: CredentialStore) {
     this.config = config;
     this.claudeCodeExecutable = claudeCodeExecutable;
+    this.credentialStore = credentialStore;
   }
 
   /**
@@ -31,11 +38,64 @@ export class SessionManager {
     }
 
     const id = randomUUID();
-    const session = new Session(id, {
-      config: this.config,
-      claudeCodeExecutable: this.claudeCodeExecutable,
-      anthropicApiKey: options.anthropicApiKey,
-    });
+    const agent = options.agent || 'claude_code'; // Default to Claude Code for backwards compatibility
+
+    // Build session auth configuration with defaults
+    const auth: SessionAuth = {
+      mode: options.auth?.mode || 'interactive',
+      providerKey: options.auth?.providerKey || (agent === 'claude_code' ? 'anthropic' : 'openai'),
+      apiKeyRef: options.auth?.apiKeyRef || 'none',
+      apiKey: options.auth?.apiKey,
+      storedCredentialId: options.auth?.storedCredentialId,
+    };
+
+    // Build session config
+    const sessionConfig: SessionConfig = {
+      id,
+      agent,
+      auth,
+      env: options.env,
+    };
+
+    // Get agent backend
+    const backend = getAgentBackend(agent, this.claudeCodeExecutable);
+
+    // Validate auth for this backend
+    backend.validateAuth(auth, this.config.hostedMode);
+
+    // Resolve API key if needed
+    let resolvedApiKey: string | undefined;
+    if (auth.mode === 'api_key') {
+      if (auth.apiKeyRef === 'inline') {
+        if (!auth.apiKey) {
+          throw new Error('API key required when apiKeyRef="inline"');
+        }
+        resolvedApiKey = auth.apiKey;
+      } else if (auth.apiKeyRef === 'stored') {
+        if (!this.credentialStore) {
+          throw new Error('Stored credentials not enabled. Set CREDENTIALS_MASTER_KEY to enable.');
+        }
+        if (!auth.storedCredentialId) {
+          throw new Error('storedCredentialId required when apiKeyRef="stored"');
+        }
+        const credential = this.credentialStore.get(auth.storedCredentialId);
+        if (!credential) {
+          throw new Error(`Credential not found: ${auth.storedCredentialId}`);
+        }
+        // Validate provider matches
+        if (credential.provider !== auth.providerKey) {
+          throw new Error(
+            `Credential provider mismatch: expected ${auth.providerKey}, got ${credential.provider}`
+          );
+        }
+        resolvedApiKey = credential.apiKey;
+      } else {
+        throw new Error('API key mode requires apiKeyRef to be "inline" or "stored"');
+      }
+    }
+
+    // Create session
+    const session = new Session(sessionConfig, backend, this.config, resolvedApiKey);
 
     // Set up event handlers
     session.on('exit', () => {

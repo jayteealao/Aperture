@@ -36,11 +36,19 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --omit=dev
 
-# Install claude-code-acp globally
-RUN npm install -g @zed-industries/claude-code-acp
+# Install ACP agents globally
+# - claude-code-acp for Claude Code agent
+# - codex-acp for Codex agent (if available)
+# - @openai/codex for Codex CLI
+RUN npm install -g @zed-industries/claude-code-acp && \
+    npm install -g @zed-industries/codex-acp || echo "codex-acp not available, skipping" && \
+    npm install -g @openai/codex || echo "codex not available, skipping"
 
 # Copy built files from builder
 COPY --from=builder /build/dist ./dist
+
+# Create data directory for encrypted credentials
+RUN mkdir -p /home/app/data && chown app:app /home/app/data
 
 # Change ownership to app user
 RUN chown -R app:app /app

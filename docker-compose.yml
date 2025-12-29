@@ -13,6 +13,10 @@ services:
     volumes:
       # Persist Claude Code home directory for subscription auth
       - claude-data:/home/app/.claude
+      # Persist Codex home directory for subscription auth
+      - codex-data:/home/app/.codex
+      # Persist encrypted credentials
+      - credentials-data:/home/app/data
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/healthz', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
       interval: 30s
@@ -28,3 +32,7 @@ services:
 volumes:
   claude-data:
     name: aperture-claude-data
+  codex-data:
+    name: aperture-codex-data
+  credentials-data:
+    name: aperture-credentials-data

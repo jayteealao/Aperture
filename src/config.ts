@@ -10,9 +10,6 @@ export interface Config {
   // Authentication
   apiToken: string;
 
-  // Optional Anthropic API key
-  anthropicApiKey?: string;
-
   // Session limits
   maxConcurrentSessions: number;
   sessionIdleTimeoutMs: number;
@@ -30,6 +27,15 @@ export interface Config {
 
   // Auto-install Claude CLI if not found
   autoInstallClaude: boolean;
+
+  // Hosted mode (enforces API key auth for Codex)
+  hostedMode: boolean;
+
+  // Credential storage encryption key (optional, enables stored credentials)
+  credentialsMasterKey?: string;
+
+  // Path to store encrypted credentials
+  credentialsStorePath: string;
 }
 
 function getEnv(key: string, defaultValue?: string): string | undefined {
@@ -75,14 +81,28 @@ export function loadConfig(): Config {
   // APERTURE_API_TOKEN is mandatory
   const apiToken = getEnvRequired('APERTURE_API_TOKEN');
 
-  // Warn if ANTHROPIC_API_KEY is set
-  const anthropicApiKey = getEnv('ANTHROPIC_API_KEY');
-  if (anthropicApiKey) {
+  // Warn if old API key env vars are set (no longer automatically forwarded)
+  if (process.env.ANTHROPIC_API_KEY) {
     console.warn(
-      '⚠️  ANTHROPIC_API_KEY is set - this will use API billing instead of subscription usage!'
+      '⚠️  ANTHROPIC_API_KEY in gateway environment is IGNORED by default.'
     );
     console.warn(
-      '⚠️  To use Claude Pro/Max subscription, unset ANTHROPIC_API_KEY and authenticate via Claude Code CLI.'
+      '⚠️  Use per-session auth.mode="api_key" to explicitly enable API billing for a session.'
+    );
+  }
+  if (process.env.OPENAI_API_KEY) {
+    console.warn(
+      '⚠️  OPENAI_API_KEY in gateway environment is IGNORED by default.'
+    );
+    console.warn(
+      '⚠️  Use per-session auth.mode="api_key" for Codex sessions to explicitly enable API billing.'
+    );
+  }
+
+  const credentialsMasterKey = getEnv('CREDENTIALS_MASTER_KEY');
+  if (credentialsMasterKey && credentialsMasterKey.length < 32) {
+    console.warn(
+      '⚠️  CREDENTIALS_MASTER_KEY must be at least 32 characters. Stored credentials disabled.'
     );
   }
 
@@ -91,7 +111,6 @@ export function loadConfig(): Config {
     host: getEnv('HOST', '0.0.0.0')!,
     logLevel: getEnv('LOG_LEVEL', 'info')!,
     apiToken,
-    anthropicApiKey,
     maxConcurrentSessions: getEnvNumber('MAX_CONCURRENT_SESSIONS', 50),
     sessionIdleTimeoutMs: getEnvNumber('SESSION_IDLE_TIMEOUT_MS', 600000), // 10 min
     maxMessageSizeBytes: getEnvNumber('MAX_MESSAGE_SIZE_BYTES', 262144), // 256KB
@@ -100,5 +119,11 @@ export function loadConfig(): Config {
     rateLimitWindowMs: getEnvNumber('RATE_LIMIT_WINDOW_MS', 60000), // 1 min
     claudeCodeExecutable: getEnv('CLAUDE_CODE_EXECUTABLE'),
     autoInstallClaude: getEnvBoolean('AUTO_INSTALL_CLAUDE_CLI', false),
+    hostedMode: getEnvBoolean('HOSTED_MODE', true),
+    credentialsMasterKey:
+      credentialsMasterKey && credentialsMasterKey.length >= 32
+        ? credentialsMasterKey
+        : undefined,
+    credentialsStorePath: getEnv('CREDENTIALS_STORE_PATH', '/data/credentials.json.enc')!,
   };
 }

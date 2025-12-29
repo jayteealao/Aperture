@@ -1,25 +1,16 @@
-import { spawn, ChildProcess } from 'child_process';
+import { ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import { createInterface } from 'readline';
 import type { Config } from './config.js';
+import type { AgentBackend, SessionConfig, AgentType } from './agents/index.js';
 import {
   parseMessage,
   serializeMessage,
   isResponse,
   isRequest,
-  isNotification,
-  createErrorResponse,
-  ErrorCodes,
   type JsonRpcMessage,
-  type JsonRpcRequest,
   type JsonRpcResponse,
 } from './jsonrpc.js';
-
-export interface SessionOptions {
-  config: Config;
-  claudeCodeExecutable?: string;
-  anthropicApiKey?: string;
-}
 
 interface PendingRequest {
   resolve: (response: JsonRpcResponse) => void;
@@ -28,56 +19,48 @@ interface PendingRequest {
 }
 
 /**
- * Manages a single claude-code-acp child process
+ * Manages a single ACP agent child process
  */
 export class Session extends EventEmitter {
   public readonly id: string;
+  public readonly agentType: AgentType;
   private child: ChildProcess | null = null;
   private config: Config;
-  private claudeCodeExecutable?: string;
-  private anthropicApiKey?: string;
+  private backend: AgentBackend;
+  private sessionConfig: SessionConfig;
+  private resolvedApiKey?: string;
   private pendingRequests: Map<string | number, PendingRequest> = new Map();
   private stdinMutex: Promise<void> = Promise.resolve();
   private lastActivityTime: number = Date.now();
   private idleTimer: NodeJS.Timeout | null = null;
   private isShuttingDown = false;
 
-  constructor(id: string, options: SessionOptions) {
+  constructor(
+    sessionConfig: SessionConfig,
+    backend: AgentBackend,
+    config: Config,
+    resolvedApiKey?: string
+  ) {
     super();
-    this.id = id;
-    this.config = options.config;
-    this.claudeCodeExecutable = options.claudeCodeExecutable;
-    this.anthropicApiKey = options.anthropicApiKey || options.config.anthropicApiKey;
+    this.id = sessionConfig.id;
+    this.agentType = sessionConfig.agent;
+    this.sessionConfig = sessionConfig;
+    this.backend = backend;
+    this.config = config;
+    this.resolvedApiKey = resolvedApiKey;
   }
 
   /**
-   * Starts the claude-code-acp child process
+   * Starts the agent child process
    */
   async start(): Promise<void> {
     if (this.child) {
       throw new Error('Session already started');
     }
 
-    const env = { ...process.env };
-
-    // Set CLAUDE_CODE_EXECUTABLE if we have it
-    if (this.claudeCodeExecutable) {
-      env.CLAUDE_CODE_EXECUTABLE = this.claudeCodeExecutable;
-    }
-
-    // Set ANTHROPIC_API_KEY if provided (API billing mode)
-    if (this.anthropicApiKey) {
-      env.ANTHROPIC_API_KEY = this.anthropicApiKey;
-    } else {
-      // Explicitly unset to ensure subscription mode
-      delete env.ANTHROPIC_API_KEY;
-    }
-
-    // Spawn claude-code-acp
-    this.child = spawn('claude-code-acp', [], {
-      env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    // Spawn the agent via backend
+    const spawnResult = await this.backend.spawn(this.sessionConfig, this.resolvedApiKey);
+    this.child = spawnResult.child;
 
     // Handle child exit
     this.child.on('exit', (code, signal) => {
@@ -310,6 +293,8 @@ export class Session extends EventEmitter {
    */
   getStatus(): {
     id: string;
+    agent: AgentType;
+    authMode: string;
     running: boolean;
     pendingRequests: number;
     lastActivityTime: number;
@@ -317,6 +302,8 @@ export class Session extends EventEmitter {
   } {
     return {
       id: this.id,
+      agent: this.agentType,
+      authMode: this.sessionConfig.auth.mode,
       running: this.child !== null && !this.isShuttingDown,
       pendingRequests: this.pendingRequests.size,
       lastActivityTime: this.lastActivityTime,

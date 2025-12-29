@@ -1,11 +1,16 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { SessionManager } from './sessionManager.js';
 import type { Config } from './config.js';
+import type { SessionAuth, AgentType } from './agents/index.js';
+import type { CredentialStore } from './credentials.js';
 import { parseMessage, validateJsonRpcMessage, type JsonRpcMessage } from './jsonrpc.js';
 import { checkReadiness } from './claudeInstaller.js';
+import { registerCredentialRoutes } from './routes/credentials.js';
 
 interface CreateSessionBody {
-  anthropicApiKey?: string;
+  agent?: AgentType;
+  auth?: SessionAuth;
+  env?: Record<string, string>;
 }
 
 interface SendRpcBody {
@@ -18,8 +23,11 @@ interface SendRpcBody {
 export async function registerRoutes(
   fastify: FastifyInstance,
   sessionManager: SessionManager,
-  config: Config
+  config: Config,
+  credentialStore?: CredentialStore
 ) {
+  // Register credential management routes
+  await registerCredentialRoutes(fastify, credentialStore);
   // Health check - always returns 200
   fastify.get('/healthz', async () => {
     return { status: 'ok' };
@@ -47,18 +55,30 @@ export async function registerRoutes(
     '/v1/sessions',
     async (request, reply) => {
       try {
-        const { anthropicApiKey } = request.body || {};
+        const { agent, auth, env } = request.body || {};
 
-        const session = await sessionManager.createSession({ anthropicApiKey });
+        const session = await sessionManager.createSession({ agent, auth, env });
 
         return reply.code(201).send({
           id: session.id,
+          agent: session.agentType,
           status: session.getStatus(),
         });
       } catch (err) {
         const error = err as Error;
         request.log.error(error, 'Failed to create session');
-        return reply.code(500).send({
+
+        // Return 400 for validation errors, 500 for internal errors
+        const statusCode = error.message.includes('not supported') ||
+          error.message.includes('required') ||
+          error.message.includes('Invalid') ||
+          error.message.includes('not allowed') ||
+          error.message.includes('not enabled') ||
+          error.message.includes('not found')
+          ? 400
+          : 500;
+
+        return reply.code(statusCode).send({
           error: 'Failed to create session',
           message: error.message,
         });
