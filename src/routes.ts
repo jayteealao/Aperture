@@ -3,7 +3,7 @@ import type { SessionManager } from './sessionManager.js';
 import type { Config } from './config.js';
 import type { SessionAuth, AgentType } from './agents/index.js';
 import type { CredentialStore } from './credentials.js';
-import { parseMessage, validateJsonRpcMessage, type JsonRpcMessage } from './jsonrpc.js';
+import { validateJsonRpcMessage, type JsonRpcMessage } from './jsonrpc.js';
 import { checkReadiness } from './claudeInstaller.js';
 import { registerCredentialRoutes } from './routes/credentials.js';
 
@@ -227,46 +227,89 @@ export async function registerRoutes(
   fastify.get<{ Params: { id: string } }>(
     '/v1/sessions/:id/ws',
     { websocket: true },
-    (connection, request) => {
+    (socket, request) => {
       const sessionId = (request.params as { id: string }).id;
       const session = sessionManager.getSession(sessionId);
 
       if (!session) {
-        connection.socket.close(1008, 'Session not found');
+        socket.close(1008, 'Session not found');
         return;
       }
 
-      // Forward messages from child to WebSocket
+      // Forward ACP messages from agent to WebSocket (except session/update which has its own handler)
       const messageHandler = (message: JsonRpcMessage) => {
         try {
-          connection.socket.send(JSON.stringify(message));
+          // Skip session/update - handled by sessionUpdateHandler to avoid duplicates
+          if ('method' in message && message.method === 'session/update') {
+            return;
+          }
+          socket.send(JSON.stringify(message));
         } catch (err) {
           request.log.error(err, 'Failed to send WebSocket message');
         }
       };
 
+      // Handle session/update notifications specifically for frontend
+      const sessionUpdateHandler = (params: unknown) => {
+        try {
+          // Forward as a notification to the frontend
+          socket.send(JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'session/update',
+            params,
+          }));
+        } catch (err) {
+          request.log.error(err, 'Failed to send session update');
+        }
+      };
+
+      // Handle permission requests from agent
+      const permissionRequestHandler = (request: {
+        id: string | number;
+        toolCallId: string;
+        toolCall: unknown;
+        options: unknown[];
+      }) => {
+        try {
+          // Forward permission request to frontend
+          socket.send(JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'session/request_permission',
+            params: {
+              toolCallId: request.toolCallId,
+              toolCall: request.toolCall,
+              options: request.options,
+            },
+          }));
+        } catch (err) {
+          console.error('Failed to send permission request', err);
+        }
+      };
+
       const exitHandler = ({ code, signal }: { code: number | null; signal: string | null }) => {
-        connection.socket.send(
+        socket.send(
           JSON.stringify({
             jsonrpc: '2.0',
             method: 'session/exit',
             params: { code, signal },
           })
         );
-        connection.socket.close(1000, 'Session ended');
+        socket.close(1000, 'Session ended');
       };
 
       session.on('message', messageHandler);
+      session.on('session_update', sessionUpdateHandler);
+      session.on('permission_request', permissionRequestHandler);
       session.on('exit', exitHandler);
 
-      // Handle messages from WebSocket to child
-      connection.socket.on('message', async (data: Buffer) => {
+      // Handle messages from WebSocket (frontend) to agent
+      socket.on('message', async (data: Buffer) => {
         try {
           const text = data.toString('utf-8');
 
           // Check message size
           if (text.length > config.maxMessageSizeBytes) {
-            connection.socket.send(
+            socket.send(
               JSON.stringify({
                 jsonrpc: '2.0',
                 error: {
@@ -279,12 +322,52 @@ export async function registerRoutes(
             return;
           }
 
-          const message = parseMessage(text);
-          await session.send(message);
+          // Parse the incoming message
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(text);
+          } catch {
+            throw new Error('Invalid JSON');
+          }
+
+          const obj = parsed as Record<string, unknown>;
+
+          // Handle frontend-style messages
+          if (obj.type === 'user_message' && typeof obj.content === 'string') {
+            // Send prompt using the proper session method
+            // Note: sendPrompt is async and returns when agent finishes responding
+            // We don't await here so the WebSocket doesn't block
+            session.sendPrompt(obj.content).catch((err) => {
+              request.log.error(err, 'Failed to send prompt');
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'session/error',
+                params: { message: (err as Error).message },
+              }));
+            });
+          } else if (obj.type === 'permission_response') {
+            // Handle permission response from frontend
+            const toolCallId = obj.toolCallId as string;
+            const optionId = obj.optionId as string;
+
+            if (optionId) {
+              await session.respondToPermission(toolCallId, optionId);
+            } else {
+              await session.cancelPermission(toolCallId);
+            }
+          } else if (obj.type === 'cancel') {
+            // Handle cancel request
+            await session.cancelPrompt();
+          } else if (validateJsonRpcMessage(obj)) {
+            // Raw JSON-RPC message - forward directly
+            await session.send(obj as JsonRpcMessage);
+          } else {
+            throw new Error('Unknown message type');
+          }
         } catch (err) {
           const error = err as Error;
           request.log.error(error, 'Failed to process WebSocket message');
-          connection.socket.send(
+          socket.send(
             JSON.stringify({
               jsonrpc: '2.0',
               error: {
@@ -298,8 +381,10 @@ export async function registerRoutes(
       });
 
       // Clean up on disconnect
-      connection.socket.on('close', () => {
+      socket.on('close', () => {
         session.off('message', messageHandler);
+        session.off('session_update', sessionUpdateHandler);
+        session.off('permission_request', permissionRequestHandler);
         session.off('exit', exitHandler);
       });
     }
