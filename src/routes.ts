@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import type { SessionManager } from './sessionManager.js';
 import type { Config } from './config.js';
 import type { SessionAuth, AgentType } from './agents/index.js';

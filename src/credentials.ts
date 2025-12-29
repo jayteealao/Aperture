@@ -1,13 +1,12 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { dirname } from 'path';
 import type { Provider } from './agents/types.js';
 
 const ALGORITHM = 'aes-256-gcm';
 const SALT_LENGTH = 32;
 const IV_LENGTH = 16;
-const AUTH_TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
 
 export interface StoredCredential {
@@ -175,7 +174,7 @@ export class CredentialStore {
     await this.save();
 
     // Return without API key
-    const { apiKey: _, ...stored } = credential;
+    const { apiKey: _apiKey, ...stored } = credential;
     return stored;
   }
 
@@ -183,7 +182,7 @@ export class CredentialStore {
    * List all stored credentials (without API keys)
    */
   list(): StoredCredential[] {
-    return Array.from(this.credentials.values()).map(({ apiKey, ...cred }) => cred);
+    return Array.from(this.credentials.values()).map(({ apiKey: _apiKey, ...cred }) => cred);
   }
 
   /**

@@ -1,6 +1,3 @@
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-
 export interface Config {
   // Server
   port: number;

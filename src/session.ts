@@ -214,7 +214,7 @@ export class Session extends EventEmitter {
     this.child = null;
 
     // Reject all pending requests
-    for (const [id, pending] of this.pendingRequests) {
+    for (const [_id, pending] of this.pendingRequests) {
       clearTimeout(pending.timer);
       pending.reject(new Error(`Child process exited (code: ${code}, signal: ${signal})`));
     }
@@ -270,7 +270,7 @@ export class Session extends EventEmitter {
     }
 
     // Reject all pending requests
-    for (const [id, pending] of this.pendingRequests) {
+    for (const [_id, pending] of this.pendingRequests) {
       clearTimeout(pending.timer);
       pending.reject(new Error('Session terminated'));
     }

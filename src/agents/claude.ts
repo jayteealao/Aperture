@@ -1,5 +1,4 @@
 import { spawn } from 'child_process';
-import { verifyClaudeInstallation } from '../claudeInstaller.js';
 import type {
   AgentBackend,
   AgentReadiness,
