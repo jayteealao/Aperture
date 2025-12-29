@@ -1,3 +1,8 @@
+import { config as loadEnv } from 'dotenv';
+
+// Load .env file
+loadEnv();
+
 export interface Config {
   // Server
   port: number;
