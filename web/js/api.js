@@ -107,7 +107,8 @@ class ApertureClient {
   connectWebSocket(sessionId, onMessage) {
     return new Promise((resolve, reject) => {
       const wsUrl = this.baseUrl.replace(/^http/, 'ws');
-      const url = `${wsUrl}/v1/sessions/${sessionId}/ws`;
+      // Pass token as query param since browsers don't support custom WebSocket headers
+      const url = `${wsUrl}/v1/sessions/${sessionId}/ws?token=${encodeURIComponent(this.token)}`;
 
       try {
         this.ws = new WebSocket(url);
