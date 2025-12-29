@@ -1,6 +1,6 @@
 # Aperture
 
-**Production-ready WebSocket + HTTP gateway for ACP agents (Claude Code + Codex)**
+**Production-ready WebSocket + HTTP gateway for ACP agents (Claude Code + Codex + Gemini)**
 
 Aperture exposes stdio-based ACP (Agent Communication Protocol) agents over WebSocket and HTTP (Server-Sent Events), making them suitable for running on a VPS and accessible from web clients, mobile apps, and other remote consumers.
 
@@ -8,10 +8,11 @@ Aperture exposes stdio-based ACP (Agent Communication Protocol) agents over WebS
 
 - **Claude Code** (`@zed-industries/claude-code-acp`) - Claude AI assistant for coding
 - **Codex** (`@zed-industries/codex-acp`) - OpenAI Codex for code generation
+- **Gemini** (`@google/gemini-cli`) - Google Gemini AI with ACP mode support
 
 ## What is this?
 
-- **Multi-Agent Gateway**: TypeScript/Node.js server that spawns ACP agent child processes (claude-code-acp, codex-acp) and bridges stdio JSON-RPC to WebSocket/HTTP
+- **Multi-Agent Gateway**: TypeScript/Node.js server that spawns ACP agent child processes (claude-code-acp, codex-acp, gemini --experimental-acp) and bridges stdio JSON-RPC to WebSocket/HTTP
 - **Zed-like Auth**: Explicit per-session authentication - no accidental API billing from ambient environment variables
 - **Production-ready**: Bearer token auth, rate limiting, session management, idle timeouts, encrypted credential storage
 - **Docker-first**: Designed for VPS deployment with persistent volumes for agent state
@@ -49,20 +50,21 @@ Aperture exposes stdio-based ACP (Agent Communication Protocol) agents over WebS
 │  │  - Credential store (AES-256-GCM encrypted)     │    │
 │  └────────────────┬────────────────────────────────┘    │
 │                   │                                      │
-│  ┌────────────────▼──────────────────────────────┐      │
-│  │  Session Manager                               │      │
-│  │  - Agent backend selection (Claude | Codex)    │      │
-│  │  - Auth validation (hosted mode enforcement)   │      │
-│  │  - Credential resolution (inline | stored)     │      │
-│  └────────────────┬──────────────────────────────┘      │
-│                   │                                      │
-│  ┌────────────────▼──────────────────────────────┐      │
-│  │  Session (per client)                          │      │
-│  │  ┌──────────────────────────────────────┐     │      │
-│  │  │  Agent Backend (spawns child)        │     │      │
-│  │  │  - ClaudeBackend → claude-code-acp   │     │      │
-│  │  │  - CodexBackend  → codex-acp         │     │      │
-│  │  └──────────────────────────────────────┘     │      │
+│  ┌────────────────▼────────────────────────────────────┐      │
+│  │  Session Manager                                     │      │
+│  │  - Agent backend selection (Claude | Codex | Gemini) │      │
+│  │  - Auth validation (hosted mode enforcement)         │      │
+│  │  - Credential resolution (inline | stored)           │      │
+│  └────────────────┬────────────────────────────────────┘      │
+│                   │                                            │
+│  ┌────────────────▼────────────────────────────────────┐      │
+│  │  Session (per client)                                │      │
+│  │  ┌────────────────────────────────────────────┐     │      │
+│  │  │  Agent Backend (spawns child)              │     │      │
+│  │  │  - ClaudeBackend → claude-code-acp         │     │      │
+│  │  │  - CodexBackend  → codex-acp               │     │      │
+│  │  │  - GeminiBackend → gemini --experimental-acp     │      │
+│  │  └────────────────────────────────────────────┘     │      │
 │  │  - stdio JSON-RPC framing (newline-delimited) │      │
 │  │  - stdin write mutex (no interleaving)        │      │
 │  │  - stdout line reader                         │      │
@@ -76,22 +78,25 @@ Aperture exposes stdio-based ACP (Agent Communication Protocol) agents over WebS
 ### Multi-Agent Support
 - **Claude Code**: Full support for interactive (subscription) and API key modes
 - **Codex**: API key mode (hosted mode enforces this; ChatGPT login doesn't work remotely)
+- **Gemini**: OAuth (Google login), API key, and Vertex AI modes
 - Agent selection via `agent` parameter in session creation
 
 ### Authentication Modes (Per-Session)
 - **Interactive**: Use persisted credentials from `~/.claude` or `~/.codex` (subscription)
+- **OAuth**: Google account authentication for Gemini (cached in `~/.gemini`)
 - **API Key**: Explicit API billing mode with key from:
   - `inline`: Provided in request body
   - `stored`: Retrieved from encrypted credential store
-  - `none`: No API key (interactive mode)
+  - `none`: No API key (interactive/oauth mode)
+- **Vertex AI**: Google Cloud Vertex AI with Application Default Credentials (Gemini only)
 
 ### Security
-- **No auto-forwarding**: `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in gateway environment are **IGNORED**
+- **No auto-forwarding**: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `GEMINI_API_KEY` in gateway environment are **IGNORED**
 - **Encrypted credential storage**: AES-256-GCM with scrypt key derivation
-- **Environment variable whitelist**: Session `env` validated; `*_API_KEY` rejected unless `auth.mode=api_key`
+- **Environment variable whitelist**: Session `env` validated; `*_API_KEY` and Google Cloud vars rejected unless auth mode explicitly allows
 - **Bearer token auth**: Required for all endpoints (except health checks)
 - **Rate limiting**: Configurable per-window limits
-- **Hosted mode**: Enforces API key auth for Codex (ChatGPT login unsupported remotely)
+- **Hosted mode**: Enforces API key auth for Codex; disables Gemini OAuth unless `ALLOW_INTERACTIVE_AUTH=true`
 
 ### Transports
 - **WebSocket**: Bidirectional JSON-RPC
@@ -266,6 +271,321 @@ If `HOSTED_MODE=true` (default), this returns:
   "message": "Codex interactive mode (ChatGPT login) is not supported in hosted environments. Please use auth.mode=\"api_key\" with an OpenAI API key."
 }
 ```
+#### Gemini - OAuth (Google Login)
+
+Uses your Google account to authenticate with Gemini via OAuth. Credentials are cached in `~/.gemini`.
+
+**Prerequisites**: One-time OAuth bootstrap (only needed once):
+```bash
+docker exec -it aperture-gateway bash
+gemini
+# Follow prompts to authenticate with Google via browser
+# Credentials will be cached for future sessions
+exit
+```
+
+**Important**: In `HOSTED_MODE=true` (default), OAuth is disabled by default. To enable:
+```bash
+# In .env
+ALLOW_INTERACTIVE_AUTH=true
+```
+
+**Create session**:
+```bash
+curl -X POST http://localhost:8080/v1/sessions \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "gemini",
+    "auth": {
+      "mode": "oauth",
+      "providerKey": "google",
+      "apiKeyRef": "none"
+    }
+  }'
+```
+
+**Response**:
+```json
+{
+  "id": "7a3c8de0-1234-5678-abcd-1234567890ab",
+  "agent": "gemini",
+  "status": {
+    "id": "7a3c8de0-...",
+    "agent": "gemini",
+    "authMode": "oauth",
+    "running": true,
+    "pendingRequests": 0,
+    "lastActivityTime": 1704067200000,
+    "idleMs": 0
+  }
+}
+```
+
+**If ALLOW_INTERACTIVE_AUTH=false** (default in hosted mode):
+```json
+{
+  "error": "Failed to create session",
+  "message": "Gemini OAuth mode (interactive Google login) is disabled in hosted environments. Set ALLOW_INTERACTIVE_AUTH=true to enable, or use auth.mode=\"api_key\" or \"vertex\" instead."
+}
+```
+
+#### Gemini - API Key (Inline)
+
+Uses Gemini API key for billing. Recommended for production VPS deployments.
+
+**Get API key**: https://makersuite.google.com/app/apikey
+
+**Create session**:
+```bash
+curl -X POST http://localhost:8080/v1/sessions \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "gemini",
+    "auth": {
+      "mode": "api_key",
+      "providerKey": "google",
+      "apiKeyRef": "inline",
+      "apiKey": "AIza-your-gemini-api-key-here"
+    }
+  }'
+```
+
+#### Gemini - API Key (Stored Credential)
+
+First, store the credential:
+```bash
+curl -X POST http://localhost:8080/v1/credentials \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "google",
+    "label": "Production Gemini Key",
+    "apiKey": "AIza-your-gemini-api-key-here"
+  }'
+```
+
+Response:
+```json
+{
+  "id": "xyz789ghi012",
+  "provider": "google",
+  "label": "Production Gemini Key",
+  "createdAt": 1704067200000
+}
+```
+
+Then create Gemini session:
+```bash
+curl -X POST http://localhost:8080/v1/sessions \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "gemini",
+    "auth": {
+      "mode": "api_key",
+      "providerKey": "google",
+      "apiKeyRef": "stored",
+      "storedCredentialId": "xyz789ghi012"
+    }
+  }'
+```
+
+#### Gemini - Vertex AI (Google Cloud)
+
+Uses Google Cloud Vertex AI for enterprise deployments with Application Default Credentials (ADC).
+
+**Prerequisites**:
+1. Enable Vertex AI API in your Google Cloud project
+2. Configure ADC in the container (one of these methods):
+   - **Option A**: Mount service account JSON and set `GOOGLE_APPLICATION_CREDENTIALS`
+   - **Option B**: Use GCE/GKE workload identity
+   - **Option C**: Use `gcloud auth application-default login` (dev only)
+
+**Method A: Service Account JSON** (recommended for VPS):
+
+1. Create service account JSON:
+   ```bash
+   gcloud iam service-accounts create aperture-gemini --project=your-project-id
+   gcloud projects add-iam-policy-binding your-project-id \
+     --member="serviceAccount:aperture-gemini@your-project-id.iam.gserviceaccount.com" \
+     --role="roles/aiplatform.user"
+   gcloud iam service-accounts keys create /path/to/service-account.json \
+     --iam-account=aperture-gemini@your-project-id.iam.gserviceaccount.com
+   ```
+
+2. Mount in docker-compose.yml:
+   ```yaml
+   services:
+     aperture:
+       volumes:
+         - /path/to/service-account.json:/app/gcp-service-account.json:ro
+       environment:
+         - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-service-account.json
+   ```
+
+3. Create session with Vertex credentials path:
+   ```bash
+   curl -X POST http://localhost:8080/v1/sessions \
+     -H "Authorization: Bearer your-token" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "agent": "gemini",
+       "auth": {
+         "mode": "vertex",
+         "providerKey": "google",
+         "apiKeyRef": "none",
+         "vertexProjectId": "your-gcp-project-id",
+         "vertexLocation": "us-central1",
+         "vertexCredentialsPath": "/app/gcp-service-account.json"
+       }
+     }'
+   ```
+
+**Method B: Application Default Credentials** (simpler, requires pre-configured ADC):
+
+```bash
+curl -X POST http://localhost:8080/v1/sessions \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "gemini",
+    "auth": {
+      "mode": "vertex",
+      "providerKey": "google",
+      "apiKeyRef": "none",
+      "vertexProjectId": "your-gcp-project-id",
+      "vertexLocation": "us-central1"
+    }
+  }'
+```
+
+**Note**: `vertexCredentialsPath` is optional. If not provided, Gemini CLI will use Application Default Credentials (ADC) from the environment.
+
+**Common Vertex Locations**:
+- `us-central1` (Iowa)
+- `us-east4` (Northern Virginia)
+- `europe-west4` (Netherlands)
+- `asia-southeast1` (Singapore)
+
+See: https://cloud.google.com/vertex-ai/docs/general/locations
+
+**Vertex Auth Mode Requirements**:
+- ✅ Works in `HOSTED_MODE=true` (recommended for production)
+- ✅ No `ALLOW_INTERACTIVE_AUTH` flag needed
+- ✅ Supports both service account JSON and ADC
+- ⚠️  Requires Vertex AI API enabled in GCP project
+- ⚠️  Billing is through Google Cloud, not Gemini API
+
+### Gemini CLI Troubleshooting
+
+#### Gemini CLI not found
+
+**Error**:
+```json
+{
+  "error": "Failed to create session",
+  "message": "Agent backend not ready: Gemini CLI not found. Install via: npm install -g @google/gemini-cli"
+}
+```
+
+**Solution** (Docker):
+```bash
+# Rebuild image (Gemini CLI is installed automatically)
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+**Solution** (Local dev):
+```bash
+npm install -g @google/gemini-cli
+gemini --version  # Verify installation
+```
+
+#### OAuth not working in hosted mode
+
+**Error**:
+```json
+{
+  "error": "Failed to create session",
+  "message": "Gemini OAuth mode (interactive Google login) is disabled in hosted environments..."
+}
+```
+
+**Solution**:
+```bash
+# In .env
+ALLOW_INTERACTIVE_AUTH=true
+
+# Restart gateway
+docker-compose restart
+```
+
+#### Vertex AI authentication failed
+
+**Error**:
+```
+Session stderr: Error: Could not load the default credentials
+```
+
+**Solution**:
+1. **Verify service account JSON** is mounted and readable:
+   ```bash
+   docker exec -it aperture-gateway cat /app/gcp-service-account.json
+   ```
+
+2. **Verify GOOGLE_APPLICATION_CREDENTIALS** is set:
+   ```bash
+   docker exec -it aperture-gateway printenv GOOGLE_APPLICATION_CREDENTIALS
+   ```
+
+3. **Verify Vertex AI API is enabled**:
+   ```bash
+   gcloud services enable aiplatform.googleapis.com --project=your-project-id
+   ```
+
+4. **Verify service account has permissions**:
+   ```bash
+   gcloud projects get-iam-policy your-project-id \
+     --flatten="bindings[].members" \
+     --filter="bindings.members:serviceAccount:aperture-gemini@*"
+   ```
+
+#### ACP framing error (non-JSON output)
+
+**Error** (in stderr logs):
+```
+Session stderr: Failed to parse stdout: Invalid JSON: Unexpected token...
+```
+
+**Cause**: Gemini CLI outputting logs to stdout instead of JSON-RPC.
+
+**Solution**: Ensure `--experimental-acp` flag is supported in your Gemini CLI version:
+```bash
+docker exec -it aperture-gateway gemini --help | grep experimental-acp
+# Should show: --experimental-acp    Starts the agent in ACP mode
+```
+
+If not present, update Gemini CLI:
+```bash
+# In Dockerfile
+RUN npm install -g @google/gemini-cli@latest
+
+# Rebuild
+docker-compose build --no-cache
+```
+
+#### Gateway environment GEMINI_API_KEY not working
+
+**Symptom**: Set `GEMINI_API_KEY` in `.env` but sessions don't use it.
+
+**Explanation**: This is **intentional**. Aperture uses Zed-like auth semantics:
+- Gateway environment API keys are **IGNORED**
+- You must explicitly set `auth.mode="api_key"` per session
+- This prevents accidental API billing
+
+**Solution**: Use per-session auth configuration (see examples above).
 
 ## API Reference
 

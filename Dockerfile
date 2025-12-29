@@ -40,15 +40,20 @@ RUN npm ci --omit=dev
 # - claude-code-acp for Claude Code agent
 # - codex-acp for Codex agent (if available)
 # - @openai/codex for Codex CLI
+# - @google/gemini-cli for Gemini CLI (with ACP mode support)
 RUN npm install -g @zed-industries/claude-code-acp && \
     npm install -g @zed-industries/codex-acp || echo "codex-acp not available, skipping" && \
-    npm install -g @openai/codex || echo "codex not available, skipping"
+    npm install -g @openai/codex || echo "codex not available, skipping" && \
+    npm install -g @google/gemini-cli || echo "gemini-cli not available, skipping"
 
 # Copy built files from builder
 COPY --from=builder /build/dist ./dist
 
-# Create data directory for encrypted credentials
-RUN mkdir -p /home/app/data && chown app:app /home/app/data
+# Create directories for persisted state
+# - /home/app/data for encrypted credentials
+# - /home/app/.gemini for Gemini CLI OAuth cache
+RUN mkdir -p /home/app/data /home/app/.gemini && \
+    chown -R app:app /home/app/data /home/app/.gemini
 
 # Change ownership to app user
 RUN chown -R app:app /app
@@ -56,7 +61,7 @@ RUN chown -R app:app /app
 # Switch to non-root user
 USER app
 
-# Set HOME so Claude Code can persist config in ~/.claude
+# Set HOME so agents can persist config in ~/.claude, ~/.codex, ~/.gemini
 ENV HOME=/home/app
 
 # Expose port

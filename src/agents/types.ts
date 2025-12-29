@@ -3,12 +3,12 @@ import type { ChildProcess } from 'child_process';
 /**
  * Authentication mode for an agent session
  */
-export type AuthMode = 'interactive' | 'api_key';
+export type AuthMode = 'interactive' | 'api_key' | 'oauth' | 'vertex';
 
 /**
  * Provider type
  */
-export type Provider = 'anthropic' | 'openai';
+export type Provider = 'anthropic' | 'openai' | 'google';
 
 /**
  * API key reference type
@@ -24,12 +24,17 @@ export interface SessionAuth {
   apiKeyRef?: ApiKeyRef;
   apiKey?: string; // Only allowed when apiKeyRef='inline'
   storedCredentialId?: string; // Only used when apiKeyRef='stored'
+
+  // Vertex AI specific (only for mode='vertex')
+  vertexProjectId?: string; // GOOGLE_CLOUD_PROJECT
+  vertexLocation?: string; // GOOGLE_CLOUD_LOCATION
+  vertexCredentialsPath?: string; // Path to service account JSON (optional)
 }
 
 /**
  * Agent type
  */
-export type AgentType = 'claude_code' | 'codex';
+export type AgentType = 'claude_code' | 'codex' | 'gemini';
 
 /**
  * Session configuration for creating an agent
@@ -79,7 +84,7 @@ export interface AgentBackend {
    * Validate authentication configuration for this agent
    * Throws user-facing errors if invalid
    */
-  validateAuth(sessionAuth: SessionAuth, hostedMode: boolean): void;
+  validateAuth(sessionAuth: SessionAuth, hostedMode: boolean, allowInteractiveAuth?: boolean): void;
 
   /**
    * Spawn the agent process with the given configuration

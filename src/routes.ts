@@ -34,7 +34,7 @@ export async function registerRoutes(
   });
 
   // Readiness check - verifies runtime, child spawn, and claude executable
-  fastify.get('/readyz', async (request, reply) => {
+  fastify.get('/readyz', async (_request, reply) => {
     const readiness = await checkReadiness();
 
     if (!readiness.ready) {

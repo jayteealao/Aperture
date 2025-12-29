@@ -35,10 +35,10 @@ export async function registerCredentialRoutes(
         });
       }
 
-      if (provider !== 'anthropic' && provider !== 'openai') {
+      if (provider !== 'anthropic' && provider !== 'openai' && provider !== 'google') {
         return reply.code(400).send({
           error: 'Invalid provider',
-          message: 'provider must be "anthropic" or "openai"',
+          message: 'provider must be "anthropic", "openai", or "google"',
         });
       }
 

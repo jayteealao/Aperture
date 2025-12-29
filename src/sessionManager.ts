@@ -40,13 +40,25 @@ export class SessionManager {
     const id = randomUUID();
     const agent = options.agent || 'claude_code'; // Default to Claude Code for backwards compatibility
 
+    // Determine default provider based on agent
+    let defaultProvider: 'anthropic' | 'openai' | 'google' = 'anthropic';
+    if (agent === 'codex') {
+      defaultProvider = 'openai';
+    } else if (agent === 'gemini') {
+      defaultProvider = 'google';
+    }
+
     // Build session auth configuration with defaults
     const auth: SessionAuth = {
       mode: options.auth?.mode || 'interactive',
-      providerKey: options.auth?.providerKey || (agent === 'claude_code' ? 'anthropic' : 'openai'),
+      providerKey: options.auth?.providerKey || defaultProvider,
       apiKeyRef: options.auth?.apiKeyRef || 'none',
       apiKey: options.auth?.apiKey,
       storedCredentialId: options.auth?.storedCredentialId,
+      // Vertex AI specific fields
+      vertexProjectId: options.auth?.vertexProjectId,
+      vertexLocation: options.auth?.vertexLocation,
+      vertexCredentialsPath: options.auth?.vertexCredentialsPath,
     };
 
     // Build session config
@@ -58,12 +70,12 @@ export class SessionManager {
     };
 
     // Get agent backend
-    const backend = getAgentBackend(agent, this.claudeCodeExecutable);
+    const backend = getAgentBackend(agent, this.claudeCodeExecutable, this.config.geminiHomePath);
 
     // Validate auth for this backend
-    backend.validateAuth(auth, this.config.hostedMode);
+    backend.validateAuth(auth, this.config.hostedMode, this.config.allowInteractiveAuth);
 
-    // Resolve API key if needed
+    // Resolve API key if needed (only for api_key mode)
     let resolvedApiKey: string | undefined;
     if (auth.mode === 'api_key') {
       if (auth.apiKeyRef === 'inline') {
@@ -93,6 +105,7 @@ export class SessionManager {
         throw new Error('API key mode requires apiKeyRef to be "inline" or "stored"');
       }
     }
+    // Note: oauth and vertex modes don't need API key resolution here
 
     // Create session
     const session = new Session(sessionConfig, backend, this.config, resolvedApiKey);

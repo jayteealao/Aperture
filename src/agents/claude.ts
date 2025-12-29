@@ -49,7 +49,7 @@ export class ClaudeBackend implements AgentBackend {
     };
   }
 
-  validateAuth(sessionAuth: SessionAuth, hostedMode: boolean): void {
+  validateAuth(sessionAuth: SessionAuth, hostedMode: boolean, _allowInteractiveAuth?: boolean): void {
     // Validate apiKeyRef and apiKey combination
     if (sessionAuth.apiKeyRef === 'inline' && !sessionAuth.apiKey) {
       throw new Error('apiKey is required when apiKeyRef="inline"');

@@ -15,6 +15,8 @@ services:
       - claude-data:/home/app/.claude
       # Persist Codex home directory for subscription auth
       - codex-data:/home/app/.codex
+      # Persist Gemini CLI home directory for OAuth cache
+      - gemini-data:/home/app/.gemini
       # Persist encrypted credentials
       - credentials-data:/home/app/data
     healthcheck:
@@ -34,5 +36,7 @@ volumes:
     name: aperture-claude-data
   codex-data:
     name: aperture-codex-data
+  gemini-data:
+    name: aperture-gemini-data
   credentials-data:
     name: aperture-credentials-data

@@ -28,11 +28,17 @@ export interface Config {
   // Hosted mode (enforces API key auth for Codex)
   hostedMode: boolean;
 
+  // Allow interactive/OAuth auth modes in hosted mode (default: false)
+  allowInteractiveAuth: boolean;
+
   // Credential storage encryption key (optional, enables stored credentials)
   credentialsMasterKey?: string;
 
   // Path to store encrypted credentials
   credentialsStorePath: string;
+
+  // Gemini CLI home directory for OAuth cache
+  geminiHomePath: string;
 }
 
 function getEnv(key: string, defaultValue?: string): string | undefined {
@@ -95,6 +101,14 @@ export function loadConfig(): Config {
       '⚠️  Use per-session auth.mode="api_key" for Codex sessions to explicitly enable API billing.'
     );
   }
+  if (process.env.GEMINI_API_KEY) {
+    console.warn(
+      '⚠️  GEMINI_API_KEY in gateway environment is IGNORED by default.'
+    );
+    console.warn(
+      '⚠️  Use per-session auth.mode="api_key" for Gemini sessions to explicitly enable API billing.'
+    );
+  }
 
   const credentialsMasterKey = getEnv('CREDENTIALS_MASTER_KEY');
   if (credentialsMasterKey && credentialsMasterKey.length < 32) {
@@ -117,10 +131,12 @@ export function loadConfig(): Config {
     claudeCodeExecutable: getEnv('CLAUDE_CODE_EXECUTABLE'),
     autoInstallClaude: getEnvBoolean('AUTO_INSTALL_CLAUDE_CLI', false),
     hostedMode: getEnvBoolean('HOSTED_MODE', true),
+    allowInteractiveAuth: getEnvBoolean('ALLOW_INTERACTIVE_AUTH', false),
     credentialsMasterKey:
       credentialsMasterKey && credentialsMasterKey.length >= 32
         ? credentialsMasterKey
         : undefined,
     credentialsStorePath: getEnv('CREDENTIALS_STORE_PATH', '/data/credentials.json.enc')!,
+    geminiHomePath: getEnv('GEMINI_HOME_PATH', '/home/app/.gemini')!,
   };
 }
