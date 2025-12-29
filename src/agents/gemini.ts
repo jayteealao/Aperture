@@ -214,6 +214,7 @@ export class GeminiBackend implements AgentBackend {
     const child = spawn('gemini', ['--experimental-acp'], {
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
+      shell: true, // Required on Windows to resolve .cmd executables
     });
 
     return {

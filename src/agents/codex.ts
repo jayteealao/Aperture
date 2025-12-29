@@ -125,6 +125,7 @@ export class CodexBackend implements AgentBackend {
     const child = spawn('codex-acp', [], {
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
+      shell: true, // Required on Windows to resolve .cmd executables
     });
 
     return {

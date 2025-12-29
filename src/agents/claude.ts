@@ -116,6 +116,7 @@ export class ClaudeBackend implements AgentBackend {
     const child = spawn('claude-code-acp', [], {
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
+      shell: true, // Required on Windows to resolve .cmd executables
     });
 
     return {
