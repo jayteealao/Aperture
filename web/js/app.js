@@ -76,6 +76,9 @@ const router = new Router();
 
 // Bootstrap
 async function init() {
+  // Restore state from IndexedDB
+  await store.restoreState();
+
   // Configure API client
   const serverUrl = store.get('serverUrl');
   const apiToken = store.get('apiToken');
@@ -84,8 +87,15 @@ async function init() {
     api.configure(serverUrl, apiToken);
   }
 
-  // Navigate to initial route
-  await router.navigate(router.currentPath);
+  // Check if we have a restored session and navigate to it
+  const currentSession = store.get('currentSession');
+  if (currentSession && router.currentPath === '/') {
+    // Navigate to chat if we have a restored session
+    await router.navigate('/chat');
+  } else {
+    // Navigate to initial route
+    await router.navigate(router.currentPath);
+  }
 
   // Apply settings
   applySettings();

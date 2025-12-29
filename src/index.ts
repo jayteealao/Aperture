@@ -8,6 +8,7 @@ import { dirname, join } from 'path';
 import { loadConfig } from './config.js';
 import { SessionManager } from './sessionManager.js';
 import { CredentialStore } from './credentials.js';
+import { ApertureDatabase } from './database.js';
 import { createAuthMiddleware, redactHeaders } from './auth.js';
 import { registerRoutes } from './routes.js';
 import { verifyClaudeInstallation } from './claudeInstaller.js';
@@ -37,6 +38,13 @@ async function main() {
     console.warn('⚠️  Credential storage disabled (no CREDENTIALS_MASTER_KEY set)');
     console.warn('⚠️  Only inline API keys can be used for sessions');
   }
+
+  // Initialize database
+  console.log('💾 Initializing database...');
+  const database = new ApertureDatabase(config.databasePath);
+  const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
+  database.migrate(migrationsDir);
+  console.log('✅ Database initialized');
 
   // Verify Claude Code CLI installation (with optional auto-install)
   const claudePath = await verifyClaudeInstallation(config.autoInstallClaude);
@@ -77,7 +85,10 @@ async function main() {
   });
 
   // Create session manager
-  const sessionManager = new SessionManager(config, claudePath, credentialStore);
+  const sessionManager = new SessionManager(config, database, claudePath, credentialStore);
+
+  // Restore sessions from database
+  await sessionManager.restoreSessions();
 
   // Register authentication middleware for all routes except health checks and static files
   fastify.addHook('onRequest', async (request, reply) => {
@@ -95,12 +106,13 @@ async function main() {
   });
 
   // Register routes
-  await registerRoutes(fastify, sessionManager, config, credentialStore);
+  await registerRoutes(fastify, sessionManager, config, database, credentialStore);
 
   // Graceful shutdown
   const shutdown = async () => {
     console.log('\n🛑 Shutting down...');
     await sessionManager.terminateAll();
+    database.close();
     await fastify.close();
     process.exit(0);
   };

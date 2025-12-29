@@ -19,6 +19,8 @@ export function renderChat() {
   container.className = 'app-shell';
 
   container.innerHTML = `
+    <div class="connection-banner" id="connection-banner" style="display: none;"></div>
+
     <div class="connection-bar" id="connection-bar">
       <div class="cluster cluster--xs">
         <button class="btn btn--ghost btn--sm" id="toggle-rail">☰</button>
@@ -118,6 +120,7 @@ export function renderChat() {
   `;
 
   // DOM references
+  const connectionBanner = container.querySelector('#connection-banner');
   const rail = container.querySelector('#rail');
   const inspector = container.querySelector('#inspector');
   const timeline = container.querySelector('#chat-timeline');
@@ -661,6 +664,31 @@ export function renderChat() {
     }
   }
 
+  // Connection banner
+  function renderConnectionBanner() {
+    const conn = store.get('connection');
+
+    if (conn.status === 'reconnecting') {
+      connectionBanner.innerHTML = `
+        <div style="background: #f59e0b; color: white; padding: 12px; text-align: center;">
+          <span>Reconnecting... (attempt ${conn.retryCount || 0})</span>
+          <button class="btn btn--sm" style="margin-left: 12px;" onclick="location.reload()">Reload Page</button>
+        </div>
+      `;
+      connectionBanner.style.display = 'block';
+    } else if (conn.status === 'failed') {
+      connectionBanner.innerHTML = `
+        <div style="background: #dc2626; color: white; padding: 12px; text-align: center;">
+          <span>Connection lost: ${conn.error || 'Unknown error'}</span>
+          <button class="btn btn--sm" style="margin-left: 12px;" onclick="location.hash = '/sessions'">Back to Sessions</button>
+        </div>
+      `;
+      connectionBanner.style.display = 'block';
+    } else {
+      connectionBanner.style.display = 'none';
+    }
+  }
+
   // Connection info
   function renderConnectionInfo() {
     const conn = store.get('connection');
@@ -679,6 +707,12 @@ export function renderChat() {
         <span class="kicker">Session ID</span>
         <p class="mono">${session.id}</p>
       </div>
+      ${conn.retryCount ? `
+        <div>
+          <span class="kicker">Retry Count</span>
+          <p class="mono meta">${conn.retryCount}</p>
+        </div>
+      ` : ''}
       ${conn.lastPing ? `
         <div>
           <span class="kicker">Last Ping</span>
@@ -742,18 +776,35 @@ export function renderChat() {
       renderConnectionInfo();
     } else if (key === 'connection') {
       renderConnectionInfo();
+      renderConnectionBanner();
     } else if (key === 'sessions') {
       renderSessionList();
     }
   });
 
+  // Load messages from IndexedDB if not already in memory
+  async function initializeMessages() {
+    const messages = store.get('messages')[session.id];
+    if (!messages || messages.length === 0) {
+      await store.loadMessagesForSession(session.id);
+    }
+    renderMessages();
+  }
+
   // Initialize
-  renderMessages();
-  renderSessionList();
-  renderEvents();
-  renderApprovals();
-  renderConnectionInfo();
-  connectWebSocket();
+  (async () => {
+    // Save current session ID for restoration
+    await store.saveCurrentSessionId(session.id);
+
+    // Load messages
+    await initializeMessages();
+
+    renderSessionList();
+    renderEvents();
+    renderApprovals();
+    renderConnectionInfo();
+    connectWebSocket();
+  })();
 
   return container;
 }

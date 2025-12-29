@@ -4,6 +4,7 @@ import { Session } from './session.js';
 import { getAgentBackend } from './agents/index.js';
 import type { SessionAuth, AgentType, SessionConfig } from './agents/index.js';
 import type { CredentialStore } from './credentials.js';
+import type { ApertureDatabase } from './database.js';
 
 export interface CreateSessionOptions {
   agent?: AgentType;
@@ -19,11 +20,37 @@ export class SessionManager {
   private config: Config;
   private claudeCodeExecutable?: string;
   private credentialStore?: CredentialStore;
+  private database?: ApertureDatabase;
 
-  constructor(config: Config, claudeCodeExecutable?: string, credentialStore?: CredentialStore) {
+  constructor(
+    config: Config,
+    database?: ApertureDatabase,
+    claudeCodeExecutable?: string,
+    credentialStore?: CredentialStore
+  ) {
     this.config = config;
+    this.database = database;
     this.claudeCodeExecutable = claudeCodeExecutable;
     this.credentialStore = credentialStore;
+  }
+
+  /**
+   * Restore sessions from database on startup
+   */
+  async restoreSessions(): Promise<void> {
+    if (!this.database) {
+      return;
+    }
+
+    const activeSessions = this.database.getActiveSessions();
+    console.log(`[SessionManager] Found ${activeSessions.length} active sessions in database`);
+
+    // Mark all previous sessions as ended (they can't be resumed after server restart)
+    for (const sessionRecord of activeSessions) {
+      this.database.endSession(sessionRecord.id, Date.now());
+    }
+
+    console.log('[SessionManager] Marked all previous sessions as ended');
   }
 
   /**
@@ -108,15 +135,41 @@ export class SessionManager {
     // Note: oauth and vertex modes don't need API key resolution here
 
     // Create session
-    const session = new Session(sessionConfig, backend, this.config, resolvedApiKey);
+    const session = new Session(sessionConfig, backend, this.config, this.database, resolvedApiKey);
+
+    // Persist to database
+    if (this.database) {
+      this.database.saveSession({
+        id,
+        agent,
+        auth_mode: auth.mode,
+        acp_session_id: null, // Will be updated after initialization
+        created_at: Date.now(),
+        last_activity_at: Date.now(),
+        ended_at: null,
+        status: 'active',
+        metadata: JSON.stringify({ env: options.env }),
+        user_id: null, // Future: extract from auth token
+      });
+    }
 
     // Set up event handlers
     session.on('exit', () => {
       this.sessions.delete(id);
+
+      // Mark session as ended in database
+      if (this.database) {
+        this.database.endSession(id, Date.now());
+      }
     });
 
     session.on('idle', () => {
       console.log(`Session ${id} idle, terminating`);
+
+      // Mark session as idle in database
+      if (this.database) {
+        this.database.endSession(id, Date.now());
+      }
     });
 
     session.on('error', (err) => {
@@ -125,6 +178,13 @@ export class SessionManager {
 
     session.on('stderr', (line) => {
       console.error(`Session ${id} stderr: ${line}`);
+    });
+
+    // Set up activity tracking
+    session.on('activity', () => {
+      if (this.database) {
+        this.database.updateSessionActivity(id, Date.now());
+      }
     });
 
     // Start the session
@@ -152,6 +212,11 @@ export class SessionManager {
 
     await session.terminate();
     this.sessions.delete(id);
+
+    // Delete from database
+    if (this.database) {
+      this.database.deleteSession(id);
+    }
   }
 
   /**

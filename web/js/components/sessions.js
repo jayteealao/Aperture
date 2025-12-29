@@ -6,6 +6,7 @@ import { store } from '../store.js';
 import { api } from '../api.js';
 import { router, showToast } from '../app.js';
 import { renderNewSessionPanel } from './new-session.js';
+import { db } from '../db.js';
 
 export function renderSessions() {
   const container = document.createElement('div');
@@ -122,23 +123,55 @@ async function loadSessions(container) {
       return;
     }
 
-    listContainer.innerHTML = sessions.map(session => `
-      <div
-        class="session-item"
-        role="button"
-        tabindex="0"
-        data-session-id="${session.id}"
-      >
-        <div class="status-dot" data-status="${session.status.running ? 'ok' : 'idle'}"></div>
-        <div class="session-item__meta">
-          <div class="cluster--s2">
-            <span class="kicker">${session.id.slice(0, 8)}</span>
-            <span class="chip chip--accent">${session.agent.toUpperCase()}</span>
+    // Get message counts from IndexedDB for each session
+    const sessionWithCounts = await Promise.all(
+      sessions.map(async (session) => {
+        const messageCount = await db.getMessageCount(session.id);
+        const lastMessage = await db.getLastMessage(session.id);
+        return {
+          ...session,
+          messageCount,
+          lastMessage
+        };
+      })
+    );
+
+    listContainer.innerHTML = sessionWithCounts.map(session => {
+      const lastActivityTime = session.status.lastActivityTime;
+      const timeAgo = formatTimeAgo(lastActivityTime);
+      const preview = session.lastMessage
+        ? truncate(session.lastMessage.content, 60)
+        : 'No messages yet';
+
+      return `
+        <div
+          class="session-item"
+          role="button"
+          tabindex="0"
+          data-session-id="${session.id}"
+          style="flex-direction: column; align-items: flex-start; padding: 12px; gap: 8px;"
+        >
+          <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+            <div class="status-dot" data-status="${session.status.running ? 'ok' : 'idle'}"></div>
+            <div class="session-item__meta" style="flex: 1;">
+              <div class="cluster--s2">
+                <span class="kicker">${session.id.slice(0, 8)}</span>
+                <span class="chip chip--accent">${session.agent.toUpperCase()}</span>
+              </div>
+            </div>
+            <span class="meta" style="font-size: 12px;">${timeAgo}</span>
           </div>
-          <span class="meta">${session.status.authMode} • ${new Date(session.status.lastActivityTime).toLocaleTimeString()}</span>
+          ${session.lastMessage ? `
+            <div style="width: 100%; padding-left: 20px;">
+              <p class="meta" style="font-size: 13px; line-height: 1.4; margin: 0;">${preview}</p>
+            </div>
+          ` : ''}
+          <div style="width: 100%; padding-left: 20px;">
+            <span class="meta" style="font-size: 12px;">${session.messageCount} messages • ${session.status.authMode}</span>
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     // Add click handlers
     listContainer.querySelectorAll('.session-item').forEach(item => {
@@ -155,4 +188,26 @@ async function loadSessions(container) {
     showToast('Error', `Failed to load sessions: ${error.message}`, 'error');
     listContainer.innerHTML = '<p class="meta">Failed to load sessions</p>';
   }
+}
+
+function formatTimeAgo(timestamp) {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (seconds < 60) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+function truncate(text, maxLength) {
+  if (typeof text !== 'string') {
+    text = JSON.stringify(text);
+  }
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength) + '...';
 }

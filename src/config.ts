@@ -44,6 +44,9 @@ export interface Config {
 
   // Gemini CLI home directory for OAuth cache
   geminiHomePath: string;
+
+  // Database path for session and message persistence
+  databasePath: string;
 }
 
 function getEnv(key: string, defaultValue?: string): string | undefined {
@@ -141,7 +144,8 @@ export function loadConfig(): Config {
       credentialsMasterKey && credentialsMasterKey.length >= 32
         ? credentialsMasterKey
         : undefined,
-    credentialsStorePath: getEnv('CREDENTIALS_STORE_PATH', '/data/credentials.json.enc')!,
+    credentialsStorePath: getEnv('CREDENTIALS_STORE_PATH', '/home/app/data/credentials.json.enc')!,
     geminiHomePath: getEnv('GEMINI_HOME_PATH', '/home/app/.gemini')!,
+    databasePath: getEnv('DATABASE_PATH', '/home/app/data/aperture.db')!,
   };
 }

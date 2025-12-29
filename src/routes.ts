@@ -3,6 +3,7 @@ import type { SessionManager } from './sessionManager.js';
 import type { Config } from './config.js';
 import type { SessionAuth, AgentType } from './agents/index.js';
 import type { CredentialStore } from './credentials.js';
+import type { ApertureDatabase } from './database.js';
 import { validateJsonRpcMessage, type JsonRpcMessage } from './jsonrpc.js';
 import { checkReadiness } from './claudeInstaller.js';
 import { registerCredentialRoutes } from './routes/credentials.js';
@@ -24,6 +25,7 @@ export async function registerRoutes(
   fastify: FastifyInstance,
   sessionManager: SessionManager,
   config: Config,
+  database?: ApertureDatabase,
   credentialStore?: CredentialStore
 ) {
   // Register credential management routes
@@ -125,6 +127,66 @@ export async function registerRoutes(
       total: sessions.length,
     };
   });
+
+  // Get message history for a session
+  fastify.get<{ Params: { id: string }; Querystring: { limit?: number; offset?: number } }>(
+    '/v1/sessions/:id/messages',
+    async (request, reply) => {
+      if (!database) {
+        return reply.code(503).send({
+          error: 'Message persistence not enabled',
+        });
+      }
+
+      const sessionRecord = database.getSession(request.params.id);
+      if (!sessionRecord) {
+        return reply.code(404).send({
+          error: 'Session not found',
+        });
+      }
+
+      const limit = request.query.limit || 1000;
+      const offset = request.query.offset || 0;
+
+      const messages = database.getMessages(request.params.id, limit, offset);
+      const total = database.getMessageCount(request.params.id);
+
+      return {
+        messages,
+        total,
+        limit,
+        offset,
+      };
+    }
+  );
+
+  // Get all sessions including ended ones (from database)
+  fastify.get<{ Querystring: { status?: string; userId?: string } }>(
+    '/v1/sessions/history',
+    async (request, reply) => {
+      if (!database) {
+        return reply.code(503).send({
+          error: 'Session persistence not enabled',
+        });
+      }
+
+      const userId = request.query.userId; // Future: extract from auth
+      const sessions = database.getAllSessions(userId);
+
+      if (request.query.status) {
+        const filtered = sessions.filter((s) => s.status === request.query.status);
+        return {
+          sessions: filtered,
+          total: filtered.length,
+        };
+      }
+
+      return {
+        sessions,
+        total: sessions.length,
+      };
+    }
+  );
 
   // Send JSON-RPC message to a session
   fastify.post<{ Params: { id: string }; Body: SendRpcBody }>(

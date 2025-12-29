@@ -4,6 +4,7 @@ import { createInterface } from 'readline';
 import { readFile, writeFile } from 'fs/promises';
 import type { Config } from './config.js';
 import type { AgentBackend, SessionConfig, AgentType } from './agents/index.js';
+import type { ApertureDatabase } from './database.js';
 import {
   parseMessage,
   serializeMessage,
@@ -80,6 +81,7 @@ export class Session extends EventEmitter {
   private config: Config;
   private backend: AgentBackend;
   private sessionConfig: SessionConfig;
+  private database?: ApertureDatabase;
   private resolvedApiKey?: string;
   private pendingRequests: Map<string | number, PendingRequest> = new Map();
   private pendingPermissions: Map<string, PendingPermission> = new Map();
@@ -95,6 +97,7 @@ export class Session extends EventEmitter {
     sessionConfig: SessionConfig,
     backend: AgentBackend,
     config: Config,
+    database?: ApertureDatabase,
     resolvedApiKey?: string
   ) {
     super();
@@ -103,6 +106,7 @@ export class Session extends EventEmitter {
     this.sessionConfig = sessionConfig;
     this.backend = backend;
     this.config = config;
+    this.database = database;
     this.resolvedApiKey = resolvedApiKey;
   }
 
@@ -597,6 +601,7 @@ export class Session extends EventEmitter {
   private updateActivity(): void {
     this.lastActivityTime = Date.now();
     this.resetIdleTimer();
+    this.emit('activity');
   }
 
   /**
