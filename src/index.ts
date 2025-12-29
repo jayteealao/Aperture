@@ -2,6 +2,9 @@ import Fastify from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
 import fastifyCors from '@fastify/cors';
 import fastifyRateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { loadConfig } from './config.js';
 import { SessionManager } from './sessionManager.js';
 import { CredentialStore } from './credentials.js';
@@ -65,13 +68,25 @@ async function main() {
     timeWindow: config.rateLimitWindowMs,
   });
 
+  // Serve static files from web folder
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  await fastify.register(fastifyStatic, {
+    root: join(__dirname, '..', 'web'),
+    prefix: '/',
+  });
+
   // Create session manager
   const sessionManager = new SessionManager(config, claudePath, credentialStore);
 
-  // Register authentication middleware for all routes except health checks
+  // Register authentication middleware for all routes except health checks and static files
   fastify.addHook('onRequest', async (request, reply) => {
     // Skip auth for health checks
     if (request.url === '/healthz' || request.url === '/readyz') {
+      return;
+    }
+    // Skip auth for static files (frontend)
+    if (request.url === '/' || request.url.startsWith('/css/') || request.url.startsWith('/js/')) {
       return;
     }
 
