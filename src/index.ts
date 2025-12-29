@@ -15,9 +15,12 @@ async function main() {
   console.log('🚀 Starting Aperture Gateway...');
   console.log(`📡 Port: ${config.port}`);
   console.log(`🔒 Authentication: enabled`);
+  if (config.autoInstallClaude) {
+    console.log('🔧 Auto-install Claude CLI: enabled');
+  }
 
-  // Verify Claude Code CLI installation
-  const claudePath = await verifyClaudeInstallation();
+  // Verify Claude Code CLI installation (with optional auto-install)
+  const claudePath = await verifyClaudeInstallation(config.autoInstallClaude);
 
   // Create Fastify instance
   const fastify = Fastify({

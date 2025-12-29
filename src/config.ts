@@ -27,6 +27,9 @@ export interface Config {
 
   // Claude Code CLI path (optional, will auto-detect if not set)
   claudeCodeExecutable?: string;
+
+  // Auto-install Claude CLI if not found
+  autoInstallClaude: boolean;
 }
 
 function getEnv(key: string, defaultValue?: string): string | undefined {
@@ -51,6 +54,21 @@ function getEnvNumber(key: string, defaultValue: number): number {
     throw new Error(`Invalid number for ${key}: ${value}`);
   }
   return parsed;
+}
+
+function getEnvBoolean(key: string, defaultValue: boolean): boolean {
+  const value = process.env[key];
+  if (!value) {
+    return defaultValue;
+  }
+  const lower = value.toLowerCase();
+  if (lower === 'true' || lower === '1' || lower === 'yes') {
+    return true;
+  }
+  if (lower === 'false' || lower === '0' || lower === 'no') {
+    return false;
+  }
+  throw new Error(`Invalid boolean for ${key}: ${value} (use true/false)`);
 }
 
 export function loadConfig(): Config {
@@ -81,5 +99,6 @@ export function loadConfig(): Config {
     rateLimitMax: getEnvNumber('RATE_LIMIT_MAX', 100),
     rateLimitWindowMs: getEnvNumber('RATE_LIMIT_WINDOW_MS', 60000), // 1 min
     claudeCodeExecutable: getEnv('CLAUDE_CODE_EXECUTABLE'),
+    autoInstallClaude: getEnvBoolean('AUTO_INSTALL_CLAUDE_CLI', false),
   };
 }

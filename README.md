@@ -465,10 +465,20 @@ curl -fsSL https://claude.ai/install.cmd -o install.cmd && install.cmd && del in
 ### How Aperture Uses the CLI
 
 1. On startup, Aperture checks if `claude` is in PATH via `claude --version`
-2. If found, sets `CLAUDE_CODE_EXECUTABLE` env var when spawning `claude-code-acp`
-3. If not found, logs a warning but continues (claude-code-acp will use its vendored CLI as fallback, just like Zed does)
+2. If not found and `AUTO_INSTALL_CLAUDE_CLI=true` is set, attempts automatic installation using official installers
+3. Re-checks after installation attempt
+4. If found, sets `CLAUDE_CODE_EXECUTABLE` env var when spawning `claude-code-acp`
+5. If not found, logs a warning but continues (claude-code-acp will use its vendored CLI as fallback, just like Zed does)
 
-You can manually override the path:
+**Auto-install** (optional):
+```bash
+# In .env:
+AUTO_INSTALL_CLAUDE_CLI=true
+```
+
+When enabled, Aperture will automatically install Claude Code CLI on first startup if it's not found. This uses the official platform-specific installers.
+
+**Manual override**:
 ```bash
 # In .env:
 CLAUDE_CODE_EXECUTABLE=/custom/path/to/claude
@@ -719,6 +729,7 @@ APERTURE_API_TOKEN=your-token-here
 | `RATE_LIMIT_MAX` | No | 100 | Max requests per window |
 | `RATE_LIMIT_WINDOW_MS` | No | 60000 | Rate limit window (ms) |
 | `CLAUDE_CODE_EXECUTABLE` | No | auto | Path to Claude Code CLI (auto-detected if not set) |
+| `AUTO_INSTALL_CLAUDE_CLI` | No | false | Auto-install Claude CLI if not found on startup |
 
 ## Testing
 

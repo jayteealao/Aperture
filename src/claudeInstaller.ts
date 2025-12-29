@@ -95,29 +95,65 @@ export async function installClaude(platform: Platform): Promise<void> {
 
 /**
  * Verifies Claude Code CLI installation and returns the executable path
- * If not installed, returns undefined and logs a warning
+ * If not installed, checks AUTO_INSTALL_CLAUDE_CLI env var for permission
+ * Attempts installation if permission granted, then re-checks
+ * If still not present, proceeds anyway (adapter will use vendored CLI)
  */
-export async function verifyClaudeInstallation(): Promise<string | undefined> {
-  const installed = await isClaudeInstalled();
+export async function verifyClaudeInstallation(
+  autoInstall: boolean = false
+): Promise<string | undefined> {
+  // Check if already installed
+  let installed = await isClaudeInstalled();
 
   if (installed) {
     const path = await getClaudePath();
     console.log(`✓ Claude Code CLI found at: ${path || 'PATH'}`);
     return path;
+  }
+
+  // Not installed - check if we should auto-install
+  const platform = detectPlatform();
+  const installCommand = getInstallCommand(platform);
+
+  if (autoInstall) {
+    console.log('⚙️  Claude Code CLI not found, attempting auto-install...');
+    console.log(`⚙️  Platform: ${platform}`);
+    console.log(`⚙️  Command: ${installCommand}`);
+
+    try {
+      await installClaude(platform);
+      console.log('✓ Installation completed');
+
+      // Re-check after installation
+      installed = await isClaudeInstalled();
+
+      if (installed) {
+        const path = await getClaudePath();
+        console.log(`✓ Claude Code CLI now available at: ${path || 'PATH'}`);
+        return path;
+      } else {
+        console.warn('⚠️  Installation completed but CLI still not found in PATH');
+        console.warn('⚠️  You may need to restart or update PATH');
+      }
+    } catch (err) {
+      console.error(`❌ Failed to install Claude Code CLI: ${(err as Error).message}`);
+      console.warn('⚠️  Continuing anyway - adapter will use vendored CLI');
+    }
   } else {
     console.warn('⚠️  Claude Code CLI not found');
-    console.warn('⚠️  The adapter will attempt to use its vendored CLI');
-    console.warn('⚠️  For best results, install Claude Code CLI:');
-    const platform = detectPlatform();
-    console.warn(`⚠️  Run: ${getInstallCommand(platform)}`);
-    return undefined;
+    console.warn('⚠️  Set AUTO_INSTALL_CLAUDE_CLI=true to auto-install, or install manually:');
+    console.warn(`⚠️  Run: ${installCommand}`);
   }
+
+  // Not installed (or installation failed) - proceed anyway
+  console.warn('⚠️  The adapter will attempt to use its vendored CLI');
+  return undefined;
 }
 
 /**
  * Checks readiness: verifies we can spawn processes and locate claude-code-acp
  */
-export async function checkReadiness(): Promise<{
+export async function checkReadiness(autoInstall: boolean = false): Promise<{
   ready: boolean;
   claudePath?: string;
   errors: string[];
@@ -139,7 +175,7 @@ export async function checkReadiness(): Promise<{
   }
 
   // Check if Claude CLI is available (optional but recommended)
-  const claudePath = await verifyClaudeInstallation();
+  const claudePath = await verifyClaudeInstallation(autoInstall);
 
   return {
     ready: errors.length === 0,
