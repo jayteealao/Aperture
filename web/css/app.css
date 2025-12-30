@@ -26,13 +26,16 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, Monaco, monospace;
 
-  /* Fluid Type Scale */
-  --step--1: clamp(12px, 0.4vw + 10px, 13px);
-  --step-0: clamp(14px, 0.6vw + 12px, 16px);
-  --step-1: clamp(16px, 0.9vw + 13px, 18px);
-  --step-2: clamp(20px, 1.2vw + 14px, 24px);
-  --step-3: clamp(26px, 1.9vw + 16px, 34px);
-  --step-4: clamp(34px, 2.8vw + 18px, 46px);
+  /* Font scale multiplier (adjustable via settings) */
+  --font-scale: 1;
+
+  /* Fluid Type Scale (respects --font-scale) */
+  --step--1: calc(clamp(12px, 0.4vw + 10px, 13px) * var(--font-scale));
+  --step-0: calc(clamp(14px, 0.6vw + 12px, 16px) * var(--font-scale));
+  --step-1: calc(clamp(16px, 0.9vw + 13px, 18px) * var(--font-scale));
+  --step-2: calc(clamp(20px, 1.2vw + 14px, 24px) * var(--font-scale));
+  --step-3: calc(clamp(26px, 1.9vw + 16px, 34px) * var(--font-scale));
+  --step-4: calc(clamp(34px, 2.8vw + 18px, 46px) * var(--font-scale));
 
   /* Line Heights */
   --lh-tight: 1.1;
@@ -328,6 +331,8 @@ pre {
   border: none;
   box-shadow: none;
   padding: var(--s2) var(--s3);
+  background: transparent;
+  color: inherit;
   text-decoration: underline;
 
   &:hover {
@@ -382,21 +387,60 @@ pre {
 }
 
 .textarea {
-  composes: input;
+  width: 100%;
+  padding: var(--s3) var(--s4);
+  font-family: var(--font-sans);
+  font-size: var(--step-0);
+  background: var(--bg);
+  border: var(--b2) solid var(--fg);
+  border-radius: var(--r1);
   min-height: 80px;
   resize: vertical;
-  font-family: var(--font-sans);
   line-height: var(--lh-body);
+
+  &:focus {
+    outline: 4px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  &::placeholder {
+    color: var(--muted);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 .select {
-  composes: input;
+  width: 100%;
+  padding: var(--s3) var(--s4);
+  font-family: var(--font-mono);
+  font-size: var(--step-0);
+  background: var(--bg);
+  border: var(--b2) solid var(--fg);
+  border-radius: var(--r1);
   cursor: pointer;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%230E0F12' stroke-width='2' stroke-linecap='square'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right var(--s3) center;
   padding-right: var(--s8);
+
+  &:focus {
+    outline: 4px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  &::placeholder {
+    color: var(--muted);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 /* Checkbox Label */
@@ -1239,4 +1283,139 @@ dialog {
   ::view-transition-new(root) {
     animation-duration: var(--t-med);
   }
+}
+
+/* =============================================================================
+   10. SESSION STATUS INDICATORS
+   ============================================================================= */
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.status-indicator--connected::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.status-indicator--streaming::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: status-pulse 1.5s ease-in-out infinite;
+}
+
+.status-indicator--reconnecting::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+  animation: status-pulse 1s ease-in-out infinite;
+}
+
+.status-indicator--disconnected::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--muted);
+  background: transparent;
+}
+
+.status-indicator--error::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
+.status-indicator--active::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.9); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-indicator--streaming::before,
+  .status-indicator--reconnecting::before {
+    animation: none;
+  }
+}
+
+/* Unread badge */
+.unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--danger);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Session card enhancements for sidebar */
+.session-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-card__id {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.session-card__agent {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.session-card__preview {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-card__status {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.session-card__status--streaming {
+  color: var(--accent);
+}
+
+.session-card__status--reconnecting {
+  color: var(--warn);
+}
+
+.session-card__status--error {
+  color: var(--danger);
 }
