@@ -87,13 +87,33 @@ async function init() {
     api.configure(serverUrl, apiToken);
   }
 
-  // Check if we have a restored session and navigate to it
-  const currentSession = store.get('currentSession');
-  if (currentSession && router.currentPath === '/') {
-    // Navigate to chat if we have a restored session
+  // Fetch active sessions from server and reconcile
+  try {
+    const { sessions: serverSessions } = await api.listSessions();
+
+    // Update local sessions with server status
+    for (const serverSession of serverSessions) {
+      await store.addSession(serverSession);
+    }
+
+    // Connect to all active server sessions (up to limit)
+    const sessionsToConnect = serverSessions.slice(0, 10);
+    for (const session of sessionsToConnect) {
+      try {
+        api.connectSession(session.id, handleGlobalMessage);
+      } catch (err) {
+        console.warn('[App] Failed to connect session:', session.id, err);
+      }
+    }
+  } catch (err) {
+    console.warn('[App] Failed to fetch server sessions:', err);
+  }
+
+  // Navigate based on state
+  const activeSessionId = store.get('activeSessionId');
+  if (activeSessionId && router.currentPath === '/') {
     await router.navigate('/chat');
   } else {
-    // Navigate to initial route
     await router.navigate(router.currentPath);
   }
 
@@ -106,6 +126,23 @@ async function init() {
       applySettings();
     }
   });
+}
+
+// Global message handler for sessions not currently viewed
+function handleGlobalMessage(sessionId, data) {
+  const activeSessionId = store.get('activeSessionId');
+
+  // If this is for the active session, chat.js handles it
+  if (sessionId === activeSessionId) return;
+
+  // Handle background session updates
+  if (data.jsonrpc === '2.0' && data.method === 'session/update') {
+    const update = data.params?.update;
+    if (update?.sessionUpdate === 'agent_message_chunk') {
+      store.setStreaming(sessionId, true);
+      store.incrementUnread(sessionId);
+    }
+  }
 }
 
 function applySettings() {
