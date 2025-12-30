@@ -32,10 +32,10 @@ export function renderNewSessionPanel() {
         </div>
       </div>
 
-      <div class="stack--s3">
+      <div class="stack--s3" id="auth-mode-section" style="display: none;">
         <h3 class="kicker">Auth Mode</h3>
         <select class="select" id="auth-mode">
-          <option value="">-- Select --</option>
+          <option value="">-- Select Auth Mode --</option>
         </select>
       </div>
 
@@ -66,6 +66,7 @@ export function renderNewSessionPanel() {
 
   // Agent picker
   const agentCards = container.querySelectorAll('.agent-card');
+  const authModeSection = container.querySelector('#auth-mode-section');
   const authModeSelect = container.querySelector('#auth-mode');
   const authOptions = container.querySelector('#auth-options');
   const createBtn = container.querySelector('#create-session');
@@ -102,12 +103,18 @@ export function renderNewSessionPanel() {
     authModeSelect.innerHTML = '<option value="">-- Select Auth Mode --</option>';
 
     if (selectedAgent && options[selectedAgent]) {
+      // Show the auth mode section
+      authModeSection.style.display = '';
+
       options[selectedAgent].forEach(opt => {
         const option = document.createElement('option');
         option.value = opt.value;
         option.textContent = opt.label;
         authModeSelect.appendChild(option);
       });
+    } else {
+      // Hide the auth mode section if no agent selected
+      authModeSection.style.display = 'none';
     }
   }
 
@@ -281,8 +288,15 @@ export function renderNewSessionPanel() {
 
     try {
       const session = await api.createSession(config);
-      store.set('currentSession', session);
-      store.addSession(session);
+      await store.addSession(session);
+      store.setActiveSession(session.id);
+
+      // Connect to the new session immediately
+      api.connectSession(session.id, (sessionId, data) => {
+        // This handler will be replaced when chat.js loads
+        console.log('[NewSession] Message for session:', sessionId, data);
+      });
+
       showToast('Success', `Session ${session.id.slice(0, 8)} created`, 'success');
       router.push('/chat');
     } catch (error) {
