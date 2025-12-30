@@ -9,12 +9,9 @@ class ApertureClient {
   constructor() {
     this.baseUrl = '';
     this.token = '';
-    this.ws = null;
+    this.connections = new Map();  // sessionId -> { ws, retryCount, onMessage }
+    this.maxConnections = 10;
     this.sse = null;
-    this.retryCount = 0;
-    this.maxRetries = Infinity; // Never give up on reconnecting
-    this.reconnectStrategy = 'exponential';
-    this.currentSessionId = null;
   }
 
   configure(baseUrl, token) {
@@ -111,9 +108,27 @@ class ApertureClient {
     return this.request(`/v1/credentials/${id}`, { method: 'DELETE' });
   }
 
-  // WebSocket connection
-  async connectWebSocket(sessionId, onMessage, options = {}) {
-    // Check if session still exists before connecting
+  // Multi-connection WebSocket management
+  async connectSession(sessionId, onMessage, options = {}) {
+    // Check if already connected
+    const existing = this.connections.get(sessionId);
+    if (existing && existing.ws && existing.ws.readyState === WebSocket.OPEN) {
+      console.log('[API] Already connected to session:', sessionId);
+      return existing.ws;
+    }
+
+    // Enforce connection limit
+    if (this.connections.size >= this.maxConnections) {
+      const oldest = this.findOldestIdleConnection();
+      if (oldest) {
+        console.log('[API] Max connections reached, disconnecting:', oldest);
+        this.disconnectSession(oldest);
+      } else {
+        throw new Error('Maximum concurrent connections reached');
+      }
+    }
+
+    // Check if session exists on server
     if (!options.skipSessionCheck) {
       try {
         const sessionStatus = await this.getSession(sessionId);
@@ -121,141 +136,149 @@ class ApertureClient {
           throw new Error('Session no longer exists or has ended');
         }
       } catch (err) {
-        store.update('connection', conn => ({
-          ...conn,
-          status: 'failed',
+        store.updateConnection(sessionId, {
+          status: 'error',
           error: 'Session no longer exists on server'
-        }));
+        });
         throw err;
       }
     }
 
-    this.currentSessionId = sessionId;
+    store.updateConnection(sessionId, { status: 'connecting' });
 
     return new Promise((resolve, reject) => {
       const wsUrl = this.baseUrl.replace(/^http/, 'ws');
-      // Pass token as query param since browsers don't support custom WebSocket headers
       const url = `${wsUrl}/v1/sessions/${sessionId}/ws?token=${encodeURIComponent(this.token)}`;
 
       try {
-        this.ws = new WebSocket(url);
+        const ws = new WebSocket(url);
 
-        this.ws.onopen = async () => {
-          console.log('[WS] Connected to session:', sessionId);
+        const connData = {
+          ws,
+          retryCount: 0,
+          onMessage,
+          sessionId
+        };
+        this.connections.set(sessionId, connData);
 
-          // Sync state after reconnection
-          if (options.isReconnect) {
-            await this.syncSessionState(sessionId);
-          }
-
-          store.update('connection', conn => ({ ...conn, status: 'connected', error: null, retryCount: 0 }));
-          this.retryCount = 0;
-          resolve(this.ws);
+        ws.onopen = () => {
+          console.log('[API] Connected to session:', sessionId);
+          store.updateConnection(sessionId, {
+            status: 'connected',
+            error: null,
+            retryCount: 0
+          });
+          connData.retryCount = 0;
+          resolve(ws);
         };
 
-        this.ws.onmessage = (event) => {
+        ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            onMessage(data);
+            onMessage(sessionId, data);
             store.addEvent({
               timestamp: Date.now(),
               type: 'message',
               direction: 'inbound',
+              sessionId,
               data
             });
           } catch (error) {
-            console.error('[WS] Failed to parse message:', error);
+            console.error('[API] Failed to parse message:', error);
           }
         };
 
-        this.ws.onerror = (error) => {
-          console.error('[WS] Error:', error);
-          store.update('connection', conn => ({ ...conn, error: 'WebSocket error' }));
+        ws.onerror = (error) => {
+          console.error('[API] WebSocket error for session:', sessionId, error);
+          store.updateConnection(sessionId, { error: 'WebSocket error' });
         };
 
-        this.ws.onclose = (event) => {
-          console.log('[WS] Closed:', event.code, event.reason);
-          store.update('connection', conn => ({ ...conn, status: 'disconnected' }));
+        ws.onclose = (event) => {
+          console.log('[API] WebSocket closed for session:', sessionId, event.code, event.reason);
 
-          // Attempt reconnect if not a clean close (code 1000 = normal closure)
-          if (!event.wasClean || (event.code !== 1000 && this.currentSessionId === sessionId)) {
-            this.retryReconnect(sessionId, onMessage);
+          if (!event.wasClean || event.code !== 1000) {
+            store.updateConnection(sessionId, { status: 'reconnecting' });
+            this.retryConnection(sessionId, onMessage);
+          } else {
+            store.updateConnection(sessionId, { status: 'disconnected' });
+            this.connections.delete(sessionId);
           }
         };
       } catch (error) {
-        console.error('[WS] Failed to create WebSocket:', error);
+        console.error('[API] Failed to create WebSocket:', error);
+        store.updateConnection(sessionId, { status: 'error', error: error.message });
         reject(error);
       }
     });
   }
 
-  async syncSessionState(sessionId) {
-    try {
-      console.log('[Sync] Synchronizing session state...');
+  retryConnection(sessionId, onMessage) {
+    const conn = this.connections.get(sessionId);
+    if (!conn) return;
 
-      // Get latest messages from server (if persistence is enabled)
-      try {
-        const response = await this.getSessionMessages(sessionId, 100, 0);
-        if (response && response.messages) {
-          console.log('[Sync] Received', response.messages.length, 'messages from server');
-          // Server messages will be merged in store
-        }
-      } catch (err) {
-        // Message persistence might not be enabled, that's OK
-        console.log('[Sync] Message history not available (persistence may not be enabled)');
-      }
-
-      console.log('[Sync] State synchronized successfully');
-    } catch (err) {
-      console.error('[Sync] Failed to sync state:', err);
-    }
-  }
-
-  retryReconnect(sessionId, onMessage) {
-    this.retryCount++;
-    const delay = Math.min(1000 * Math.pow(2, this.retryCount), 30000);
+    conn.retryCount++;
+    const delay = Math.min(1000 * Math.pow(2, conn.retryCount), 30000);
     const jitter = Math.random() * 1000;
 
-    console.log(`[WS] Reconnecting in ${(delay + jitter) / 1000}s (attempt ${this.retryCount})`);
+    console.log(`[API] Reconnecting session ${sessionId} in ${(delay + jitter) / 1000}s (attempt ${conn.retryCount})`);
 
-    store.update('connection', conn => ({
-      ...conn,
+    store.updateConnection(sessionId, {
       status: 'reconnecting',
-      retryCount: this.retryCount
-    }));
+      retryCount: conn.retryCount
+    });
 
     setTimeout(async () => {
-      // Always try to reconnect if this is still the current session
-      if (this.currentSessionId === sessionId) {
-        try {
-          await this.connectWebSocket(sessionId, onMessage, { isReconnect: true });
-        } catch (error) {
-          console.error('[WS] Reconnect failed:', error);
+      // Check connection still exists (user may have ended session)
+      if (!this.connections.has(sessionId)) return;
 
-          // Only stop if session explicitly doesn't exist
-          if (error.message && error.message.includes('no longer exists')) {
-            store.update('connection', conn => ({
-              ...conn,
-              status: 'failed',
-              error: 'Session ended'
-            }));
-          } else {
-            // Keep retrying for network errors
-            this.retryReconnect(sessionId, onMessage);
-          }
+      try {
+        await this.connectSession(sessionId, onMessage, { isReconnect: true });
+      } catch (error) {
+        console.error('[API] Reconnect failed for session:', sessionId, error);
+
+        if (error.message && error.message.includes('no longer exists')) {
+          store.updateConnection(sessionId, {
+            status: 'error',
+            error: 'Session ended'
+          });
+          this.connections.delete(sessionId);
         }
+        // Otherwise onclose handler will trigger another retry
       }
     }, delay + jitter);
   }
 
-  sendWebSocketMessage(message) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+  disconnectSession(sessionId) {
+    const conn = this.connections.get(sessionId);
+    if (conn) {
+      if (conn.ws) {
+        conn.ws.close(1000, 'User disconnect');
+      }
+      this.connections.delete(sessionId);
+      store.updateConnection(sessionId, { status: 'disconnected' });
+    }
+  }
+
+  disconnectAll() {
+    for (const [sessionId, conn] of this.connections) {
+      if (conn.ws) {
+        conn.ws.close(1000, 'Disconnect all');
+      }
+      store.updateConnection(sessionId, { status: 'disconnected' });
+    }
+    this.connections.clear();
+  }
+
+  sendToSession(sessionId, message) {
+    const conn = this.connections.get(sessionId);
+    if (conn && conn.ws && conn.ws.readyState === WebSocket.OPEN) {
       const payload = JSON.stringify(message);
-      this.ws.send(payload);
+      conn.ws.send(payload);
       store.addEvent({
         timestamp: Date.now(),
         type: 'message',
         direction: 'outbound',
+        sessionId,
         data: message
       });
       return true;
@@ -263,13 +286,36 @@ class ApertureClient {
     return false;
   }
 
-  disconnectWebSocket() {
-    if (this.ws) {
-      this.currentSessionId = null; // Stop reconnection attempts
-      this.ws.close(1000, 'User disconnect');
-      this.ws = null;
-      this.retryCount = 0;
+  isConnected(sessionId) {
+    const conn = this.connections.get(sessionId);
+    return conn && conn.ws && conn.ws.readyState === WebSocket.OPEN;
+  }
+
+  getConnectionStatus(sessionId) {
+    const conn = this.connections.get(sessionId);
+    if (!conn || !conn.ws) return 'disconnected';
+
+    switch (conn.ws.readyState) {
+      case WebSocket.CONNECTING: return 'connecting';
+      case WebSocket.OPEN: return 'connected';
+      case WebSocket.CLOSING: return 'disconnecting';
+      case WebSocket.CLOSED: return 'disconnected';
+      default: return 'unknown';
     }
+  }
+
+  findOldestIdleConnection() {
+    let oldest = null;
+    let oldestTime = Infinity;
+
+    for (const [sessionId] of this.connections) {
+      const conn = store.getConnection(sessionId);
+      if (conn && !conn.isStreaming && conn.lastActivity < oldestTime) {
+        oldest = sessionId;
+        oldestTime = conn.lastActivity;
+      }
+    }
+    return oldest;
   }
 
   // Server-Sent Events (fallback for streaming)
