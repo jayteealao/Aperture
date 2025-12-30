@@ -173,13 +173,13 @@ async function loadSessions(container) {
       `;
     }).join('');
 
-    // Add click handlers
+    // Add click handlers - use setActiveSession for multi-session support
     listContainer.querySelectorAll('.session-item').forEach(item => {
       item.addEventListener('click', () => {
         const sessionId = item.getAttribute('data-session-id');
         const session = sessions.find(s => s.id === sessionId);
         if (session) {
-          store.set('currentSession', session);
+          store.setActiveSession(sessionId);
           router.push('/chat');
         }
       });
@@ -206,8 +206,45 @@ function formatTimeAgo(timestamp) {
 
 function truncate(text, maxLength) {
   if (typeof text !== 'string') {
-    text = JSON.stringify(text);
+    text = extractTextContent(text);
   }
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength) + '...';
+}
+
+// Extract text from ACP content structures
+function extractTextContent(content) {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (content == null) {
+    return '';
+  }
+
+  // Handle array of content blocks
+  if (Array.isArray(content)) {
+    return content.map(block => extractTextContent(block)).join(' ');
+  }
+
+  // Handle object with type/text structure (ACP format)
+  if (typeof content === 'object') {
+    if (content.type === 'text' && typeof content.text === 'string') {
+      return content.text;
+    }
+    if (content.type === 'tool_use') {
+      return `[Tool: ${content.name || 'unknown'}]`;
+    }
+    if (content.type === 'tool_result') {
+      return typeof content.content === 'string'
+        ? content.content
+        : extractTextContent(content.content);
+    }
+    if (typeof content.text === 'string') {
+      return content.text;
+    }
+    return '';
+  }
+
+  return String(content);
 }
