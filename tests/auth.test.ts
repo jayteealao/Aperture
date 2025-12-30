@@ -39,7 +39,7 @@ describe('Authentication middleware', () => {
       expect(reply.code).toHaveBeenCalledWith(401);
       expect(reply.send).toHaveBeenCalledWith({
         error: 'Unauthorized',
-        message: 'Missing Authorization header',
+        message: 'Missing Authorization header or token query parameter',
       });
     });
 
