@@ -7,12 +7,19 @@ import { store } from '../store.js';
 import { router, showToast } from '../app.js';
 
 export function renderChat() {
-  const session = store.get('currentSession');
+  let session = store.getActiveSession();
 
   if (!session) {
-    showToast('Error', 'No active session', 'error');
-    router.push('/sessions');
-    return document.createElement('div');
+    // No active session - try to get first available
+    const sessions = store.get('sessions');
+    if (sessions.length > 0) {
+      store.setActiveSession(sessions[0].id);
+      session = store.getActiveSession();
+    } else {
+      showToast('Error', 'No active session', 'error');
+      router.push('/sessions');
+      return document.createElement('div');
+    }
   }
 
   const container = document.createElement('div');
@@ -133,10 +140,8 @@ export function renderChat() {
   const inspectorContent = container.querySelector('#inspector-content');
   const inspectorTabs = container.querySelector('#inspector-tabs');
 
-  // State
-  let ws = null;
-  let isStreaming = false;
-  let currentStreamMessageId = null;
+  // Note: Connection state is now managed in store.connections[sessionId]
+  // No local ws variable - use api.sendToSession() and api.isConnected()
 
   // Auto-grow textarea
   composerInput.addEventListener('input', () => {
@@ -156,7 +161,11 @@ export function renderChat() {
 
   async function sendMessage() {
     const content = composerInput.value.trim();
-    if (!content || isStreaming) return;
+    const sessionId = store.get('activeSessionId');
+    if (!content || !sessionId) return;
+
+    const conn = store.getConnection(sessionId);
+    if (conn?.isStreaming) return; // Already streaming
 
     const toolsAllowed = container.querySelector('#tools-allowed').checked;
     const requireApprovals = container.querySelector('#require-approvals').checked;
@@ -168,7 +177,7 @@ export function renderChat() {
       content,
       timestamp: new Date().toISOString()
     };
-    store.addMessage(session.id, userMsg);
+    store.addMessage(sessionId, userMsg);
     renderMessages();
 
     // Clear composer
@@ -176,24 +185,23 @@ export function renderChat() {
     composerInput.style.height = 'auto';
 
     // Send via WebSocket
-    try {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'user_message',
-          content,
-          toolsAllowed,
-          requireApprovals
-        }));
-      } else {
-        throw new Error('WebSocket not connected');
-      }
-    } catch (error) {
-      showToast('Error', `Failed to send: ${error.message}`, 'error');
+    const sent = api.sendToSession(sessionId, {
+      type: 'user_message',
+      content,
+      toolsAllowed,
+      requireApprovals
+    });
+
+    if (!sent) {
+      showToast('Error', 'Not connected to session', 'error');
     }
   }
 
   function renderMessages() {
-    const messages = store.get('messages')[session.id] || [];
+    const sessionId = store.get('activeSessionId');
+    const messages = store.get('messages')[sessionId] || [];
+    const conn = store.getConnection(sessionId);
+    const currentStreamMessageId = conn?.currentStreamMessageId;
 
     if (messages.length === 0) {
       timeline.innerHTML = `
@@ -255,15 +263,77 @@ export function renderChat() {
   }
 
   function formatContent(content) {
+    // Extract text from ACP message content structures
     if (typeof content !== 'string') {
-      content = JSON.stringify(content, null, 2);
+      content = extractTextContent(content);
     }
-    // Basic markdown-like formatting
-    return content
+    // Escape HTML first
+    let html = content
+      .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\n/g, '<br>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>');
+      .replace(/>/g, '&gt;');
+
+    // Markdown rendering
+    html = html
+      // Code blocks (triple backticks) - must come before inline code
+      .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+      // Inline code
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // Bold (** or __)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+      // Italic (* or _) - be careful not to match inside words
+      .replace(/(?<![*\w])\*([^*]+)\*(?![*\w])/g, '<em>$1</em>')
+      .replace(/(?<![_\w])_([^_]+)_(?![_\w])/g, '<em>$1</em>')
+      // Newlines to <br>
+      .replace(/\n/g, '<br>');
+
+    return html;
+  }
+
+  // Extract text from ACP content structures
+  function extractTextContent(content) {
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    // Handle null/undefined
+    if (content == null) {
+      return '';
+    }
+
+    // Handle array of content blocks
+    if (Array.isArray(content)) {
+      return content.map(block => extractTextContent(block)).join('\n');
+    }
+
+    // Handle object with type/text structure (ACP format)
+    if (typeof content === 'object') {
+      // Text block: { type: 'text', text: '...' }
+      if (content.type === 'text' && typeof content.text === 'string') {
+        return content.text;
+      }
+      // Tool use block
+      if (content.type === 'tool_use') {
+        return `[Tool: ${content.name || 'unknown'}]`;
+      }
+      // Tool result block
+      if (content.type === 'tool_result') {
+        if (typeof content.content === 'string') {
+          return content.content;
+        }
+        return extractTextContent(content.content);
+      }
+      // Generic text property
+      if (typeof content.text === 'string') {
+        return content.text;
+      }
+      // Fallback to JSON for unknown objects
+      return JSON.stringify(content, null, 2);
+    }
+
+    // Fallback for primitives
+    return String(content);
   }
 
   function formatTime(timestamp) {
@@ -278,7 +348,7 @@ export function renderChat() {
 
   function escapeHtml(text) {
     if (typeof text !== 'string') {
-      text = JSON.stringify(text);
+      text = extractTextContent(text);
     }
     return text
       .replace(/&/g, '&amp;')
@@ -288,31 +358,83 @@ export function renderChat() {
       .replace(/'/g, '&#039;');
   }
 
+  // Helper functions for multi-session support
+  async function switchToSession(sessionId) {
+    if (sessionId === store.get('activeSessionId')) return;
+
+    console.log('[Chat] Switching to session:', sessionId);
+
+    // Update active session
+    store.setActiveSession(sessionId);
+    store.clearUnread(sessionId);
+
+    // Load messages if not in memory
+    await store.loadMessagesForSession(sessionId);
+
+    // Update header
+    const newSession = store.getActiveSession();
+    if (newSession) {
+      container.querySelector('.connection-bar__session').innerHTML = `
+        <span class="kicker">Session</span>
+        <span class="mono">${newSession.id.slice(0, 8)}</span>
+        <span class="meta">${newSession.agent}</span>
+      `;
+    }
+
+    // Re-render messages
+    renderMessages();
+
+    // Connect if not already connected
+    if (!api.isConnected(sessionId)) {
+      connectToSession(sessionId);
+    }
+
+    // Update connection status display
+    updateConnectionStatus(sessionId);
+  }
+
+  function updateConnectionStatus(sessionId) {
+    const conn = store.getConnection(sessionId);
+    const status = conn?.status || 'disconnected';
+
+    const statusMap = {
+      connected: { text: 'Connected', class: 'chip--ok' },
+      connecting: { text: 'Connecting...', class: '' },
+      reconnecting: { text: 'Reconnecting...', class: 'chip--warn' },
+      disconnected: { text: 'Disconnected', class: 'chip--danger' },
+      error: { text: 'Error', class: 'chip--danger' },
+      ended: { text: 'Ended', class: 'chip--muted' }
+    };
+
+    const statusInfo = statusMap[status] || statusMap.disconnected;
+    connectionStatus.textContent = statusInfo.text;
+    connectionStatus.className = `chip chip--sm ${statusInfo.class}`;
+    connectionStateText.textContent = conn?.error || `WebSocket ${status}`;
+  }
+
   // WebSocket connection
-  async function connectWebSocket() {
+  async function connectToSession(sessionId) {
     try {
-      connectionStatus.textContent = 'Connecting...';
-      connectionStatus.className = 'chip chip--sm';
-      connectionStateText.textContent = 'Establishing WebSocket connection...';
+      updateConnectionStatus(sessionId);
 
-      ws = await api.connectWebSocket(session.id, handleWebSocketMessage);
+      await api.connectSession(sessionId, handleWebSocketMessage);
 
-      connectionStatus.textContent = 'Connected';
-      connectionStatus.className = 'chip chip--sm chip--ok';
-      connectionStateText.textContent = 'WebSocket connected';
-
+      updateConnectionStatus(sessionId);
     } catch (error) {
-      connectionStatus.textContent = 'Disconnected';
-      connectionStatus.className = 'chip chip--sm chip--danger';
-      connectionStateText.textContent = `Error: ${error.message}`;
-      showToast('Connection Error', error.message, 'error');
+      updateConnectionStatus(sessionId);
+
+      if (!error.message || !error.message.includes('no longer exists')) {
+        showToast('Connection Error', error.message, 'error');
+      }
     }
   }
 
-  function handleWebSocketMessage(data) {
+  function handleWebSocketMessage(sessionId, data) {
+    const activeSessionId = store.get('activeSessionId');
+
     // Handle ACP JSON-RPC format
     if (data.jsonrpc === '2.0') {
-      handleAcpMessage(data);
+      handleAcpMessage(sessionId, data);
       return;
     }
 
@@ -322,39 +444,48 @@ export function renderChat() {
       store.addEvent({
         timestamp: Date.now(),
         type: 'error',
+        sessionId,
         data
       });
-      renderEvents();
+      if (sessionId === activeSessionId) {
+        renderEvents();
+      }
     }
   }
 
   // Handle ACP protocol messages
-  function handleAcpMessage(msg) {
+  function handleAcpMessage(sessionId, msg) {
     const method = msg.method;
     const params = msg.params || {};
+    const activeSessionId = store.get('activeSessionId');
 
     // Log all ACP messages for debugging
     store.addEvent({
       timestamp: Date.now(),
       type: method || 'response',
+      sessionId,
       data: msg
     });
-    renderEvents();
+
+    if (sessionId === activeSessionId) {
+      renderEvents();
+    }
 
     if (method === 'session/update') {
-      handleSessionUpdate(params);
+      handleSessionUpdate(sessionId, params);
     } else if (method === 'session/request_permission') {
-      handlePermissionRequest(params);
+      handlePermissionRequest(sessionId, params);
     } else if (method === 'session/exit') {
-      handleSessionExit(params);
+      handleSessionExit(sessionId, params);
     } else if (method === 'session/error') {
       showToast('Error', params.message || 'Unknown error', 'error');
     } else if (msg.result) {
       // Response to a request (e.g., session/prompt completed)
       if (msg.result.stopReason) {
-        isStreaming = false;
-        currentStreamMessageId = null;
-        renderMessages();
+        store.setStreaming(sessionId, false);
+        if (sessionId === activeSessionId) {
+          renderMessages();
+        }
       }
     } else if (msg.error) {
       showToast('Error', msg.error.message || 'Unknown error', 'error');
@@ -362,20 +493,25 @@ export function renderChat() {
   }
 
   // Handle session/update notifications from ACP
-  function handleSessionUpdate(params) {
+  function handleSessionUpdate(sessionId, params) {
     const update = params.update;
     if (!update) return;
 
     const updateType = update.sessionUpdate;
+    const activeSessionId = store.get('activeSessionId');
+    const isActive = sessionId === activeSessionId;
 
     switch (updateType) {
       case 'agent_message_chunk': {
+        const conn = store.getConnection(sessionId);
+
         // Start streaming if not already
-        if (!isStreaming) {
-          isStreaming = true;
-          currentStreamMessageId = `msg-${Date.now()}`;
-          store.addMessage(session.id, {
-            id: currentStreamMessageId,
+        if (!conn?.isStreaming) {
+          const msgId = `msg-${Date.now()}`;
+          store.setStreaming(sessionId, true);
+          store.updateConnection(sessionId, { currentStreamMessageId: msgId });
+          store.addMessage(sessionId, {
+            id: msgId,
             role: 'assistant',
             content: '',
             timestamp: new Date().toISOString()
@@ -385,74 +521,56 @@ export function renderChat() {
         // Extract text from content block
         const content = update.content;
         if (content && content.type === 'text' && content.text) {
-          const messages = store.get('messages')[session.id] || [];
-          const currentMsg = messages.find(m => m.id === currentStreamMessageId);
+          const messages = store.get('messages')[sessionId] || [];
+          const streamMsgId = store.getConnection(sessionId)?.currentStreamMessageId;
+          const currentMsg = messages.find(m => m.id === streamMsgId);
           if (currentMsg) {
-            store.updateMessage(session.id, currentStreamMessageId, {
+            store.updateMessage(sessionId, streamMsgId, {
               content: currentMsg.content + content.text
             });
           }
         }
-        renderMessages();
+
+        if (isActive) {
+          renderMessages();
+        } else {
+          store.incrementUnread(sessionId);
+        }
         break;
       }
 
       case 'agent_thought_chunk': {
-        // Could display thoughts differently, for now treat like message
         const content = update.content;
         if (content && content.type === 'text' && content.text) {
-          // Optionally log thoughts
           console.log('Agent thought:', content.text);
         }
         break;
       }
 
-      case 'tool_call': {
-        // New tool call started
-        store.addEvent({
-          timestamp: Date.now(),
-          type: 'tool_call',
-          data: {
-            toolCallId: update.toolCallId,
-            title: update.title,
-            kind: update.kind,
-            status: update.status
-          }
-        });
-        renderEvents();
-        break;
-      }
-
+      case 'tool_call':
       case 'tool_call_update': {
-        // Tool call status update
         store.addEvent({
           timestamp: Date.now(),
-          type: 'tool_call_update',
-          data: {
-            toolCallId: update.toolCallId,
-            title: update.title,
-            kind: update.kind,
-            status: update.status,
-            content: update.content
-          }
+          type: updateType,
+          sessionId,
+          data: update
         });
-        renderEvents();
+        if (isActive) renderEvents();
         break;
       }
 
       case 'plan': {
-        // Agent planning
         store.addEvent({
           timestamp: Date.now(),
           type: 'plan',
+          sessionId,
           data: update.entries
         });
-        renderEvents();
+        if (isActive) renderEvents();
         break;
       }
 
       case 'current_mode_update': {
-        // Mode changed
         console.log('Mode changed to:', update.currentModeId);
         break;
       }
@@ -463,13 +581,14 @@ export function renderChat() {
   }
 
   // Handle permission requests from agent
-  function handlePermissionRequest(params) {
+  function handlePermissionRequest(sessionId, params) {
     const { toolCallId, toolCall, options } = params;
 
     // Store pending approval
     store.addEvent({
       timestamp: Date.now(),
       type: 'permission_request',
+      sessionId,
       data: {
         toolCallId,
         toolCall,
@@ -478,53 +597,94 @@ export function renderChat() {
       }
     });
 
-    // Show in approvals tab
-    renderApprovals();
-
-    // Switch to approvals tab
-    switchTab('approvals');
-    inspector.setAttribute('data-open', 'true');
+    const isActive = sessionId === store.get('activeSessionId');
+    if (isActive) {
+      renderApprovals();
+      switchTab('approvals');
+      inspector.setAttribute('data-open', 'true');
+    } else {
+      store.incrementUnread(sessionId);
+      showToast('Approval Needed', `Session ${sessionId.slice(0, 8)} requires approval`, 'info');
+    }
   }
 
   // Handle session exit
-  function handleSessionExit(params) {
-    isStreaming = false;
-    currentStreamMessageId = null;
-    showToast('Session Ended', `Exit code: ${params.code}`, 'info');
-    connectionStatus.textContent = 'Disconnected';
-    connectionStatus.className = 'chip chip--sm chip--danger';
+  function handleSessionExit(sessionId, params) {
+    store.setStreaming(sessionId, false);
+    store.updateConnection(sessionId, {
+      status: 'ended',
+      currentStreamMessageId: null
+    });
+
+    const isActive = sessionId === store.get('activeSessionId');
+    if (isActive) {
+      showToast('Session Ended', `Exit code: ${params.code}`, 'info');
+      updateConnectionStatus(sessionId);
+    }
   }
 
-  // Session list
+  // Session list with status indicators
   function renderSessionList() {
     const sessions = store.get('sessions');
-    const currentId = session.id;
+    const connections = store.get('connections');
+    const activeId = store.get('activeSessionId');
 
     if (sessions.length === 0) {
       sessionListItems.innerHTML = '<p class="meta">No sessions</p>';
       return;
     }
 
-    sessionListItems.innerHTML = sessions.map(s => `
-      <div class="session-card ${s.id === currentId ? 'session-card--active' : ''}" data-id="${s.id}">
-        <div class="session-card__header">
-          <span class="kicker">${s.agent}</span>
-          <span class="mono meta">${s.id.slice(0, 8)}</span>
-        </div>
-        <div class="meta">${s.status || 'active'}</div>
-      </div>
-    `).join('');
+    sessionListItems.innerHTML = sessions.map(s => {
+      const conn = connections[s.id] || {};
+      const isActive = s.id === activeId;
 
+      // Determine status indicator class
+      let statusClass = 'status-indicator--disconnected';
+      let statusText = 'disconnected';
+
+      if (isActive) {
+        statusClass = 'status-indicator--active';
+        statusText = 'active';
+      } else if (conn.isStreaming) {
+        statusClass = 'status-indicator--streaming';
+        statusText = 'streaming';
+      } else if (conn.status === 'connected') {
+        statusClass = 'status-indicator--connected';
+        statusText = 'connected';
+      } else if (conn.status === 'reconnecting') {
+        statusClass = 'status-indicator--reconnecting';
+        statusText = `reconnecting (${conn.retryCount || 0})`;
+      } else if (conn.status === 'error' || conn.status === 'ended') {
+        statusClass = 'status-indicator--error';
+        statusText = conn.status;
+      }
+
+      const unreadBadge = conn.unreadCount > 0
+        ? `<span class="unread-badge">${conn.unreadCount}</span>`
+        : '';
+
+      return `
+        <div class="session-card ${isActive ? 'session-card--active' : ''}" data-id="${s.id}">
+          <div class="session-card__header">
+            <span class="status-indicator ${statusClass}"></span>
+            <div class="session-card__info">
+              <span class="session-card__id">${s.id.slice(0, 8)}</span>
+              <span class="session-card__agent">${s.agent}</span>
+            </div>
+            ${unreadBadge}
+          </div>
+          <div class="session-card__status session-card__status--${conn.status || 'disconnected'}">
+            ${statusText}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Click handlers - use switchToSession instead of navigation
     sessionListItems.querySelectorAll('.session-card').forEach(card => {
       card.addEventListener('click', () => {
         const sessionId = card.dataset.id;
-        const targetSession = sessions.find(s => s.id === sessionId);
-        if (targetSession) {
-          store.set('currentSession', targetSession);
-          // Close WebSocket and reload
-          if (ws) ws.close();
-          router.push('/chat');
-        }
+        switchToSession(sessionId);
       });
     });
   }
@@ -644,13 +804,15 @@ export function renderChat() {
   }
 
   function handlePermissionResponse(toolCallId, optionId) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'permission_response',
-        toolCallId,
-        optionId // null means cancel/deny
-      }));
+    const sessionId = store.get('activeSessionId');
 
+    const sent = api.sendToSession(sessionId, {
+      type: 'permission_response',
+      toolCallId,
+      optionId
+    });
+
+    if (sent) {
       // Mark as handled in store
       const events = store.get('inspector').events;
       const eventIdx = events.findIndex(e => e.data.toolCallId === toolCallId);
@@ -661,29 +823,65 @@ export function renderChat() {
 
       showToast('Sent', optionId ? 'Permission granted' : 'Permission denied', 'success');
       renderApprovals();
+    } else {
+      showToast('Error', 'Failed to send response - not connected', 'error');
     }
   }
 
   // Connection banner
   function renderConnectionBanner() {
-    const conn = store.get('connection');
+    const sessionId = store.get('activeSessionId');
+    const conn = store.getConnection(sessionId);
+
+    if (!conn) {
+      connectionBanner.style.display = 'none';
+      return;
+    }
 
     if (conn.status === 'reconnecting') {
       connectionBanner.innerHTML = `
-        <div style="background: #f59e0b; color: white; padding: 12px; text-align: center;">
+        <div style="background: var(--warn); color: white; padding: 12px; text-align: center;">
           <span>Reconnecting... (attempt ${conn.retryCount || 0})</span>
           <button class="btn btn--sm" style="margin-left: 12px;" onclick="location.reload()">Reload Page</button>
         </div>
       `;
       connectionBanner.style.display = 'block';
-    } else if (conn.status === 'failed') {
-      connectionBanner.innerHTML = `
-        <div style="background: #dc2626; color: white; padding: 12px; text-align: center;">
-          <span>Connection lost: ${conn.error || 'Unknown error'}</span>
-          <button class="btn btn--sm" style="margin-left: 12px;" onclick="location.hash = '/sessions'">Back to Sessions</button>
-        </div>
-      `;
-      connectionBanner.style.display = 'block';
+    } else if (conn.status === 'error') {
+      const isStaleSession = conn.error && conn.error.includes('no longer exists');
+
+      if (isStaleSession) {
+        connectionBanner.innerHTML = `
+          <div style="background: var(--danger); color: white; padding: 12px; text-align: center;">
+            <span>Session no longer exists on server</span>
+            <button class="btn btn--sm" style="margin-left: 12px;" id="cleanup-stale-session">Remove &amp; Go Back</button>
+            <button class="btn btn--sm" style="margin-left: 8px;" id="keep-local-session">Keep Local Copy</button>
+          </div>
+        `;
+        connectionBanner.style.display = 'block';
+
+        connectionBanner.querySelector('#cleanup-stale-session')?.addEventListener('click', async () => {
+          await store.removeSession(sessionId);
+          api.disconnectSession(sessionId);
+          showToast('Cleaned Up', 'Stale session removed', 'success');
+          router.push('/sessions');
+        });
+
+        connectionBanner.querySelector('#keep-local-session')?.addEventListener('click', () => {
+          router.push('/sessions');
+        });
+      } else {
+        connectionBanner.innerHTML = `
+          <div style="background: var(--danger); color: white; padding: 12px; text-align: center;">
+            <span>Connection error: ${conn.error || 'Unknown error'}</span>
+            <button class="btn btn--sm" style="margin-left: 12px;" id="retry-connection">Retry</button>
+          </div>
+        `;
+        connectionBanner.style.display = 'block';
+
+        connectionBanner.querySelector('#retry-connection')?.addEventListener('click', () => {
+          connectToSession(sessionId);
+        });
+      }
     } else {
       connectionBanner.style.display = 'none';
     }
@@ -691,13 +889,14 @@ export function renderChat() {
 
   // Connection info
   function renderConnectionInfo() {
-    const conn = store.get('connection');
+    const sessionId = store.get('activeSessionId');
+    const conn = store.getConnection(sessionId) || {};
     const connectionInfo = container.querySelector('#connection-info');
 
     connectionInfo.innerHTML = `
       <div>
         <span class="kicker">Status</span>
-        <div class="chip ${conn.status === 'connected' ? 'chip--ok' : 'chip--danger'}">${conn.status}</div>
+        <div class="chip ${conn.status === 'connected' ? 'chip--ok' : 'chip--danger'}">${conn.status || 'disconnected'}</div>
       </div>
       <div>
         <span class="kicker">Server URL</span>
@@ -705,7 +904,11 @@ export function renderChat() {
       </div>
       <div>
         <span class="kicker">Session ID</span>
-        <p class="mono">${session.id}</p>
+        <p class="mono">${sessionId || 'none'}</p>
+      </div>
+      <div>
+        <span class="kicker">Active Connections</span>
+        <p class="mono">${api.connections?.size || 0} / ${api.maxConnections || 10}</p>
       </div>
       ${conn.retryCount ? `
         <div>
@@ -713,10 +916,10 @@ export function renderChat() {
           <p class="mono meta">${conn.retryCount}</p>
         </div>
       ` : ''}
-      ${conn.lastPing ? `
+      ${conn.isStreaming ? `
         <div>
-          <span class="kicker">Last Ping</span>
-          <p class="mono meta">${new Date(conn.lastPing).toLocaleTimeString()}</p>
+          <span class="kicker">Streaming</span>
+          <p class="chip chip--accent">Active</p>
         </div>
       ` : ''}
       ${conn.error ? `
@@ -747,13 +950,23 @@ export function renderChat() {
   });
 
   container.querySelector('#end-session').addEventListener('click', async () => {
-    if (confirm('End this session? Messages will be lost.')) {
+    const sessionId = store.get('activeSessionId');
+    if (!sessionId) return;
+
+    if (confirm('End this session? The agent will be stopped.')) {
       try {
-        if (ws) ws.close();
-        await api.deleteSession(session.id);
-        store.removeSession(session.id);
+        api.disconnectSession(sessionId);
+        await api.deleteSession(sessionId);
+        await store.removeSession(sessionId);
         showToast('Success', 'Session ended', 'success');
-        router.push('/sessions');
+
+        // Switch to another session or go to sessions page
+        const remaining = store.get('sessions');
+        if (remaining.length > 0) {
+          switchToSession(remaining[0].id);
+        } else {
+          router.push('/sessions');
+        }
       } catch (error) {
         showToast('Error', `Failed to end session: ${error.message}`, 'error');
       }
@@ -767,6 +980,7 @@ export function renderChat() {
   // Store listeners
   store.addEventListener('change', (event) => {
     const { key } = event.detail;
+    const activeSessionId = store.get('activeSessionId');
 
     if (key === 'messages') {
       renderMessages();
@@ -774,9 +988,13 @@ export function renderChat() {
       renderEvents();
       renderApprovals();
       renderConnectionInfo();
-    } else if (key === 'connection') {
-      renderConnectionInfo();
-      renderConnectionBanner();
+    } else if (key === 'connections' || key === 'activeSessionId') {
+      renderSessionList();
+      if (activeSessionId) {
+        updateConnectionStatus(activeSessionId);
+        renderConnectionBanner();
+        renderConnectionInfo();
+      }
     } else if (key === 'sessions') {
       renderSessionList();
     }
@@ -784,26 +1002,29 @@ export function renderChat() {
 
   // Load messages from IndexedDB if not already in memory
   async function initializeMessages() {
-    const messages = store.get('messages')[session.id];
+    const sessionId = store.get('activeSessionId');
+    const messages = store.get('messages')[sessionId];
     if (!messages || messages.length === 0) {
-      await store.loadMessagesForSession(session.id);
+      await store.loadMessagesForSession(sessionId);
     }
     renderMessages();
   }
 
   // Initialize
   (async () => {
-    // Save current session ID for restoration
-    await store.saveCurrentSessionId(session.id);
+    const sessionId = store.get('activeSessionId');
+    if (!sessionId) return;
 
-    // Load messages
+    await store.saveCurrentSessionId(sessionId);
     await initializeMessages();
 
     renderSessionList();
     renderEvents();
     renderApprovals();
     renderConnectionInfo();
-    connectWebSocket();
+
+    // Connect to active session
+    connectToSession(sessionId);
   })();
 
   return container;
