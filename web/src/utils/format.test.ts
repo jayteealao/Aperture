@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { formatRelativeTime, formatDate, formatTime, truncate } from './format'
+import { formatRelativeTime, truncate } from './format'
 
 describe('format utilities', () => {
   beforeEach(() => {

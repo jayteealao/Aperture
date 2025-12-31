@@ -298,6 +298,7 @@ function MessageBubble({
               onClick={handleCopy}
               className="opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity p-1 rounded hover:bg-[var(--color-surface)]"
               title="Copy message"
+              aria-label={copied ? 'Message copied' : 'Copy message'}
             >
               {copied ? <Check size={14} /> : <Copy size={14} />}
             </button>

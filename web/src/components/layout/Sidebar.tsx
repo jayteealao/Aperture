@@ -67,6 +67,7 @@ export function Sidebar({ className }: SidebarProps) {
           <button
             onClick={() => setSidebarOpen(false)}
             className="p-1.5 rounded-lg hover:bg-[var(--color-surface)] lg:hidden"
+            aria-label="Close sidebar"
           >
             <X size={18} />
           </button>
@@ -107,6 +108,7 @@ export function Sidebar({ className }: SidebarProps) {
                   setSidebarOpen(false)
                 }}
                 className="p-1 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+                aria-label="Create new session"
               >
                 <Plus size={14} />
               </button>
