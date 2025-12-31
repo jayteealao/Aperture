@@ -25,8 +25,8 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN useradd -m -u 1000 -s /bin/bash app
+# Create non-root user (use UID 1001 since 1000 is taken by 'node' user)
+RUN useradd -m -u 1001 -s /bin/bash app
 
 WORKDIR /app
 
