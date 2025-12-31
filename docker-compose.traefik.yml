@@ -47,7 +47,7 @@ services:
     labels:
       - "traefik.enable=true"
       # API routes
-      - "traefik.http.routers.aperture-api.rule=Host(`${API_DOMAIN:-aperture-api.archivist.lol}`)"
+      - "traefik.http.routers.aperture-api.rule=Host(`${API_DOMAIN}`)"
       - "traefik.http.routers.aperture-api.entrypoints=web,websecure"
       - "traefik.http.routers.aperture-api.tls=true"
       - "traefik.http.routers.aperture-api.tls.certresolver=myresolver"
@@ -85,7 +85,7 @@ services:
     labels:
       - "traefik.enable=true"
       # Web frontend routes
-      - "traefik.http.routers.aperture.rule=Host(`${WEB_DOMAIN:-aperture.archivist.lol}`)"
+      - "traefik.http.routers.aperture.rule=Host(`${WEB_DOMAIN}`)"
       - "traefik.http.routers.aperture.entrypoints=web,websecure"
       - "traefik.http.routers.aperture.tls=true"
       - "traefik.http.routers.aperture.tls.certresolver=myresolver"
@@ -97,7 +97,7 @@ services:
 
 networks:
   default:
-    name: ${NETWORK_NAME:-archivebox_default}
+    name: ${NETWORK_NAME:-traefik_default}
     external: true
 
 volumes:
