@@ -81,7 +81,7 @@ export class Session extends EventEmitter {
   private config: Config;
   private backend: AgentBackend;
   private sessionConfig: SessionConfig;
-  private database?: ApertureDatabase;
+  private _database?: ApertureDatabase;
   private resolvedApiKey?: string;
   private pendingRequests: Map<string | number, PendingRequest> = new Map();
   private pendingPermissions: Map<string, PendingPermission> = new Map();
@@ -106,7 +106,7 @@ export class Session extends EventEmitter {
     this.sessionConfig = sessionConfig;
     this.backend = backend;
     this.config = config;
-    this.database = database;
+    this._database = database;
     this.resolvedApiKey = resolvedApiKey;
   }
 
