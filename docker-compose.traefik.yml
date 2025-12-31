@@ -1,0 +1,111 @@
+version: '3.8'
+
+# Aperture Stack for Portainer GitOps Deployment with Traefik
+#
+# Usage with Portainer:
+# 1. Create stack from Git repository
+# 2. Set compose path to: docker-compose.traefik.yml
+# 3. Add environment variables in Portainer or create stack.env in repo
+# 4. Enable GitOps updates for CI/CD
+
+services:
+  # Aperture Gateway (Backend API)
+  aperture-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aperture-gateway:latest
+    container_name: aperture-gateway
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Europe/London}
+      PORT: "8080"
+      HOST: "0.0.0.0"
+      # Enable credential storage (set in stack.env or Portainer env vars)
+      CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY:-}
+    volumes:
+      # Persist Claude Code home directory for subscription auth
+      - claude-data:/home/app/.claude
+      # Persist Codex home directory for subscription auth
+      - codex-data:/home/app/.codex
+      # Persist Gemini CLI home directory for OAuth cache
+      - gemini-data:/home/app/.gemini
+      # Persist encrypted credentials
+      - credentials-data:/home/app/data
+    networks: [default]
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/healthz', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=true"
+      # API routes
+      - "traefik.http.routers.aperture-api.rule=Host(`${API_DOMAIN:-aperture-api.archivist.lol}`)"
+      - "traefik.http.routers.aperture-api.entrypoints=web,websecure"
+      - "traefik.http.routers.aperture-api.tls=true"
+      - "traefik.http.routers.aperture-api.tls.certresolver=myresolver"
+      - "traefik.http.services.aperture-api.loadbalancer.server.port=8080"
+      # CrowdSec middleware
+      - "traefik.http.routers.aperture-api.middlewares=crowdsec-aperture-api@docker"
+      - "traefik.http.middlewares.crowdsec-aperture-api.plugin.crowdsec-bouncer.enabled=true"
+      - "traefik.http.middlewares.crowdsec-aperture-api.plugin.crowdsec-bouncer.crowdseclapikey=${CROWDSEC_API_KEY}"
+
+  # Aperture Web Frontend
+  aperture-web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: aperture-web:latest
+    container_name: aperture-web
+    restart: unless-stopped
+    depends_on:
+      aperture-gateway:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-Europe/London}
+    networks: [default]
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=true"
+      # Web frontend routes
+      - "traefik.http.routers.aperture.rule=Host(`${WEB_DOMAIN:-aperture.archivist.lol}`)"
+      - "traefik.http.routers.aperture.entrypoints=web,websecure"
+      - "traefik.http.routers.aperture.tls=true"
+      - "traefik.http.routers.aperture.tls.certresolver=myresolver"
+      - "traefik.http.services.aperture.loadbalancer.server.port=80"
+      # CrowdSec middleware
+      - "traefik.http.routers.aperture.middlewares=crowdsec-aperture@docker"
+      - "traefik.http.middlewares.crowdsec-aperture.plugin.crowdsec-bouncer.enabled=true"
+      - "traefik.http.middlewares.crowdsec-aperture.plugin.crowdsec-bouncer.crowdseclapikey=${CROWDSEC_API_KEY}"
+
+networks:
+  default:
+    name: ${NETWORK_NAME:-archivebox_default}
+    external: true
+
+volumes:
+  claude-data:
+    name: aperture-claude-data
+  codex-data:
+    name: aperture-codex-data
+  gemini-data:
+    name: aperture-gemini-data
+  credentials-data:
+    name: aperture-credentials-data
