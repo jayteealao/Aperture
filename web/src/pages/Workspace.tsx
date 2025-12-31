@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { cn } from '@/utils/cn'
 import { useSessionsStore } from '@/stores/sessions'
 import { useToast } from '@/components/ui/Toast'
@@ -16,6 +20,10 @@ import {
   Check,
   AlertCircle,
   Terminal,
+  ChevronDown,
+  ChevronRight,
+  Wrench,
+  CheckCircle2,
 } from 'lucide-react'
 
 export default function Workspace() {
@@ -271,10 +279,10 @@ function MessageBubble({
 }) {
   const [copied, setCopied] = useState(false)
   const isUser = message.role === 'user'
-  const content = extractText(message.content)
+  const { textContent, toolBlocks } = extractContentBlocks(message.content)
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(content)
+    navigator.clipboard.writeText(textContent)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -304,10 +312,18 @@ function MessageBubble({
             </button>
           )}
         </div>
-        <div className="prose prose-sm max-w-none">
-          <MessageContent content={content} />
-          {isStreaming && <span className="inline-block w-2 h-4 bg-current animate-typing ml-0.5" />}
+        <div className="prose prose-sm max-w-none dark:prose-invert">
+          <MarkdownContent content={textContent} />
+          {isStreaming && <span className="inline-block w-2 h-4 bg-current animate-pulse ml-0.5" />}
         </div>
+        {/* Tool calls and results */}
+        {toolBlocks.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {toolBlocks.map((block, i) => (
+              <ToolBlock key={i} block={block} />
+            ))}
+          </div>
+        )}
         <div className="mt-2 text-2xs opacity-50">
           {new Date(message.timestamp).toLocaleTimeString()}
         </div>
@@ -316,36 +332,107 @@ function MessageBubble({
   )
 }
 
-function MessageContent({ content }: { content: string }) {
-  // Simple markdown-like rendering
-  const parts = content.split(/(```[\s\S]*?```|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g)
-
+function MarkdownContent({ content }: { content: string }) {
   return (
     <div className="whitespace-pre-wrap break-words">
-      {parts.map((part, i) => {
-        if (part.startsWith('```')) {
-          const code = part.slice(3, -3).replace(/^\w+\n/, '')
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+        code({ className, children, ...props }) {
+          const match = /language-(\w+)/.exec(className || '')
+          const isInline = !match && !className
+
+          if (isInline) {
+            return (
+              <code className="px-1.5 py-0.5 rounded bg-[var(--color-surface)] text-sm font-mono" {...props}>
+                {children}
+              </code>
+            )
+          }
+
           return (
-            <pre key={i} className="my-2 p-3 rounded-lg bg-[var(--color-bg-tertiary)] overflow-x-auto text-xs">
-              <code>{code}</code>
+            <SyntaxHighlighter
+              style={oneDark}
+              language={match?.[1] || 'text'}
+              PreTag="div"
+              className="!my-2 !rounded-lg !text-xs"
+              customStyle={{
+                margin: 0,
+                borderRadius: '0.5rem',
+              }}
+            >
+              {String(children).replace(/\n$/, '')}
+            </SyntaxHighlighter>
+          )
+        },
+        pre({ children }) {
+          return <>{children}</>
+        },
+        p({ children }) {
+          return <p className="mb-2 last:mb-0">{children}</p>
+        },
+        ul({ children }) {
+          return <ul className="list-disc list-inside mb-2">{children}</ul>
+        },
+        ol({ children }) {
+          return <ol className="list-decimal list-inside mb-2">{children}</ol>
+        },
+        a({ href, children }) {
+          return (
+            <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+              {children}
+            </a>
+          )
+        },
+      }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
+function ToolBlock({ block }: { block: { type: 'tool_use' | 'tool_result'; name?: string; input?: unknown; content?: string | ContentBlock[] } }) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const isToolUse = block.type === 'tool_use'
+
+  return (
+    <div className={cn(
+      'rounded-lg border text-xs overflow-hidden',
+      isToolUse
+        ? 'border-[var(--color-border)] bg-[var(--color-surface)]'
+        : 'border-success/30 bg-success/5'
+    )}>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--color-surface-hover)] transition-colors"
+      >
+        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {isToolUse ? (
+          <Wrench size={14} className="text-[var(--color-text-muted)]" />
+        ) : (
+          <CheckCircle2 size={14} className="text-success" />
+        )}
+        <span className="font-medium">
+          {isToolUse ? `Tool: ${block.name}` : 'Tool Result'}
+        </span>
+      </button>
+      {isExpanded && (
+        <div className="px-3 py-2 border-t border-[var(--color-border)] bg-[var(--color-bg-tertiary)]">
+          {isToolUse && block.input !== undefined && (
+            <pre className="overflow-x-auto text-[10px] leading-relaxed">
+              {typeof block.input === 'string' ? block.input : JSON.stringify(block.input, null, 2)}
             </pre>
-          )
-        }
-        if (part.startsWith('`') && part.endsWith('`')) {
-          return (
-            <code key={i} className="px-1 py-0.5 rounded bg-[var(--color-surface)] text-sm">
-              {part.slice(1, -1)}
-            </code>
-          )
-        }
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i}>{part.slice(2, -2)}</strong>
-        }
-        if (part.startsWith('*') && part.endsWith('*')) {
-          return <em key={i}>{part.slice(1, -1)}</em>
-        }
-        return <span key={i}>{part}</span>
-      })}
+          )}
+          {!isToolUse && block.content !== undefined && (
+            <div className="overflow-x-auto">
+              <pre className="text-[10px] leading-relaxed whitespace-pre-wrap">
+                {typeof block.content === 'string' ? block.content : JSON.stringify(block.content, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -406,20 +493,44 @@ function PermissionRequest({
   )
 }
 
-// Helper to extract text from content blocks
-function extractText(content: string | ContentBlock[]): string {
-  if (typeof content === 'string') return content
-  if (!Array.isArray(content)) return String(content)
+// Helper to extract text and tool blocks from content
+interface ToolBlockData {
+  type: 'tool_use' | 'tool_result'
+  name?: string
+  input?: unknown
+  content?: string | ContentBlock[]
+}
 
-  return content
-    .map((block) => {
-      if (block.type === 'text' && block.text) return block.text
-      if (block.type === 'tool_use') return `[Tool: ${block.name}]`
-      if (block.type === 'tool_result') {
-        if (typeof block.content === 'string') return block.content
-        return extractText(block.content || [])
-      }
-      return ''
-    })
-    .join('\n')
+function extractContentBlocks(content: string | ContentBlock[]): { textContent: string; toolBlocks: ToolBlockData[] } {
+  if (typeof content === 'string') {
+    return { textContent: content, toolBlocks: [] }
+  }
+  if (!Array.isArray(content)) {
+    return { textContent: String(content), toolBlocks: [] }
+  }
+
+  const textParts: string[] = []
+  const toolBlocks: ToolBlockData[] = []
+
+  for (const block of content) {
+    if (block.type === 'text' && block.text) {
+      textParts.push(block.text)
+    } else if (block.type === 'tool_use') {
+      toolBlocks.push({
+        type: 'tool_use',
+        name: block.name,
+        input: block.input,
+      })
+    } else if (block.type === 'tool_result') {
+      toolBlocks.push({
+        type: 'tool_result',
+        content: block.content,
+      })
+    }
+  }
+
+  return {
+    textContent: textParts.join('\n'),
+    toolBlocks,
+  }
 }

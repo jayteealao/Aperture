@@ -298,11 +298,14 @@ export async function registerRoutes(
         return;
       }
 
-      // Forward ACP messages from agent to WebSocket (except session/update which has its own handler)
+      // Forward ACP messages from agent to WebSocket (except those with dedicated handlers)
       const messageHandler = (message: JsonRpcMessage) => {
         try {
-          // Skip session/update - handled by sessionUpdateHandler to avoid duplicates
-          if ('method' in message && message.method === 'session/update') {
+          // Skip messages that have dedicated handlers to avoid duplicates
+          if ('method' in message && (
+            message.method === 'session/update' ||
+            message.method === 'session/request_permission'
+          )) {
             return;
           }
           socket.send(JSON.stringify(message));
