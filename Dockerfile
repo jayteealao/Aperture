@@ -25,8 +25,8 @@ COPY packages/worktrunk-native/src packages/worktrunk-native/src
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Build native addon first
-RUN pnpm -C packages/worktrunk-native build
+# Build native addon using workspace filter (not -C which doesn't work with workspaces)
+RUN pnpm --filter @aperture/worktrunk-native build
 
 # Copy remaining source files
 COPY tsconfig.json ./
