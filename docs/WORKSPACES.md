@@ -404,7 +404,7 @@ npm start
 
 3. Check the import path in `src/workspaces/worktreeManager.ts`:
    ```typescript
-   const nativePath = new URL('../../../packages/worktrunk-native/index.ts', import.meta.url).pathname;
+   const nativePath = new URL('../../../packages/worktrunk-native/index.js', import.meta.url).pathname;
    ```
 
 ---

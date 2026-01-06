@@ -72,7 +72,6 @@ RUN npm install -g @zed-industries/claude-code-acp && \
 # Copy built files from builder
 COPY --from=builder /build/dist ./dist
 COPY --from=builder /build/packages/worktrunk-native/*.node ./packages/worktrunk-native/
-COPY --from=builder /build/packages/worktrunk-native/index.ts ./packages/worktrunk-native/
 COPY --from=builder /build/packages/worktrunk-native/index.d.ts ./packages/worktrunk-native/
 COPY --from=builder /build/packages/worktrunk-native/index.js ./packages/worktrunk-native/
 
