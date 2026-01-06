@@ -10,6 +10,7 @@ export interface CreateSessionOptions {
   agent?: AgentType;
   auth?: SessionAuth;
   env?: Record<string, string>;
+  workspaceId?: string; // Optional workspace ID for workspace-backed sessions
 }
 
 /**
@@ -134,8 +135,56 @@ export class SessionManager {
     }
     // Note: oauth and vertex modes don't need API key resolution here
 
+    // Handle workspace-backed sessions
+    let worktreePath: string | undefined;
+    if (options.workspaceId && this.database) {
+      const { createWorktreeManager } = await import('./workspaces/worktreeManager.js');
+      const worktreeManager = createWorktreeManager();
+
+      const workspace = this.database.getWorkspace(options.workspaceId);
+      if (!workspace) {
+        throw new Error(`Workspace not found: ${options.workspaceId}`);
+      }
+
+      // Generate branch name for this agent (use session ID for uniqueness)
+      const branch = `agent/${id.substring(0, 8)}`;
+
+      try {
+        // Create worktree
+        const worktreeResult = await worktreeManager.ensureWorktree({
+          repoRoot: workspace.repo_root,
+          branch,
+          worktreeBaseDir: `${workspace.repo_root}/.worktrees`,
+          pathTemplate: '{worktreeBaseDir}/{branch}',
+        });
+
+        worktreePath = worktreeResult.worktreePath;
+
+        // Save workspace agent mapping
+        this.database.saveWorkspaceAgent({
+          id: randomUUID(),
+          workspace_id: options.workspaceId,
+          session_id: id,
+          branch,
+          worktree_path: worktreePath,
+          created_at: Date.now(),
+          updated_at: Date.now(),
+        });
+
+        console.log(`[SessionManager] Created worktree for session ${id} at ${worktreePath}`);
+      } catch (error) {
+        console.error(`[SessionManager] Failed to create worktree:`, error);
+        throw new Error(`Failed to create worktree for workspace: ${error}`);
+      }
+    }
+
     // Create session
     const session = new Session(sessionConfig, backend, this.config, this.database, resolvedApiKey);
+
+    // Pass worktree path to session if available
+    if (worktreePath) {
+      session.setWorktreePath(worktreePath);
+    }
 
     // Persist to database
     if (this.database) {

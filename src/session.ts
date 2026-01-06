@@ -82,6 +82,7 @@ export class Session extends EventEmitter {
   private backend: AgentBackend;
   private sessionConfig: SessionConfig;
   private resolvedApiKey?: string;
+  private worktreePath?: string; // Optional worktree path for workspace-backed sessions
   private pendingRequests: Map<string | number, PendingRequest> = new Map();
   private pendingPermissions: Map<string, PendingPermission> = new Map();
   private terminals: Map<string, ManagedTerminal> = new Map();
@@ -161,6 +162,14 @@ export class Session extends EventEmitter {
   }
 
   /**
+   * Set the worktree path for this session
+   * Must be called before initialization
+   */
+  setWorktreePath(path: string): void {
+    this.worktreePath = path;
+  }
+
+  /**
    * Initializes the ACP protocol with the agent
    */
   private async initializeAcp(): Promise<void> {
@@ -194,7 +203,7 @@ export class Session extends EventEmitter {
 
     // Create a new ACP session
     const sessionParams: NewSessionParams = {
-      cwd: process.cwd(),
+      cwd: this.worktreePath || process.cwd(), // Use worktree path if available
       mcpServers: [],
     };
 
