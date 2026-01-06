@@ -1,9 +1,9 @@
 # Build stage
 FROM node:20-slim AS builder
 
-# Install Rust for native addon compilation
+# Install Rust and build dependencies for native addon compilation
 RUN apt-get update && \
-    apt-get install -y curl build-essential && \
+    apt-get install -y curl build-essential pkg-config libssl-dev && \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
