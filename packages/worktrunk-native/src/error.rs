@@ -1,4 +1,3 @@
-use napi::bindgen_prelude::*;
 use thiserror::Error;
 
 /// Error codes for worktree operations
