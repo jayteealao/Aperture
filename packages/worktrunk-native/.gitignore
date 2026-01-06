@@ -1,0 +1,8 @@
+node_modules/
+target/
+*.node
+*.log
+npm-debug.log*
+dist/
+*.tgz
+.DS_Store
