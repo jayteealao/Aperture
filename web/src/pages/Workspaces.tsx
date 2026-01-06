@@ -16,7 +16,6 @@ import {
   Folder,
   RefreshCw,
   AlertCircle,
-  CheckCircle2,
   Lock,
   Activity,
 } from 'lucide-react'
@@ -217,6 +216,7 @@ export default function Workspaces() {
       {/* Create Dialog */}
       {showCreateDialog && (
         <CreateWorkspaceDialog
+          open={showCreateDialog}
           onClose={() => setShowCreateDialog(false)}
           onSuccess={() => {
             setShowCreateDialog(false)
@@ -314,7 +314,7 @@ function WorkspaceCard({
               Active Agents
             </span>
           </div>
-          <Badge variant={workspace.agents.length > 0 ? 'success' : 'secondary'} size="sm">
+          <Badge variant={workspace.agents.length > 0 ? 'success' : 'default'} size="sm">
             {workspace.agents.length}
           </Badge>
         </button>
@@ -375,7 +375,7 @@ function WorkspaceCard({
               Git Worktrees
             </span>
           </div>
-          <Badge variant="secondary" size="sm">
+          <Badge variant="default" size="sm">
             {workspace.worktrees.length}
           </Badge>
         </button>
@@ -435,9 +435,11 @@ function WorkspaceCard({
 }
 
 function CreateWorkspaceDialog({
+  open,
   onClose,
   onSuccess,
 }: {
+  open: boolean
   onClose: () => void
   onSuccess: () => void
 }) {
@@ -477,7 +479,7 @@ function CreateWorkspaceDialog({
   }
 
   return (
-    <Dialog onClose={onClose} title="Create Workspace" size="md">
+    <Dialog open={open} onClose={onClose} title="Create Workspace" size="md">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-4">
           <div>
