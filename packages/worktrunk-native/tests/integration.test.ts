@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { tmpdir } from 'os';
 import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
+import { realpathSync } from 'fs';
 import { execSync } from 'child_process';
 import {
   ensureRepoReady,
@@ -9,6 +10,15 @@ import {
   listWorktrees,
   removeWorktree,
 } from '../index';
+
+// Helper to normalize paths (resolves symlinks like /var -> /private/var on macOS)
+const normalizePath = (path: string): string => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+};
 
 describe('Worktrunk Native Addon - Integration Tests', () => {
   let tempDir: string;
@@ -99,7 +109,7 @@ describe('Worktrunk Native Addon - Integration Tests', () => {
         worktreeBaseDir: join(repoRoot, '.worktrees'),
       });
 
-      expect(result2.worktreePath).toBe(result1.worktreePath);
+      expect(normalizePath(result2.worktreePath)).toBe(normalizePath(result1.worktreePath));
       expect(result2.branch).toBe(result1.branch);
     });
 
@@ -141,7 +151,7 @@ describe('Worktrunk Native Addon - Integration Tests', () => {
 
       const mainWorktree = worktrees.find((w) => w.isMain);
       expect(mainWorktree).toBeDefined();
-      expect(mainWorktree?.path).toBe(repoRoot);
+      expect(normalizePath(mainWorktree?.path || '')).toBe(normalizePath(repoRoot));
     });
 
     it('should list all worktrees including created ones', async () => {
