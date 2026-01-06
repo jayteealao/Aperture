@@ -178,3 +178,52 @@ export interface ConnectionState {
   lastActivity: number
   currentStreamMessageId?: string
 }
+
+// Workspace types
+export interface WorkspaceRecord {
+  id: string
+  name: string
+  repoRoot: string
+  description: string | null
+  createdAt: string
+  updatedAt: string
+  metadata: string | null
+}
+
+export interface WorkspaceAgentRecord {
+  id: string
+  workspaceId: string
+  sessionId: string | null
+  branch: string
+  worktreePath: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WorktreeInfo {
+  branch: string
+  path: string
+  isMain: boolean
+  isLocked: boolean
+}
+
+export interface CreateWorkspaceRequest {
+  name?: string
+  repoRoot?: string
+  description?: string
+}
+
+export interface ListWorkspacesResponse {
+  workspaces: WorkspaceRecord[]
+  total: number
+}
+
+export interface ListWorkspaceAgentsResponse {
+  agents: WorkspaceAgentRecord[]
+  total: number
+}
+
+export interface ListWorktreesResponse {
+  worktrees: WorktreeInfo[]
+  total: number
+}

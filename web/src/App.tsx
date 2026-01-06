@@ -7,6 +7,7 @@ import { Spinner } from './components/ui/Spinner'
 // Lazy load pages for code splitting
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Workspace = lazy(() => import('./pages/Workspace'))
+const Workspaces = lazy(() => import('./pages/Workspaces'))
 const Sessions = lazy(() => import('./pages/Sessions'))
 const Credentials = lazy(() => import('./pages/Credentials'))
 const Settings = lazy(() => import('./pages/Settings'))
@@ -72,6 +73,7 @@ export default function App() {
           <Route index element={<Navigate to="/workspace" replace />} />
           <Route path="workspace" element={<Workspace />} />
           <Route path="workspace/:sessionId" element={<Workspace />} />
+          <Route path="workspaces" element={<Workspaces />} />
           <Route path="sessions" element={<Sessions />} />
           <Route path="sessions/new" element={<Sessions />} />
           <Route path="credentials" element={<Credentials />} />

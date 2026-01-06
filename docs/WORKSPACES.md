@@ -179,26 +179,33 @@ After evaluating Worktrunk, we decided to use git2-rs directly because:
 
 ## Web UI
 
-A visual workspace manager is available at `http://localhost:8080/workspaces` (or your configured port).
+The workspace management interface is integrated into the main Aperture web frontend.
 
 ### Features
 
-- **Workspace Management**: Create and delete workspaces with a clean interface
+- **Modern UI**: Glassmorphism design matching Aperture's visual language
+- **Workspace Management**: Create and delete workspaces with clean modal dialogs
 - **Live Monitoring**: Auto-refreshes every 5 seconds to show real-time status
-- **Agent Tracking**: View all active agents and their associated worktrees
-- **Worktree Browser**: Visualize all git worktrees in each workspace
+- **Agent Tracking**: View all active agents with session IDs and worktree paths
+- **Worktree Browser**: Visualize all git worktrees with status indicators (main, locked, active)
+- **Card-Based Layout**: Responsive grid layout with collapsible sections
 - **One-Click Actions**: Quick delete and refresh actions for workspaces and agents
 
 ### Usage
 
-1. Start the Aperture gateway:
+1. Start the Aperture gateway and web frontend:
    ```bash
+   # Backend
    npm start
+
+   # Frontend (in a separate terminal)
+   cd web && npm run dev
    ```
 
-2. Open your browser to `http://localhost:8080/workspaces`
+2. Navigate to Workspaces in the sidebar (or visit `/workspaces`)
 
 3. Create a workspace:
+   - Click "New Workspace" button
    - Enter workspace name (e.g., "my-project")
    - Provide git repository root path (e.g., "/path/to/repo")
    - Optionally add a description
@@ -216,6 +223,8 @@ The Web UI uses the following REST endpoints:
 - `GET /v1/workspaces/:id/worktrees` - List git worktrees
 - `DELETE /v1/workspaces/:id` - Delete workspace (with cleanup)
 - `DELETE /v1/workspaces/:id/agents/:agentId` - Remove specific agent
+
+See `web/src/api/client.ts` for the TypeScript API client implementation.
 
 ## Future Work
 

@@ -8,12 +8,6 @@ import { validateJsonRpcMessage, type JsonRpcMessage } from './jsonrpc.js';
 import { checkReadiness } from './claudeInstaller.js';
 import { registerCredentialRoutes } from './routes/credentials.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.js';
-import { readFile } from 'fs/promises';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 interface CreateSessionBody {
   agent?: AgentType;
@@ -41,20 +35,6 @@ export async function registerRoutes(
 
   // Register workspace management routes
   await registerWorkspaceRoutes(fastify, database || null);
-
-  // Serve workspace manager UI
-  fastify.get('/workspaces', async (_request, reply) => {
-    try {
-      const htmlPath = join(__dirname, '..', 'public', 'workspace-manager.html');
-      const html = await readFile(htmlPath, 'utf-8');
-      return reply.type('text/html').send(html);
-    } catch (error) {
-      return reply.code(404).send({
-        error: 'Workspace UI not found',
-        message: 'The workspace manager interface is not available',
-      });
-    }
-  });
 
   // Health check - always returns 200
   fastify.get('/healthz', async () => {

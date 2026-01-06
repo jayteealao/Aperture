@@ -13,6 +13,7 @@ import {
   Moon,
   Sun,
   Command,
+  GitBranch,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 
@@ -27,6 +28,7 @@ export function Sidebar({ className }: SidebarProps) {
 
   const navItems = [
     { to: '/workspace', icon: MessageSquare, label: 'Workspace' },
+    { to: '/workspaces', icon: GitBranch, label: 'Workspaces' },
     { to: '/sessions', icon: Folder, label: 'Sessions' },
     { to: '/credentials', icon: Key, label: 'Credentials' },
     { to: '/settings', icon: Settings, label: 'Settings' },

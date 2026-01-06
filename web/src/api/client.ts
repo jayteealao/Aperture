@@ -12,6 +12,11 @@ import type {
   ReadyResponse,
   MessagesResponse,
   JsonRpcMessage,
+  CreateWorkspaceRequest,
+  WorkspaceRecord,
+  ListWorkspacesResponse,
+  ListWorkspaceAgentsResponse,
+  ListWorktreesResponse,
 } from './types'
 
 class ApiError extends Error {
@@ -149,6 +154,42 @@ class ApertureClient {
   getWebSocketUrl(sessionId: string): string {
     const wsUrl = this.baseUrl.replace(/^http/, 'ws')
     return `${wsUrl}/v1/sessions/${sessionId}/ws?token=${encodeURIComponent(this.token)}`
+  }
+
+  // Workspaces
+  async createWorkspace(data: CreateWorkspaceRequest): Promise<WorkspaceRecord> {
+    return this.request<WorkspaceRecord>('/v1/workspaces', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async listWorkspaces(): Promise<ListWorkspacesResponse> {
+    return this.request<ListWorkspacesResponse>('/v1/workspaces')
+  }
+
+  async getWorkspace(id: string): Promise<WorkspaceRecord> {
+    return this.request<WorkspaceRecord>(`/v1/workspaces/${id}`)
+  }
+
+  async deleteWorkspace(id: string): Promise<void> {
+    return this.request<void>(`/v1/workspaces/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async listWorkspaceAgents(workspaceId: string): Promise<ListWorkspaceAgentsResponse> {
+    return this.request<ListWorkspaceAgentsResponse>(`/v1/workspaces/${workspaceId}/agents`)
+  }
+
+  async deleteWorkspaceAgent(workspaceId: string, agentId: string): Promise<void> {
+    return this.request<void>(`/v1/workspaces/${workspaceId}/agents/${agentId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async listWorkspaceWorktrees(workspaceId: string): Promise<ListWorktreesResponse> {
+    return this.request<ListWorktreesResponse>(`/v1/workspaces/${workspaceId}/worktrees`)
   }
 }
 
