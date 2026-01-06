@@ -177,17 +177,61 @@ After evaluating Worktrunk, we decided to use git2-rs directly because:
 | Maintenance | Active | Active | Stale | Active |
 | Deployment | Single .node file | git CLI required | .node + libs | None |
 
+## Web UI
+
+A visual workspace manager is available at `http://localhost:8080/workspaces` (or your configured port).
+
+### Features
+
+- **Workspace Management**: Create and delete workspaces with a clean interface
+- **Live Monitoring**: Auto-refreshes every 5 seconds to show real-time status
+- **Agent Tracking**: View all active agents and their associated worktrees
+- **Worktree Browser**: Visualize all git worktrees in each workspace
+- **One-Click Actions**: Quick delete and refresh actions for workspaces and agents
+
+### Usage
+
+1. Start the Aperture gateway:
+   ```bash
+   npm start
+   ```
+
+2. Open your browser to `http://localhost:8080/workspaces`
+
+3. Create a workspace:
+   - Enter workspace name (e.g., "my-project")
+   - Provide git repository root path (e.g., "/path/to/repo")
+   - Optionally add a description
+   - Click "Create Workspace"
+
+4. Monitor agents and worktrees in real-time as sessions are created
+
+### API Integration
+
+The Web UI uses the following REST endpoints:
+- `POST /v1/workspaces` - Create workspace
+- `GET /v1/workspaces` - List all workspaces
+- `GET /v1/workspaces/:id` - Get workspace details
+- `GET /v1/workspaces/:id/agents` - List agents in workspace
+- `GET /v1/workspaces/:id/worktrees` - List git worktrees
+- `DELETE /v1/workspaces/:id` - Delete workspace (with cleanup)
+- `DELETE /v1/workspaces/:id/agents/:agentId` - Remove specific agent
+
 ## Future Work
 
-- Full workspace database schema integration
-- Workspace creation/deletion API endpoints
-- Automatic worktree cleanup on session end
-- Web UI for workspace management
 - Workspace templates and configuration
+- Advanced worktree filtering and search
+- Session logs integration in the UI
+- Workspace-level settings and environment variables
 
 ## Status
 
-**Experimental** - The native addon is fully functional and tested, but full workspace management in the gateway is not yet implemented. The foundation is solid and ready for production use cases.
+**Ready for Production** - The workspace management system is fully implemented with:
+- ✅ Native addon (git2-rs) with comprehensive tests
+- ✅ Full database schema integration
+- ✅ Complete REST API
+- ✅ Automatic cleanup on session end
+- ✅ Web UI for management and monitoring
 
 ## Contributing
 

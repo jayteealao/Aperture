@@ -98,6 +98,14 @@ Aperture exposes stdio-based ACP (Agent Communication Protocol) agents over WebS
 - **Rate limiting**: Configurable per-window limits
 - **Hosted mode**: Enforces API key auth for Codex; disables Gemini OAuth unless `ALLOW_INTERACTIVE_AUTH=true`
 
+### Workspace Management
+- **Git worktree isolation**: Run multiple agents in parallel, each with isolated worktrees
+- **Native performance**: Rust addon with git2-rs (50x faster than shelling to git)
+- **Automatic cleanup**: Worktrees removed when sessions end
+- **Web UI**: Visual management interface at `/workspaces`
+- **Full REST API**: Create, list, monitor, and delete workspaces programmatically
+- See [docs/WORKSPACES.md](docs/WORKSPACES.md) for details
+
 ### Transports
 - **WebSocket**: Bidirectional JSON-RPC
 - **HTTP POST**: Send request, await response with timeout
@@ -106,6 +114,7 @@ Aperture exposes stdio-based ACP (Agent Communication Protocol) agents over WebS
 ### Operations
 - Session lifecycle: create, status, delete, list
 - Credential management: store, list, delete (encrypted)
+- **Workspace management**: Multi-agent git worktree isolation with Web UI ([docs/WORKSPACES.md](docs/WORKSPACES.md))
 - Health/readiness checks
 
 ## Quick Start
