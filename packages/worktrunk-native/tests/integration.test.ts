@@ -12,11 +12,15 @@ import {
   removeWorktree,
 } from '../index';
 
-// Helper to normalize paths (resolves symlinks like /var -> /private/var on macOS)
+// Helper to normalize paths (resolves symlinks on macOS/Linux and short names on Windows)
 const normalizePath = (path: string): string => {
   try {
-    return realpathSync(path);
+    // Use native realpath which handles Windows short names (8.3 format) and symlinks
+    // On Windows: RUNNER~1 -> runneradmin
+    // On macOS: /var -> /private/var
+    return realpathSync.native(path);
   } catch {
+    // Fallback to original path if normalization fails
     return path;
   }
 };
