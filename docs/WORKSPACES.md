@@ -233,6 +233,379 @@ See `web/src/api/client.ts` for the TypeScript API client implementation.
 - Session logs integration in the UI
 - Workspace-level settings and environment variables
 
+## Troubleshooting
+
+### Native Addon Build Issues
+
+**Problem**: `Error: Cannot find module '@aperture/worktrunk-native'`
+
+**Solution**:
+```bash
+# Build the native addon
+pnpm -C packages/worktrunk-native build
+
+# Verify the .node file exists
+ls -la packages/worktrunk-native/*.node
+```
+
+**Common causes**:
+- Rust toolchain not installed: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- Build dependencies missing on Linux: `apt-get install build-essential pkg-config libssl-dev`
+- Permissions issue: Check file permissions on `packages/worktrunk-native/` directory
+
+---
+
+**Problem**: `dyld: Library not loaded` (macOS) or `error while loading shared libraries` (Linux)
+
+**Solution**:
+The native addon uses static linking for libgit2, so this shouldn't happen. If it does:
+```bash
+# Rebuild from scratch
+pnpm -C packages/worktrunk-native clean
+pnpm -C packages/worktrunk-native build
+
+# Check the .node file's dependencies (Linux)
+ldd packages/worktrunk-native/*.node
+
+# Check the .node file's dependencies (macOS)
+otool -L packages/worktrunk-native/*.node
+```
+
+---
+
+**Problem**: Build fails with `error: linker 'cc' not found`
+
+**Solution**:
+```bash
+# Ubuntu/Debian
+sudo apt-get install build-essential
+
+# macOS
+xcode-select --install
+
+# Alpine Linux (Docker)
+apk add build-base
+```
+
+---
+
+### Repository Validation Errors
+
+**Problem**: `Invalid repository: Path is not a valid git repository`
+
+**Solution**:
+1. Verify the path exists and is a git repository:
+   ```bash
+   cd /path/to/repo
+   git status  # Should not error
+   ```
+
+2. Check file permissions - the Aperture process needs read access:
+   ```bash
+   ls -la /path/to/repo/.git
+   ```
+
+3. For Docker deployments, ensure the repo is mounted as a volume:
+   ```yaml
+   volumes:
+     - /host/path/to/repo:/workspace/repo:rw
+   ```
+
+4. Check that .git is a directory, not a file (worktree submodules use .git files):
+   ```bash
+   test -d /path/to/repo/.git && echo "OK" || echo "Not a main repo"
+   ```
+
+---
+
+**Problem**: Workspace creation works but agents can't access files
+
+**Solution**:
+This is typically a permissions issue:
+```bash
+# Check ownership
+ls -la /path/to/repo
+
+# If running as Docker user 'app' (UID 1001):
+chown -R 1001:1001 /path/to/repo
+
+# Verify worktree directory is writable
+test -w /path/to/repo/.worktrees || mkdir -p /path/to/repo/.worktrees
+chmod 755 /path/to/repo/.worktrees
+```
+
+---
+
+### Database Migration Errors
+
+**Problem**: `SqliteError: no such table: workspaces`
+
+**Solution**:
+Database migrations didn't run. This can happen if:
+
+1. Database was created before migrations were added:
+   ```bash
+   # Delete and recreate database
+   rm data/db/aperture.db
+   npm start  # Will auto-migrate on startup
+   ```
+
+2. Migration directory path is wrong (check `src/database.ts`):
+   ```typescript
+   // Should be:
+   db.migrate(join(process.cwd(), 'src', 'migrations'));
+   ```
+
+3. For Docker, ensure migrations are copied:
+   ```dockerfile
+   COPY src/migrations ./src/migrations
+   ```
+
+---
+
+**Problem**: `SqliteError: table schema_version has no column named description`
+
+**Solution**:
+This was a bug in migration 002. Update to the latest version:
+```bash
+git pull origin main
+# Migration 002 should use: INSERT INTO schema_version (version, applied_at)
+# Not: INSERT INTO schema_version (version, description)
+```
+
+If you already have a corrupted database:
+```bash
+# Backup data
+cp data/db/aperture.db data/db/aperture.db.backup
+
+# Delete and recreate
+rm data/db/aperture.db
+npm start
+```
+
+---
+
+### Worktree Operation Errors
+
+**Problem**: `WorktreeManager native addon not available` (stub fallback)
+
+**Impact**: Workspace features won't work - you'll see warnings in logs.
+
+**Solution**:
+1. Build the native addon:
+   ```bash
+   pnpm -C packages/worktrunk-native build
+   ```
+
+2. Verify it loads:
+   ```bash
+   node -e "import('@aperture/worktrunk-native').then(m => console.log('OK:', m))"
+   ```
+
+3. Check the import path in `src/workspaces/worktreeManager.ts`:
+   ```typescript
+   const nativePath = new URL('../../../packages/worktrunk-native/index.ts', import.meta.url).pathname;
+   ```
+
+---
+
+**Problem**: Worktree cleanup fails with "worktree already exists"
+
+**Solution**:
+Git may have stale worktree references. Clean them up:
+```bash
+cd /path/to/repo
+git worktree prune
+git worktree list  # Should only show main repo
+```
+
+If worktree directories exist but aren't registered:
+```bash
+rm -rf /path/to/repo/.worktrees/*
+git worktree prune
+```
+
+---
+
+### Docker Deployment Issues
+
+**Problem**: Native addon works locally but not in Docker
+
+**Solution**:
+1. Ensure Rust is installed in the Docker builder stage:
+   ```dockerfile
+   RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+   ENV PATH="/root/.cargo/bin:${PATH}"
+   ```
+
+2. Verify the .node file is copied to the production stage:
+   ```dockerfile
+   COPY --from=builder /build/packages/worktrunk-native/*.node ./packages/worktrunk-native/
+   ```
+
+3. Check architecture compatibility:
+   ```bash
+   # Build image for your platform
+   docker build --platform linux/amd64 -t aperture .
+   ```
+
+---
+
+**Problem**: CI/CD pipeline fails on native addon build
+
+**Solution**:
+GitHub Actions workflow should install Rust:
+```yaml
+- name: Setup Rust
+  uses: dtolnay/rust-toolchain@stable
+
+- name: Build native addon
+  run: pnpm -C packages/worktrunk-native build
+```
+
+Check `.github/workflows/build-addon.yml` for reference.
+
+---
+
+### Performance Issues
+
+**Problem**: Worktree operations are slow
+
+**Investigation**:
+1. Check if you're using the native addon (not the stub):
+   ```bash
+   # Look for this in logs:
+   # [WorktreeManagerStub] - indicates fallback to stub (BAD)
+   # No such warning = using native addon (GOOD)
+   ```
+
+2. Monitor worktree count:
+   ```bash
+   git worktree list | wc -l
+   # Should be < 100 for good performance
+   ```
+
+3. Profile the operations:
+   ```typescript
+   const start = Date.now();
+   await manager.ensureWorktree(...);
+   console.log(`Took ${Date.now() - start}ms`);
+   // Should be < 50ms for local repos
+   ```
+
+**Solutions**:
+- Clean up old worktrees: `git worktree prune`
+- Use SSD storage for git repositories
+- Ensure native addon is built in release mode: `pnpm -C packages/worktrunk-native build`
+
+---
+
+### Web UI Issues
+
+**Problem**: Workspaces page shows "Service Unavailable"
+
+**Solution**:
+1. Check that the backend has database enabled:
+   ```bash
+   # In backend logs, should see:
+   # [DB] Opened database: data/db/aperture.db
+   ```
+
+2. Verify the API endpoint works:
+   ```bash
+   curl http://localhost:8080/v1/workspaces
+   # Should return JSON, not 503
+   ```
+
+3. Check browser console for errors
+
+---
+
+**Problem**: Workspace list doesn't auto-refresh
+
+**Solution**:
+This is expected - auto-refresh only happens while on the page. Check:
+1. Browser console for errors
+2. Network tab - should see requests every 5 seconds
+3. Disable browser extensions that might block polling
+
+---
+
+### Testing Issues
+
+**Problem**: Integration tests fail with "native addon not available"
+
+**Solution**:
+This is normal - some tests skip gracefully when the native addon isn't built:
+```bash
+# Build addon for tests
+pnpm -C packages/worktrunk-native build:debug
+
+# Run tests
+pnpm test
+```
+
+Tests that require the native addon will be skipped with a warning if it's not available.
+
+---
+
+**Problem**: `SQLITE_BUSY` errors in tests
+
+**Solution**:
+Multiple test files accessing the same database. Fix:
+```typescript
+// Each test should use a unique database path
+const testDbPath = join(tmpdir(), `test-${randomUUID()}.db`);
+```
+
+---
+
+### Common Environment Issues
+
+| Symptom | Likely Cause | Quick Fix |
+|---------|--------------|-----------|
+| `Error: Cannot find module` | Native addon not built | `pnpm -C packages/worktrunk-native build` |
+| `WorktreeManagerStub` in logs | Addon import failed | Check import path, rebuild addon |
+| `SqliteError: no such table` | Migrations not run | Delete DB and restart |
+| `Invalid repository` | Path wrong or permissions | Verify with `git status` in that directory |
+| 503 on `/v1/workspaces` | Database disabled | Check DB path in config |
+| Agent can't write files | Permission denied | `chown` repo directory to app user |
+| Slow worktree operations | Using stub fallback | Build native addon in release mode |
+
+---
+
+### Getting Help
+
+If you're still stuck:
+
+1. **Check logs**: Backend logs show detailed error messages
+   ```bash
+   npm start 2>&1 | tee aperture.log
+   ```
+
+2. **Enable debug logging**:
+   ```bash
+   DEBUG=* npm start
+   ```
+
+3. **Run tests** to verify the environment:
+   ```bash
+   pnpm test tests/workspace-api.test.ts
+   ```
+
+4. **Check system compatibility**:
+   - Node.js >= 20.0.0: `node --version`
+   - Rust toolchain: `rustc --version`
+   - Git version: `git --version`
+   - Build tools: `gcc --version` or `clang --version`
+
+5. **File a bug** with:
+   - Operating system and version
+   - Node.js version
+   - Full error message and stack trace
+   - Steps to reproduce
+   - Output of `pnpm -C packages/worktrunk-native build --verbose`
+
 ## Status
 
 **Ready for Production** - The workspace management system is fully implemented with:
