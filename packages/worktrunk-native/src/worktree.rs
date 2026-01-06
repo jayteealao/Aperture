@@ -323,6 +323,15 @@ mod tests {
     }
 
     #[test]
+    fn test_sanitize_worktree_name() {
+        assert_eq!(sanitize_worktree_name("main"), "main");
+        assert_eq!(sanitize_worktree_name("feat/add-ui"), "feat-add-ui");
+        assert_eq!(sanitize_worktree_name("fix/bug-123"), "fix-bug-123");
+        assert_eq!(sanitize_worktree_name("feature/user/profile"), "feature-user-profile");
+        assert_eq!(sanitize_worktree_name("hotfix/critical/issue"), "hotfix-critical-issue");
+    }
+
+    #[test]
     fn test_ensure_repo_ready() {
         let (_temp, repo_path) = init_test_repo();
         let (is_repo, branch) = ensure_repo_ready(repo_path.to_str().unwrap()).unwrap();

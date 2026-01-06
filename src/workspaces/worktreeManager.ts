@@ -1,22 +1,42 @@
 import type { WorktreeManagerInterface } from './types.js';
 
 /**
+ * Type definition for the native addon module
+ */
+interface NativeAddonModule {
+  ensureRepoReady(params: { repoRoot: string }): Promise<{ isGitRepo: boolean; defaultBranch: string | null }>;
+  ensureWorktree(params: {
+    repoRoot: string;
+    branch: string;
+    worktreeBaseDir: string;
+    pathTemplate?: string;
+  }): Promise<{ branch: string; worktreePath: string }>;
+  listWorktrees(params: { repoRoot: string }): Promise<Array<{
+    branch: string;
+    path: string;
+    isMain: boolean;
+    isLocked: boolean;
+  }>>;
+  removeWorktree(params: { repoRoot: string; branch: string }): Promise<void>;
+}
+
+/**
  * WorktreeManager implementation using the native addon
  */
 export class WorktreeManagerNative implements WorktreeManagerInterface {
-  private nativeModule: any;
+  private nativeModule: NativeAddonModule | null;
 
   constructor() {
     // Lazy-load the native module to avoid issues if it's not built
     this.nativeModule = null;
   }
 
-  private async ensureNativeModule() {
+  private async ensureNativeModule(): Promise<NativeAddonModule> {
     if (!this.nativeModule) {
       try {
         // Try to load the native module
         const nativePath = new URL('../../../packages/worktrunk-native/index.ts', import.meta.url).pathname;
-        this.nativeModule = await import(nativePath);
+        this.nativeModule = await import(nativePath) as NativeAddonModule;
       } catch (error) {
         throw new Error(
           `Failed to load worktrunk-native addon. Make sure it's built: pnpm -C packages/worktrunk-native build\nError: ${error}`
