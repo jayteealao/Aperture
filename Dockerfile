@@ -1,27 +1,46 @@
 # Build stage
 FROM node:20-slim AS builder
 
+# Install Rust for native addon compilation
+RUN apt-get update && \
+    apt-get install -y curl build-essential && \
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 WORKDIR /build
 
-# Copy package files
-COPY package*.json ./
-COPY tsconfig.json ./
+# Install pnpm
+RUN npm install -g pnpm
+
+# Copy workspace files
+COPY package*.json pnpm-* ./
+COPY packages/worktrunk-native/package*.json packages/worktrunk-native/
+COPY packages/worktrunk-native/Cargo.* packages/worktrunk-native/
+COPY packages/worktrunk-native/build.rs packages/worktrunk-native/
+COPY packages/worktrunk-native/src packages/worktrunk-native/src
 
 # Install dependencies
-RUN npm ci
+RUN pnpm install --frozen-lockfile
 
-# Copy source
+# Build native addon first
+RUN pnpm -C packages/worktrunk-native build
+
+# Copy remaining source files
+COPY tsconfig.json ./
 COPY src ./src
 
 # Build TypeScript
-RUN npm run build
+RUN pnpm build
 
 # Production stage
 FROM node:20-slim
 
-# Install curl and bash for Claude CLI installer
+# Install runtime dependencies (git, curl, bash)
 RUN apt-get update && \
-    apt-get install -y curl bash && \
+    apt-get install -y git curl bash && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -30,11 +49,15 @@ RUN useradd -m -u 1001 -s /bin/bash app
 
 WORKDIR /app
 
+# Install pnpm
+RUN npm install -g pnpm
+
 # Copy package files
-COPY package*.json ./
+COPY package*.json pnpm-* ./
+COPY packages/worktrunk-native/package*.json packages/worktrunk-native/
 
 # Install production dependencies only
-RUN npm ci --omit=dev
+RUN pnpm install --prod --frozen-lockfile
 
 # Install ACP agents globally
 # - claude-code-acp for Claude Code agent
@@ -48,28 +71,29 @@ RUN npm install -g @zed-industries/claude-code-acp && \
 
 # Copy built files from builder
 COPY --from=builder /build/dist ./dist
+COPY --from=builder /build/packages/worktrunk-native/*.node ./packages/worktrunk-native/
+COPY --from=builder /build/packages/worktrunk-native/index.ts ./packages/worktrunk-native/
+COPY --from=builder /build/packages/worktrunk-native/index.d.ts ./packages/worktrunk-native/
+COPY --from=builder /build/packages/worktrunk-native/index.js ./packages/worktrunk-native/
 
-# Create directories for persisted state
-# - /home/app/data for encrypted credentials
-# - /home/app/.gemini for Gemini CLI OAuth cache
-RUN mkdir -p /home/app/data /home/app/.gemini && \
-    chown -R app:app /home/app/data /home/app/.gemini
+# Create necessary directories
+RUN mkdir -p /app/data /app/data/db && chown -R app:app /app
 
-# Change ownership to app user
-RUN chown -R app:app /app
+# Copy migrations
+COPY src/migrations ./src/migrations
 
 # Switch to non-root user
 USER app
 
-# Set HOME so agents can persist config in ~/.claude, ~/.codex, ~/.gemini
-ENV HOME=/home/app
+# Create volume mounts
+VOLUME ["/app/data"]
 
-# Expose port
+# Expose default port
 EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:8080/healthz', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+  CMD curl -f http://localhost:8080/healthz || exit 1
 
-# Start server
+# Start the gateway
 CMD ["node", "dist/index.js"]
