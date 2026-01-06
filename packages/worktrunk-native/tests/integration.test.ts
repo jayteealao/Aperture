@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { tmpdir } from 'os';
 import { mkdtemp, rm } from 'fs/promises';
+import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { realpathSync } from 'fs';
 import { execSync } from 'child_process';
@@ -45,12 +46,8 @@ describe('Worktrunk Native Addon - Integration Tests', () => {
       stdio: 'pipe',
     });
 
-    // Create initial commit
-    execSync(`echo "# Test Repo" > README.md`, {
-      cwd: repoRoot,
-      stdio: 'pipe',
-      shell: '/bin/bash',
-    });
+    // Create initial commit (cross-platform)
+    writeFileSync(join(repoRoot, 'README.md'), '# Test Repo\n');
     execSync(`git add README.md`, { cwd: repoRoot, stdio: 'pipe' });
     execSync(`git commit -m "Initial commit"`, {
       cwd: repoRoot,
