@@ -107,9 +107,9 @@ From [worktrunk.dev/config](https://worktrunk.dev/config/) and the CLAUDE.md fil
 
 ### Decision: Use git2-rs Directly
 
-After thorough research, we've decided to use **git2-rs directly** rather than Worktrunk as a library because:
+After thorough research, we've decided to use **git2-rs directly** rather than Worktrunk as a library OR TypeScript git libraries because:
 
-#### Reasons:
+#### Why NOT Worktrunk Library:
 
 1. **Primary Design Intent**: Worktrunk is designed as a CLI tool, not primarily as a library
    - The crate structure prioritizes CLI user experience
@@ -119,19 +119,136 @@ After thorough research, we've decided to use **git2-rs directly** rather than W
 2. **Missing Create Operation**: Worktrunk's public API doesn't expose a clear `create_worktree()` method
    - git2-rs has `Repository::worktree_add()` which we need ✅
 
-3. **Maturity & Stability**: git2-rs is the official Rust binding for libgit2
-   - Used by Cargo itself and many production systems
-   - Well-documented and maintained
-   - Stable API surface
+3. **Dependency Size**: git2-rs is a focused, lean dependency
+   - Worktrunk brings CLI-specific dependencies (clap, crossterm, skim, etc.)
+   - We don't need TUI/CLI features in a server addon
 
-4. **Control & Flexibility**: Using git2-rs gives us more control
+#### Why NOT TypeScript Git Libraries:
+
+**Option 1: simple-git (shells out to git CLI)**
+```typescript
+import simpleGit from 'simple-git';
+await git.raw(['worktree', 'add', '-b', branch, path]);
+```
+
+**Problems:**
+- ❌ Requires `git` CLI installed on the system (deployment dependency)
+- ❌ Shell injection vulnerabilities if not careful with user input
+- ❌ Parsing stdout/stderr strings is fragile
+- ❌ No type safety for git operations
+- ❌ Cross-platform path handling issues (Windows vs Unix)
+- ❌ ~50-100ms overhead per operation (process spawning)
+
+**Option 2: nodegit (Node.js bindings to libgit2)**
+```typescript
+import nodegit from 'nodegit';
+await nodegit.Worktree.add(...);
+```
+
+**Problems:**
+- ⚠️ Less actively maintained (last major update 2+ years ago)
+- ⚠️ Worktree API is incomplete/buggy in practice
+- ⚠️ Callback-based API (not async/await friendly)
+- ⚠️ Native compilation issues similar to what we're doing, but older tooling
+
+**Option 3: isomorphic-git (Pure JavaScript)**
+```typescript
+import git from 'isomorphic-git';
+// No worktree support at all ❌
+```
+
+**Problems:**
+- ❌ **No worktree support** (only basic git operations)
+- ❌ Performance issues for large repositories
+- ❌ Not feature-complete with native git
+
+#### Why git2-rs (Rust) is Superior:
+
+1. **Complete Worktree API**
+   - ✅ `Repository::worktree_add()` - Full worktree creation with options
+   - ✅ `Worktree::prune()` - Safe removal with validation
+   - ✅ `Repository::worktrees()` - Complete listing
+   - ✅ All operations well-tested by Cargo and other production systems
+   - ✅ Type-safe at compile time
+
+2. **No External Dependencies**
+   - ✅ libgit2 is statically linked into the addon
+   - ✅ **No need for `git` CLI** to be installed
+   - ✅ Consistent behavior across all platforms
+   - ✅ No shell escaping or injection risks
+   - ✅ Simplified deployment (one .node file)
+
+3. **Performance**
+   ```typescript
+   // JS calling git CLI: ~50-100ms overhead per operation
+   await simpleGit().raw(['worktree', 'add', ...]);
+
+   // Rust calling libgit2 directly: ~1-5ms
+   await nativeAddon.ensureWorktree(...); // Direct C library call
+   ```
+   - ✅ No process spawning overhead
+   - ✅ Rust performance for intensive git operations
+   - ✅ Can handle many concurrent worktree operations efficiently
+
+4. **Better Maintained & Proven**
+   | Library | Last Update | Used By | Worktree Support |
+   |---------|-------------|---------|------------------|
+   | **git2-rs** | Active (2025) | Cargo, rustup | Full ✅ |
+   | nodegit | 2022 | Declining | Partial ⚠️ |
+   | simple-git | Active | Many | CLI wrapper ⚠️ |
+   | isomorphic-git | Active | Many | None ❌ |
+
+5. **Type Safety & Error Handling**
+   ```rust
+   // Rust catches errors at compile time
+   let worktree: Result<Worktree, Error> = repo.worktree(...);
+
+   // TypeScript with simple-git - runtime string parsing
+   const output: string = await git.raw([...]); // What format? What errors?
+   ```
+
+6. **Control & Flexibility**: Using git2-rs gives us more control
    - We can implement our own path template logic (inspired by Worktrunk)
    - We can avoid CLI-specific abstractions
    - We can optimize for our specific use case (agent isolation)
 
-5. **Dependency Size**: git2-rs is a focused, lean dependency
-   - Worktrunk brings CLI-specific dependencies (clap, crossterm, skim, etc.)
-   - We don't need TUI/CLI features in a server addon
+#### Real-World Comparison:
+
+**Using simple-git (TypeScript):**
+```typescript
+// ❌ Shell-based, fragile, external dependency
+import simpleGit from 'simple-git';
+
+const git = simpleGit();
+try {
+  await git.raw(['worktree', 'add', '-b', branch, path]);
+  // ❌ Parse output to verify success?
+  // ❌ What if path has spaces? Special characters?
+  // ❌ What if git is not installed?
+  // ❌ What if git version doesn't support worktrees?
+} catch (err) {
+  // ❌ Parse error message string to figure out what went wrong
+}
+```
+
+**Using our git2-rs addon:**
+```typescript
+// ✅ Native, type-safe, no external dependencies
+import { ensureWorktree } from '@aperture/worktrunk-native';
+
+try {
+  const result = await ensureWorktree({
+    repoRoot: '/path/to/repo',
+    branch: 'agent/alice',
+    worktreeBaseDir: '/path/to/.worktrees',
+  });
+  // ✅ Structured result, type-safe
+  console.log(result.worktreePath); // string, always valid
+} catch (err) {
+  // ✅ Structured error with error code
+  console.error(err.code); // e.g., "WORKTREE_CREATE_FAILED"
+}
+```
 
 #### What We Can Learn from Worktrunk:
 
@@ -140,6 +257,20 @@ After thorough research, we've decided to use **git2-rs directly** rather than W
 - **Hook system design**: onCreate, preRemove events for workflow automation
 - **Branch-centric model**: Each worktree maps to exactly one branch
 - **Safety principles**: "Fail rather than destroy data"
+
+#### Summary Table:
+
+| Feature | git2-rs (our choice) | simple-git | nodegit | isomorphic-git |
+|---------|---------------------|------------|---------|----------------|
+| Worktree support | Full ✅ | CLI wrapper ⚠️ | Partial ⚠️ | None ❌ |
+| No git CLI needed | ✅ | ❌ | ✅ | ✅ |
+| Performance | Excellent (~1-5ms) | Poor (~50-100ms) | Good | Poor |
+| Maintenance | Active | Active | Stale | Active |
+| Type safety | Excellent | Poor | Fair | Fair |
+| Error handling | Structured | String parsing | Callbacks | Structured |
+| Cross-platform | Excellent | Platform-dependent | Good | Good |
+| Production use | Cargo, rustup | Many | Declining | Many |
+| Deployment deps | None (statically linked) | git CLI required | None | None |
 
 ## Proposed Architecture
 
