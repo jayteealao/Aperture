@@ -7,11 +7,13 @@ import type { ApertureDatabase } from './database.js';
 import { validateJsonRpcMessage, type JsonRpcMessage } from './jsonrpc.js';
 import { checkReadiness } from './claudeInstaller.js';
 import { registerCredentialRoutes } from './routes/credentials.js';
+import { registerWorkspaceRoutes } from './routes/workspaces.js';
 
 interface CreateSessionBody {
   agent?: AgentType;
   auth?: SessionAuth;
   env?: Record<string, string>;
+  workspaceId?: string; // Optional workspace ID for workspace-backed sessions
 }
 
 interface SendRpcBody {
@@ -30,6 +32,9 @@ export async function registerRoutes(
 ) {
   // Register credential management routes
   await registerCredentialRoutes(fastify, credentialStore);
+
+  // Register workspace management routes
+  await registerWorkspaceRoutes(fastify, database || null);
   // Health check - always returns 200
   fastify.get('/healthz', async () => {
     return { status: 'ok' };
@@ -57,9 +62,9 @@ export async function registerRoutes(
     '/v1/sessions',
     async (request, reply) => {
       try {
-        const { agent, auth, env } = request.body || {};
+        const { agent, auth, env, workspaceId } = request.body || {};
 
-        const session = await sessionManager.createSession({ agent, auth, env });
+        const session = await sessionManager.createSession({ agent, auth, env, workspaceId });
 
         return reply.code(201).send({
           id: session.id,
