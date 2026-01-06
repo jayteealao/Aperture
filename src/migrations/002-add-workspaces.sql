@@ -26,4 +26,4 @@ CREATE INDEX IF NOT EXISTS idx_workspace_agents_workspace ON workspace_agents(wo
 CREATE INDEX IF NOT EXISTS idx_workspace_agents_session ON workspace_agents(session_id);
 
 -- Update schema version
-INSERT INTO schema_version (version, description) VALUES (2, 'Add workspace support');
+INSERT INTO schema_version (version, applied_at) VALUES (2, strftime('%s', 'now') * 1000);
