@@ -4,8 +4,11 @@ mod config;
 mod error;
 mod worktree;
 
+use git2::{build::RepoBuilder, FetchOptions, RemoteCallbacks};
 use napi::bindgen_prelude::*;
+use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
+use std::path::Path;
 
 /// Parameters for ensureRepoReady
 #[napi(object)]
@@ -18,6 +21,7 @@ pub struct EnsureRepoReadyParams {
 pub struct EnsureRepoReadyResult {
     pub is_git_repo: bool,
     pub default_branch: Option<String>,
+    pub remote_url: Option<String>,
 }
 
 /// Parameters for ensureWorktree
@@ -64,12 +68,12 @@ pub async fn ensure_repo_ready(
     params: EnsureRepoReadyParams,
 ) -> Result<EnsureRepoReadyResult> {
     tokio::task::spawn_blocking(move || {
-        let (is_git_repo, default_branch) =
-            worktree::ensure_repo_ready(&params.repo_root)?;
+        let result = worktree::ensure_repo_ready(&params.repo_root)?;
 
         Ok(EnsureRepoReadyResult {
-            is_git_repo,
-            default_branch,
+            is_git_repo: result.is_git_repo,
+            default_branch: result.default_branch,
+            remote_url: result.remote_url,
         })
     })
     .await
@@ -147,4 +151,77 @@ pub async fn remove_worktree(params: RemoveWorktreeParams) -> Result<()> {
             format!("Task join error: {}", e),
         )
     })?
+}
+
+/// Clone progress information
+#[napi(object)]
+pub struct CloneProgress {
+    pub phase: String,
+    pub current: u32,
+    pub total: u32,
+    pub percent: u32,
+}
+
+/// Clone a repository from a URL to a target path
+#[napi]
+pub fn clone_repository(
+    url: String,
+    target_path: String,
+    #[napi(ts_arg_type = "(progress: CloneProgress) => void")]
+    progress_callback: JsFunction,
+) -> Result<String> {
+    // Create threadsafe callback for progress updates
+    let tsfn: ThreadsafeFunction<CloneProgress, ErrorStrategy::Fatal> =
+        progress_callback.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]))?;
+
+    // Set up progress callbacks
+    let mut callbacks = RemoteCallbacks::new();
+    let tsfn_clone = tsfn.clone();
+
+    callbacks.transfer_progress(move |progress| {
+        let percent = if progress.total_objects() > 0 {
+            ((progress.received_objects() as f64 / progress.total_objects() as f64) * 100.0) as u32
+        } else {
+            0
+        };
+
+        let phase = if progress.received_objects() < progress.total_objects() {
+            "receiving"
+        } else if progress.indexed_deltas() < progress.total_deltas() {
+            "resolving"
+        } else {
+            "done"
+        };
+
+        let _ = tsfn_clone.call(
+            CloneProgress {
+                phase: phase.to_string(),
+                current: progress.received_objects() as u32,
+                total: progress.total_objects() as u32,
+                percent,
+            },
+            ThreadsafeFunctionCallMode::NonBlocking,
+        );
+
+        true // Continue operation
+    });
+
+    // Configure fetch options
+    let mut fetch_opts = FetchOptions::new();
+    fetch_opts.remote_callbacks(callbacks);
+
+    // Build and execute clone
+    let mut builder = RepoBuilder::new();
+    builder.fetch_options(fetch_opts);
+
+    let repo = builder
+        .clone(&url, Path::new(&target_path))
+        .map_err(|e| Error::new(Status::GenericFailure, format!("Clone failed: {}", e)))?;
+
+    // Return the actual path (normalized)
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| Error::new(Status::GenericFailure, "No workdir"))?;
+
+    Ok(workdir.to_string_lossy().to_string())
 }
