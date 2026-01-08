@@ -17,6 +17,9 @@ import type {
   ListWorkspacesResponse,
   ListWorkspaceAgentsResponse,
   ListWorktreesResponse,
+  DiscoveryResult,
+  CloneWorkspaceRequest,
+  CloneWorkspaceResponse,
 } from './types'
 
 class ApiError extends Error {
@@ -190,6 +193,21 @@ class ApertureClient {
 
   async listWorkspaceWorktrees(workspaceId: string): Promise<ListWorktreesResponse> {
     return this.request<ListWorktreesResponse>(`/v1/workspaces/${workspaceId}/worktrees`)
+  }
+
+  // Discovery
+  async discoverRepos(path: string): Promise<DiscoveryResult> {
+    return this.request<DiscoveryResult>('/v1/discovery/scan', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    })
+  }
+
+  async cloneWorkspace(data: CloneWorkspaceRequest): Promise<CloneWorkspaceResponse> {
+    return this.request<CloneWorkspaceResponse>('/v1/workspaces/clone', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   }
 }
 

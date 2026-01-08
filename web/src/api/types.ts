@@ -227,3 +227,27 @@ export interface ListWorktreesResponse {
   worktrees: WorktreeInfo[]
   total: number
 }
+
+// Discovery types
+export interface DiscoveredRepo {
+  path: string
+  name: string
+  remoteUrl?: string
+  hasOrigin: boolean
+}
+
+export interface DiscoveryResult {
+  repos: DiscoveredRepo[]
+  scannedDirectories: number
+  errors: Array<{ path: string; error: string }>
+}
+
+export interface CloneWorkspaceRequest {
+  remoteUrl: string
+  targetDirectory: string
+  name?: string
+}
+
+export interface CloneWorkspaceResponse {
+  workspace: WorkspaceRecord
+}
