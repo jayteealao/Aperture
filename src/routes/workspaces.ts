@@ -1,9 +1,56 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID } from 'crypto';
+import { resolve, normalize } from 'path';
 import type { ApertureDatabase, WorkspaceRecord } from '../database.js';
 import { createWorktreeManager } from '../workspaces/worktreeManager.js';
 import { cloneRepository } from '../discovery/repoCloner.js';
 import { validatePathExists } from '../discovery/pathValidation.js';
+
+/**
+ * Normalize a repository path for comparison
+ */
+function normalizeRepoPath(p: string): string {
+  return resolve(normalize(p))
+    .replace(/[\\/]+$/, '')  // Remove trailing slashes
+    .toLowerCase();  // Case-insensitive for cross-platform
+}
+
+/**
+ * Validates a git URL to prevent SSRF attacks.
+ * Only allows HTTPS and SSH (git@) URLs, and blocks internal network addresses.
+ */
+function validateGitUrl(url: string): { valid: boolean; error?: string } {
+  const httpsPattern = /^https:\/\/[^\/]+\/.+$/;
+  const sshPattern = /^git@[^:]+:.+$/;
+
+  if (!httpsPattern.test(url) && !sshPattern.test(url)) {
+    return { valid: false, error: 'Only HTTPS and SSH git URLs are allowed' };
+  }
+
+  // For HTTPS URLs, check for internal IPs and localhost
+  if (url.startsWith('https://')) {
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname.toLowerCase();
+
+      if (
+        hostname === 'localhost' ||
+        /^127\./.test(hostname) ||
+        /^10\./.test(hostname) ||
+        /^172\.(1[6-9]|2[0-9]|3[01])\./.test(hostname) ||
+        /^192\.168\./.test(hostname) ||
+        /^169\.254\./.test(hostname) ||
+        /^0\./.test(hostname)
+      ) {
+        return { valid: false, error: 'Internal network URLs are not allowed' };
+      }
+    } catch {
+      return { valid: false, error: 'Invalid URL format' };
+    }
+  }
+
+  return { valid: true };
+}
 
 export async function registerWorkspaceRoutes(
   fastify: FastifyInstance,
@@ -43,10 +90,10 @@ export async function registerWorkspaceRoutes(
       try {
         await worktreeManager.ensureRepoReady(repoRoot);
       } catch (error) {
+        console.error('[Workspace API] Invalid repository error:', error);
         return reply.status(400).send({
-          error: 'Invalid repository',
+          error: 'INVALID_REPOSITORY',
           message: `Path is not a valid git repository: ${repoRoot}`,
-          details: String(error),
         });
       }
 
@@ -61,7 +108,18 @@ export async function registerWorkspaceRoutes(
         metadata: null,
       };
 
-      database!.saveWorkspace(workspace);
+      try {
+        database!.saveWorkspace(workspace);
+      } catch (err: unknown) {
+        const error = err as { code?: string };
+        if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.code === 'SQLITE_CONSTRAINT') {
+          return reply.status(409).send({
+            error: 'DUPLICATE_WORKSPACE',
+            message: 'A workspace already exists for this repository path',
+          });
+        }
+        throw err;
+      }
 
       return reply.status(201).send({
         workspace: {
@@ -76,9 +134,8 @@ export async function registerWorkspaceRoutes(
     } catch (error) {
       console.error('[Workspace API] Create workspace error:', error);
       return reply.status(500).send({
-        error: 'Internal Server Error',
+        error: 'CREATE_WORKSPACE_FAILED',
         message: 'Failed to create workspace',
-        details: String(error),
       });
     }
   });
@@ -90,36 +147,47 @@ export async function registerWorkspaceRoutes(
   fastify.post<{
     Body: { remoteUrl?: string; targetDirectory?: string; name?: string };
   }>('/v1/workspaces/clone', { preHandler: checkDatabase }, async (request, reply) => {
+    const { remoteUrl, targetDirectory, name } = request.body;
+
+    // Validation (before clone, no cleanup needed)
+    if (!remoteUrl || typeof remoteUrl !== 'string') {
+      return reply.status(400).send({
+        error: 'INVALID_GIT_URL',
+        message: 'Missing or invalid field: remoteUrl',
+      });
+    }
+
+    // Validate git URL to prevent SSRF attacks
+    const urlValidation = validateGitUrl(remoteUrl);
+    if (!urlValidation.valid) {
+      return reply.status(400).send({
+        error: 'INVALID_GIT_URL',
+        message: urlValidation.error,
+      });
+    }
+
+    if (!targetDirectory || typeof targetDirectory !== 'string') {
+      return reply.status(400).send({
+        error: 'INVALID_PATH',
+        message: 'Missing or invalid field: targetDirectory',
+      });
+    }
+
+    // Validate target directory exists and is accessible
     try {
-      const { remoteUrl, targetDirectory, name } = request.body;
+      await validatePathExists(targetDirectory);
+    } catch {
+      return reply.status(400).send({
+        error: 'INVALID_PATH',
+        message: `Target directory does not exist or is not accessible: ${targetDirectory}`,
+      });
+    }
 
-      // Validation
-      if (!remoteUrl || typeof remoteUrl !== 'string') {
-        return reply.status(400).send({
-          error: 'INVALID_GIT_URL',
-          message: 'Missing or invalid field: remoteUrl',
-        });
-      }
+    // Track cloned path for cleanup on failure
+    let clonedPath: string | undefined;
 
-      if (!targetDirectory || typeof targetDirectory !== 'string') {
-        return reply.status(400).send({
-          error: 'INVALID_PATH',
-          message: 'Missing or invalid field: targetDirectory',
-        });
-      }
-
-      // Validate target directory exists and is accessible
-      try {
-        await validatePathExists(targetDirectory);
-      } catch (error) {
-        return reply.status(400).send({
-          error: 'INVALID_PATH',
-          message: `Target directory does not exist or is not accessible: ${targetDirectory}`,
-        });
-      }
-
+    try {
       // Clone the repository
-      let clonedPath: string;
       try {
         clonedPath = await cloneRepository({
           remoteUrl,
@@ -151,11 +219,22 @@ export async function registerWorkspaceRoutes(
 
       // Check if workspace already exists for this repo path
       const existingWorkspaces = database!.getAllWorkspaces();
+      const normalizedClonedPath = normalizeRepoPath(clonedPath);
       const duplicateWorkspace = existingWorkspaces.find(
-        (w) => w.repo_root.toLowerCase() === clonedPath.toLowerCase()
+        (w) => normalizeRepoPath(w.repo_root) === normalizedClonedPath
       );
 
       if (duplicateWorkspace) {
+        // Clean up cloned directory since we can't use it
+        if (clonedPath) {
+          try {
+            const { rm } = await import('fs/promises');
+            await rm(clonedPath, { recursive: true, force: true });
+            console.log(`[Workspace API] Cleaned up duplicate clone: ${clonedPath}`);
+          } catch (cleanupError) {
+            console.error(`[Workspace API] Failed to cleanup ${clonedPath}:`, cleanupError);
+          }
+        }
         return reply.status(409).send({
           error: 'DUPLICATE_WORKSPACE',
           message: 'Workspace already exists for this repository',
@@ -178,24 +257,45 @@ export async function registerWorkspaceRoutes(
         metadata: null,
       };
 
-      database!.saveWorkspace(workspace);
+      try {
+        database!.saveWorkspace(workspace);
+      } catch (err: unknown) {
+        const error = err as { code?: string };
+        if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.code === 'SQLITE_CONSTRAINT') {
+          return reply.status(409).send({
+            error: 'DUPLICATE_WORKSPACE',
+            message: 'A workspace already exists for this repository path',
+          });
+        }
+        throw err;
+      }
 
       return reply.status(201).send({
         workspace: {
           id: workspace.id,
           name: workspace.name,
-          repoPath: workspace.repo_root,
+          repoRoot: workspace.repo_root,
           description: workspace.description,
           createdAt: new Date(workspace.created_at).toISOString(),
           updatedAt: new Date(workspace.updated_at).toISOString(),
         },
       });
     } catch (error) {
+      // Cleanup cloned directory on any failure after clone succeeded
+      if (clonedPath) {
+        try {
+          const { rm } = await import('fs/promises');
+          await rm(clonedPath, { recursive: true, force: true });
+          console.log(`[Workspace API] Cleaned up failed clone: ${clonedPath}`);
+        } catch (cleanupError) {
+          console.error(`[Workspace API] Failed to cleanup ${clonedPath}:`, cleanupError);
+        }
+      }
+
       console.error('[Workspace API] Clone workspace error:', error);
       return reply.status(500).send({
-        error: 'Internal Server Error',
+        error: 'CLONE_WORKSPACE_FAILED',
         message: 'Failed to clone repository and create workspace',
-        details: String(error),
       });
     }
   });
@@ -343,9 +443,8 @@ export async function registerWorkspaceRoutes(
       } catch (error) {
         console.error('[Workspace API] List worktrees error:', error);
         return reply.status(500).send({
-          error: 'Internal Server Error',
+          error: 'LIST_WORKTREES_FAILED',
           message: 'Failed to list worktrees',
-          details: String(error),
         });
       }
     }
@@ -396,9 +495,8 @@ export async function registerWorkspaceRoutes(
       } catch (error) {
         console.error('[Workspace API] Delete workspace error:', error);
         return reply.status(500).send({
-          error: 'Internal Server Error',
+          error: 'DELETE_WORKSPACE_FAILED',
           message: 'Failed to delete workspace',
-          details: String(error),
         });
       }
     }
@@ -452,9 +550,8 @@ export async function registerWorkspaceRoutes(
       } catch (error) {
         console.error('[Workspace API] Delete agent error:', error);
         return reply.status(500).send({
-          error: 'Internal Server Error',
+          error: 'DELETE_AGENT_FAILED',
           message: 'Failed to delete agent',
-          details: String(error),
         });
       }
     }
