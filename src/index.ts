@@ -47,7 +47,12 @@ async function main() {
   console.log('✅ Database initialized');
 
   // Verify Claude Code CLI installation (with optional auto-install)
-  const claudePath = await verifyClaudeInstallation(config.autoInstallClaude);
+  // Prefer explicit config over auto-detection (auto-detection returns Unix-style paths on Windows/Git Bash)
+  const autoDetectedClaudePath = await verifyClaudeInstallation(config.autoInstallClaude);
+  const claudePath = config.claudeCodeExecutable || autoDetectedClaudePath;
+  if (config.claudeCodeExecutable) {
+    console.log(`✓ Using configured Claude Code CLI: ${config.claudeCodeExecutable}`);
+  }
 
   // Create Fastify instance
   const fastify = Fastify({
