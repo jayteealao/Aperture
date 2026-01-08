@@ -64,7 +64,7 @@ describe('Workspace API Error Scenarios', () => {
 
       expect(response.statusCode).toBe(400);
       const body = JSON.parse(response.body);
-      expect(body.error).toBe('Invalid repository');
+      expect(body.error).toBe('INVALID_REPOSITORY');
       expect(body.message).toContain('not a valid git repository');
     });
 
@@ -85,7 +85,7 @@ describe('Workspace API Error Scenarios', () => {
 
       expect(response.statusCode).toBe(400);
       const body = JSON.parse(response.body);
-      expect(body.error).toBe('Invalid repository');
+      expect(body.error).toBe('INVALID_REPOSITORY');
 
       // Clean up
       rmSync(nonGitDir, { recursive: true, force: true });
@@ -108,7 +108,7 @@ describe('Workspace API Error Scenarios', () => {
 
       expect(response.statusCode).toBe(400);
       const body = JSON.parse(response.body);
-      expect(body.error).toBe('Invalid repository');
+      expect(body.error).toBe('INVALID_REPOSITORY');
 
       // Clean up
       rmSync(filePath, { force: true });

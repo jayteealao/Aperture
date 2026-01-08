@@ -112,7 +112,7 @@ describe('Workspace API Integration', () => {
       const workspace2 = {
         id: randomUUID(),
         name: 'workspace-2',
-        repo_root: testRepoPath,
+        repo_root: testRepoPath + '-second',  // Different repo_root due to UNIQUE constraint
         description: 'Second workspace',
         created_at: Date.now(),
         updated_at: Date.now(),
