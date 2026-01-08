@@ -9,6 +9,8 @@ use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 /// Parameters for ensureRepoReady
 #[napi(object)]
@@ -164,64 +166,98 @@ pub struct CloneProgress {
 
 /// Clone a repository from a URL to a target path
 #[napi]
-pub fn clone_repository(
+pub async fn clone_repository(
     url: String,
     target_path: String,
     #[napi(ts_arg_type = "(progress: CloneProgress) => void")]
-    progress_callback: JsFunction,
+    progress_callback: ThreadsafeFunction<CloneProgress, ErrorStrategy::Fatal>,
 ) -> Result<String> {
-    // Create threadsafe callback for progress updates
-    let tsfn: ThreadsafeFunction<CloneProgress, ErrorStrategy::Fatal> =
-        progress_callback.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]))?;
+    // Wrap tsfn in Arc so it can be shared with the blocking closure
+    let tsfn = Arc::new(progress_callback);
 
-    // Set up progress callbacks
-    let mut callbacks = RemoteCallbacks::new();
-    let tsfn_clone = tsfn.clone();
+    tokio::task::spawn_blocking(move || {
+        // Set up progress callbacks
+        let mut callbacks = RemoteCallbacks::new();
+        let tsfn_clone = Arc::clone(&tsfn);
 
-    callbacks.transfer_progress(move |progress| {
-        let percent = if progress.total_objects() > 0 {
-            ((progress.received_objects() as f64 / progress.total_objects() as f64) * 100.0) as u32
-        } else {
-            0
-        };
+        // Rate limiting state: only emit progress when 100ms passed OR percent changed
+        let last_emit = Arc::new(Mutex::new(Instant::now()));
+        let last_percent = Arc::new(Mutex::new(0u32));
 
-        let phase = if progress.received_objects() < progress.total_objects() {
-            "receiving"
-        } else if progress.indexed_deltas() < progress.total_deltas() {
-            "resolving"
-        } else {
-            "done"
-        };
+        // Clone for use in callback
+        let last_emit_clone = Arc::clone(&last_emit);
+        let last_percent_clone = Arc::clone(&last_percent);
 
-        let _ = tsfn_clone.call(
-            CloneProgress {
-                phase: phase.to_string(),
-                current: progress.received_objects() as u32,
-                total: progress.total_objects() as u32,
-                percent,
-            },
-            ThreadsafeFunctionCallMode::NonBlocking,
-        );
+        callbacks.transfer_progress(move |progress| {
+            let percent = if progress.total_objects() > 0 {
+                ((progress.received_objects() as f64 / progress.total_objects() as f64) * 100.0)
+                    as u32
+            } else {
+                0
+            };
 
-        true // Continue operation
-    });
+            // Rate limit: only emit if 100ms passed OR percent changed
+            let should_emit = {
+                let last = last_emit_clone.lock().unwrap();
+                let last_pct = last_percent_clone.lock().unwrap();
+                last.elapsed() >= Duration::from_millis(100) || percent > *last_pct
+            };
 
-    // Configure fetch options
-    let mut fetch_opts = FetchOptions::new();
-    fetch_opts.remote_callbacks(callbacks);
+            if should_emit {
+                // Update tracking state
+                {
+                    let mut last = last_emit_clone.lock().unwrap();
+                    let mut last_pct = last_percent_clone.lock().unwrap();
+                    *last = Instant::now();
+                    *last_pct = percent;
+                }
 
-    // Build and execute clone
-    let mut builder = RepoBuilder::new();
-    builder.fetch_options(fetch_opts);
+                let phase = if progress.received_objects() < progress.total_objects() {
+                    "receiving"
+                } else if progress.indexed_deltas() < progress.total_deltas() {
+                    "resolving"
+                } else {
+                    "done"
+                };
 
-    let repo = builder
-        .clone(&url, Path::new(&target_path))
-        .map_err(|e| Error::new(Status::GenericFailure, format!("Clone failed: {}", e)))?;
+                let _ = tsfn_clone.call(
+                    CloneProgress {
+                        phase: phase.to_string(),
+                        current: progress.received_objects() as u32,
+                        total: progress.total_objects() as u32,
+                        percent,
+                    },
+                    ThreadsafeFunctionCallMode::NonBlocking,
+                );
+            }
 
-    // Return the actual path (normalized)
-    let workdir = repo
-        .workdir()
-        .ok_or_else(|| Error::new(Status::GenericFailure, "No workdir"))?;
+            true // Continue operation
+        });
 
-    Ok(workdir.to_string_lossy().to_string())
+        // Configure fetch options
+        let mut fetch_opts = FetchOptions::new();
+        fetch_opts.remote_callbacks(callbacks);
+
+        // Build and execute clone
+        let mut builder = RepoBuilder::new();
+        builder.fetch_options(fetch_opts);
+
+        let repo = builder
+            .clone(&url, Path::new(&target_path))
+            .map_err(|e| Error::new(Status::GenericFailure, format!("Clone failed: {}", e)))?;
+
+        // Return the actual path (normalized)
+        let workdir = repo
+            .workdir()
+            .ok_or_else(|| Error::new(Status::GenericFailure, "No workdir"))?;
+
+        Ok(workdir.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| {
+        napi::Error::new(
+            napi::Status::GenericFailure,
+            format!("Task join error: {}", e),
+        )
+    })?
 }

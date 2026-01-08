@@ -57,4 +57,4 @@ export interface CloneProgress {
   percent: number
 }
 /** Clone a repository from a URL to a target path */
-export declare function cloneRepository(url: string, targetPath: string, progressCallback: (progress: CloneProgress) => void): string
+export declare function cloneRepository(url: string, targetPath: string, progressCallback: (progress: CloneProgress) => void): Promise<string>
