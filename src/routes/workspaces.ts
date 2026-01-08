@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID } from 'crypto';
 import type { ApertureDatabase, WorkspaceRecord } from '../database.js';
 import { createWorktreeManager } from '../workspaces/worktreeManager.js';
+import { cloneRepository } from '../discovery/repoCloner.js';
+import { validatePathExists } from '../discovery/pathValidation.js';
 
 export async function registerWorkspaceRoutes(
   fastify: FastifyInstance,
@@ -76,6 +78,123 @@ export async function registerWorkspaceRoutes(
       return reply.status(500).send({
         error: 'Internal Server Error',
         message: 'Failed to create workspace',
+        details: String(error),
+      });
+    }
+  });
+
+  /**
+   * POST /v1/workspaces/clone
+   * Clone a remote repository and create a workspace
+   */
+  fastify.post<{
+    Body: { remoteUrl?: string; targetDirectory?: string; name?: string };
+  }>('/v1/workspaces/clone', { preHandler: checkDatabase }, async (request, reply) => {
+    try {
+      const { remoteUrl, targetDirectory, name } = request.body;
+
+      // Validation
+      if (!remoteUrl || typeof remoteUrl !== 'string') {
+        return reply.status(400).send({
+          error: 'INVALID_GIT_URL',
+          message: 'Missing or invalid field: remoteUrl',
+        });
+      }
+
+      if (!targetDirectory || typeof targetDirectory !== 'string') {
+        return reply.status(400).send({
+          error: 'INVALID_PATH',
+          message: 'Missing or invalid field: targetDirectory',
+        });
+      }
+
+      // Validate target directory exists and is accessible
+      try {
+        await validatePathExists(targetDirectory);
+      } catch (error) {
+        return reply.status(400).send({
+          error: 'INVALID_PATH',
+          message: `Target directory does not exist or is not accessible: ${targetDirectory}`,
+        });
+      }
+
+      // Clone the repository
+      let clonedPath: string;
+      try {
+        clonedPath = await cloneRepository({
+          remoteUrl,
+          targetDirectory,
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+        // Check for specific error types
+        if (errorMessage.includes('authentication') || errorMessage.includes('auth')) {
+          return reply.status(401).send({
+            error: 'AUTH_REQUIRED',
+            message: 'Authentication required for this repository',
+          });
+        }
+
+        if (errorMessage.includes('not found') || errorMessage.includes('404')) {
+          return reply.status(404).send({
+            error: 'REPO_NOT_FOUND',
+            message: `Repository not found: ${remoteUrl}`,
+          });
+        }
+
+        return reply.status(500).send({
+          error: 'CLONE_FAILED',
+          message: `Clone failed: ${errorMessage}`,
+        });
+      }
+
+      // Check if workspace already exists for this repo path
+      const existingWorkspaces = database!.getAllWorkspaces();
+      const duplicateWorkspace = existingWorkspaces.find(
+        (w) => w.repo_root.toLowerCase() === clonedPath.toLowerCase()
+      );
+
+      if (duplicateWorkspace) {
+        return reply.status(409).send({
+          error: 'DUPLICATE_WORKSPACE',
+          message: 'Workspace already exists for this repository',
+          existingWorkspaceId: duplicateWorkspace.id,
+        });
+      }
+
+      // Extract repo name from path for default workspace name
+      const repoName = clonedPath.split(/[\/\\]/).pop() || 'repository';
+      const workspaceName = name || repoName;
+
+      // Create workspace record
+      const workspace: WorkspaceRecord = {
+        id: randomUUID(),
+        name: workspaceName,
+        repo_root: clonedPath,
+        description: `Cloned from ${remoteUrl}`,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+        metadata: null,
+      };
+
+      database!.saveWorkspace(workspace);
+
+      return reply.status(201).send({
+        workspace: {
+          id: workspace.id,
+          name: workspace.name,
+          repoPath: workspace.repo_root,
+          description: workspace.description,
+          createdAt: new Date(workspace.created_at).toISOString(),
+          updatedAt: new Date(workspace.updated_at).toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error('[Workspace API] Clone workspace error:', error);
+      return reply.status(500).send({
+        error: 'Internal Server Error',
+        message: 'Failed to clone repository and create workspace',
         details: String(error),
       });
     }
