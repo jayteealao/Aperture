@@ -1,4 +1,4 @@
-import { readdir } from 'fs/promises';
+import { readdir, access } from 'fs/promises';
 import { join, basename, resolve } from 'path';
 import type { DiscoveredRepo, DiscoveryResult } from '../types/discovery.js';
 import { createWorktreeManager } from '../workspaces/worktreeManager.js';
@@ -36,29 +36,41 @@ export async function discoverRepositories(
     if (depth > MAX_DEPTH) continue;
 
     try {
-      // Check if this is a git repo using the native function
-      const repoInfo = await worktreeManager.ensureRepoReady(currentPath)
-        .then(result => ({
-          isGitRepo: true,
-          remoteUrl: result.remoteUrl,
-        }))
-        .catch(() => ({ isGitRepo: false, remoteUrl: null }));
+      // Fast check: skip expensive ensureRepoReady if no .git directory
+      const gitDir = join(currentPath, '.git');
+      let hasGitDir = false;
+      try {
+        await access(gitDir);
+        hasGitDir = true;
+      } catch {
+        // Not a git repo, continue to scan subdirectories
+      }
 
-      if (repoInfo.isGitRepo) {
-        repos.push({
-          path: currentPath,
-          name: basename(currentPath),
-          remoteUrl: repoInfo.remoteUrl ?? undefined,
-          hasOrigin: !!repoInfo.remoteUrl,
-        });
-        continue; // Don't descend into repos
+      if (hasGitDir) {
+        // Only call ensureRepoReady for full validation if .git exists
+        const repoInfo = await worktreeManager.ensureRepoReady(currentPath)
+          .then(result => ({
+            isGitRepo: true,
+            remoteUrl: result.remoteUrl,
+          }))
+          .catch(() => ({ isGitRepo: false, remoteUrl: null }));
+
+        if (repoInfo.isGitRepo) {
+          repos.push({
+            path: currentPath,
+            name: basename(currentPath),
+            remoteUrl: repoInfo.remoteUrl ?? undefined,
+            hasOrigin: !!repoInfo.remoteUrl,
+          });
+          continue; // Don't descend into repos
+        }
       }
 
       // List subdirectories
       const entries = await readdir(currentPath, { withFileTypes: true });
 
       for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
+        if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
         if (entry.name.startsWith('.')) continue;
         if (EXCLUDED_DIRS.includes(entry.name)) continue;
 
