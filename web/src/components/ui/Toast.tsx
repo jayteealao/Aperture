@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useEffect, useState, createContext, useContext, useCallback, type ReactNode } from 'react'
+import { useEffect, useState, createContext, useContext, useCallback, useMemo, type ReactNode } from 'react'
 import { cn } from '@/utils/cn'
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 
@@ -54,13 +54,13 @@ export function useToast() {
     [context]
   )
 
-  return {
+  return useMemo(() => ({
     toast,
     success: (title: string, message?: string) => toast('success', title, message),
     error: (title: string, message?: string) => toast('error', title, message),
     warning: (title: string, message?: string) => toast('warning', title, message),
     info: (title: string, message?: string) => toast('info', title, message),
-  }
+  }), [toast])
 }
 
 function ToastContainer() {
