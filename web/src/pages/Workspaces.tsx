@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Dialog } from '@/components/ui/Dialog'
 import { Badge } from '@/components/ui/Badge'
 import { Spinner } from '@/components/ui/Spinner'
-import type { WorkspaceRecord, WorkspaceAgentRecord, WorktreeInfo } from '@/api/types'
+import type { WorkspaceRecord, WorkspaceAgentRecord, WorktreeInfo, DiscoveredRepo } from '@/api/types'
 import {
   GitBranch,
   Plus,
@@ -18,6 +18,9 @@ import {
   AlertCircle,
   Lock,
   Activity,
+  FolderSearch,
+  Download,
+  ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
@@ -434,6 +437,8 @@ function WorkspaceCard({
   )
 }
 
+type CreateMode = 'manual' | 'browse' | 'clone'
+
 function CreateWorkspaceDialog({
   open,
   onClose,
@@ -444,29 +449,100 @@ function CreateWorkspaceDialog({
   onSuccess: () => void
 }) {
   const toast = useToast()
+  const [mode, setMode] = useState<CreateMode>('manual')
   const [name, setName] = useState('')
   const [repoRoot, setRepoRoot] = useState('')
   const [description, setDescription] = useState('')
   const [creating, setCreating] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Browse mode state
+  const [scanPath, setScanPath] = useState('')
+  const [discoveredRepos, setDiscoveredRepos] = useState<DiscoveredRepo[]>([])
+  const [isScanning, setIsScanning] = useState(false)
+  const [selectedRepo, setSelectedRepo] = useState<DiscoveredRepo | null>(null)
 
-    if (!name.trim() || !repoRoot.trim()) {
-      toast.error('Validation error', 'Name and repository path are required')
+  // Clone mode state
+  const [cloneUrl, setCloneUrl] = useState('')
+  const [targetDirectory, setTargetDirectory] = useState('')
+
+  const resetState = () => {
+    setName('')
+    setRepoRoot('')
+    setDescription('')
+    setScanPath('')
+    setDiscoveredRepos([])
+    setSelectedRepo(null)
+    setCloneUrl('')
+    setTargetDirectory('')
+  }
+
+  const handleScan = async () => {
+    if (!scanPath.trim()) {
+      toast.error('Validation error', 'Please enter a directory path to scan')
       return
     }
 
+    setIsScanning(true)
+    try {
+      const result = await api.discoverRepos(scanPath.trim())
+      setDiscoveredRepos(result.repos)
+      if (result.repos.length === 0) {
+        toast.info('No repositories found', `Scanned ${result.scannedDirectories} directories`)
+      }
+    } catch (error) {
+      toast.error(
+        'Scan failed',
+        error instanceof Error ? error.message : 'Unknown error'
+      )
+    } finally {
+      setIsScanning(false)
+    }
+  }
+
+  const handleSelectRepo = (repo: DiscoveredRepo) => {
+    setSelectedRepo(repo)
+    setRepoRoot(repo.path)
+    setName(repo.name)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setCreating(true)
 
     try {
-      await api.createWorkspace({
-        name: name.trim(),
-        repoRoot: repoRoot.trim(),
-        description: description.trim() || undefined,
-      })
+      if (mode === 'clone') {
+        // Clone mode: clone and create workspace
+        if (!cloneUrl.trim() || !targetDirectory.trim()) {
+          toast.error('Validation error', 'Clone URL and target directory are required')
+          setCreating(false)
+          return
+        }
 
-      toast.success('Workspace created successfully!')
+        await api.cloneWorkspace({
+          remoteUrl: cloneUrl.trim(),
+          targetDirectory: targetDirectory.trim(),
+          name: name.trim() || undefined,
+        })
+
+        toast.success('Repository cloned and workspace created!')
+      } else {
+        // Manual or Browse mode: create from existing repo
+        if (!name.trim() || !repoRoot.trim()) {
+          toast.error('Validation error', 'Name and repository path are required')
+          setCreating(false)
+          return
+        }
+
+        await api.createWorkspace({
+          name: name.trim(),
+          repoRoot: repoRoot.trim(),
+          description: description.trim() || undefined,
+        })
+
+        toast.success('Workspace created successfully!')
+      }
+
+      resetState()
       onSuccess()
     } catch (error) {
       toast.error(
@@ -479,48 +555,217 @@ function CreateWorkspaceDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Create Workspace" size="md">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              Workspace Name *
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="my-project"
-              required
-              autoFocus
-            />
-          </div>
+    <Dialog open={open} onClose={onClose} title="Create Workspace" size="lg">
+      <div className="space-y-4">
+        {/* Mode selector */}
+        <div className="flex gap-2 p-1 bg-[var(--color-bg-tertiary)] rounded-lg">
+          <button
+            type="button"
+            onClick={() => setMode('manual')}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+              mode === 'manual'
+                ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
+                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+            )}
+          >
+            <Folder size={16} />
+            Manual Path
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('browse')}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+              mode === 'browse'
+                ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
+                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+            )}
+          >
+            <FolderSearch size={16} />
+            Browse Local
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('clone')}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+              mode === 'clone'
+                ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
+                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+            )}
+          >
+            <Download size={16} />
+            Clone URL
+          </button>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              Repository Root Path *
-            </label>
-            <Input
-              value={repoRoot}
-              onChange={(e) => setRepoRoot(e.target.value)}
-              placeholder="/path/to/repo"
-              required
-            />
-            <p className="text-xs text-[var(--color-text-muted)] mt-1">
-              Absolute path to a valid git repository
-            </p>
-          </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === 'manual' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                  Workspace Name *
+                </label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="my-project"
+                  required
+                  autoFocus
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-              Description <span className="text-[var(--color-text-muted)]">(optional)</span>
-            </label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Workspace for AI agent development"
-              rows={3}
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                  Repository Root Path *
+                </label>
+                <Input
+                  value={repoRoot}
+                  onChange={(e) => setRepoRoot(e.target.value)}
+                  placeholder="/path/to/repo"
+                  required
+                />
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  Absolute path to a valid git repository
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                  Description <span className="text-[var(--color-text-muted)]">(optional)</span>
+                </label>
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Workspace for AI agent development"
+                  rows={3}
+                />
+              </div>
+            </>
+          )}
+
+          {mode === 'browse' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                  Directory to Scan
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    value={scanPath}
+                    onChange={(e) => setScanPath(e.target.value)}
+                    placeholder="C:/Users/you/dev"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    onClick={handleScan}
+                    disabled={isScanning}
+                    variant="secondary"
+                  >
+                    {isScanning ? <Spinner size="sm" /> : 'Scan'}
+                  </Button>
+                </div>
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  Scans up to 3 levels deep for git repositories
+                </p>
+              </div>
+
+              {discoveredRepos.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                    Found Repositories ({discoveredRepos.length})
+                  </label>
+                  <div className="max-h-48 overflow-y-auto space-y-2 border border-[var(--color-border)] rounded-lg p-2">
+                    {discoveredRepos.map((repo) => (
+                      <div
+                        key={repo.path}
+                        onClick={() => handleSelectRepo(repo)}
+                        className={cn(
+                          'p-2 rounded-lg cursor-pointer transition-colors',
+                          selectedRepo?.path === repo.path
+                            ? 'bg-accent/20 border border-accent/40'
+                            : 'bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-surface)]'
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-[var(--color-text-primary)]">
+                            {repo.name}
+                          </span>
+                          {repo.hasOrigin && (
+                            <ExternalLink size={14} className="text-[var(--color-text-muted)]" />
+                          )}
+                        </div>
+                        <p className="text-xs text-[var(--color-text-muted)] font-mono truncate">
+                          {repo.path}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedRepo && (
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                    Workspace Name
+                  </label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={selectedRepo.name}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {mode === 'clone' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                  Repository URL *
+                </label>
+                <Input
+                  value={cloneUrl}
+                  onChange={(e) => setCloneUrl(e.target.value)}
+                  placeholder="https://github.com/user/repo.git"
+                  required
+                  autoFocus
+                />
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  HTTPS or SSH URL (uses system credential helpers for auth)
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                  Clone To Directory *
+                </label>
+                <Input
+                  value={targetDirectory}
+                  onChange={(e) => setTargetDirectory(e.target.value)}
+                  placeholder="C:/Users/you/dev"
+                  required
+                />
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  Repository will be cloned as a subdirectory here
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                  Workspace Name <span className="text-[var(--color-text-muted)]">(optional)</span>
+                </label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Auto-detected from URL"
+                />
+              </div>
+            </>
+          )}
 
           <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
             <AlertCircle size={16} className="text-accent shrink-0 mt-0.5" />
@@ -533,17 +778,28 @@ function CreateWorkspaceDialog({
               </p>
             </div>
           </div>
-        </div>
 
-        <div className="flex justify-end gap-2 pt-4 border-t border-[var(--color-border)]">
-          <Button variant="ghost" onClick={onClose} disabled={creating}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" loading={creating} disabled={creating}>
-            {creating ? 'Creating...' : 'Create Workspace'}
-          </Button>
-        </div>
-      </form>
+          <div className="flex justify-end gap-2 pt-4 border-t border-[var(--color-border)]">
+            <Button variant="ghost" onClick={onClose} disabled={creating}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={creating}
+              disabled={creating || (mode === 'browse' && !selectedRepo)}
+            >
+              {creating
+                ? mode === 'clone'
+                  ? 'Cloning...'
+                  : 'Creating...'
+                : mode === 'clone'
+                  ? 'Clone & Create'
+                  : 'Create Workspace'}
+            </Button>
+          </div>
+        </form>
+      </div>
     </Dialog>
   )
 }
