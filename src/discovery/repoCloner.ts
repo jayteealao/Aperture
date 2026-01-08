@@ -1,5 +1,6 @@
 import { join, resolve } from 'path';
 import { existsSync } from 'fs';
+import { randomUUID } from 'crypto';
 import type { CloneProgress } from '../types/discovery.js';
 
 /**
@@ -32,16 +33,11 @@ function extractRepoName(url: string): string {
 }
 
 /**
- * Find an available path by appending -1, -2, etc.
+ * Generate a unique path by appending a UUID suffix
  */
-function findAvailablePath(dir: string, baseName: string): string {
-  let counter = 1;
-  let candidate = join(dir, `${baseName}-${counter}`);
-  while (existsSync(candidate)) {
-    counter++;
-    candidate = join(dir, `${baseName}-${counter}`);
-  }
-  return candidate;
+function generateUniquePath(dir: string, baseName: string): string {
+  const suffix = randomUUID().slice(0, 8);
+  return join(dir, `${baseName}-${suffix}`);
 }
 
 /**
@@ -67,7 +63,7 @@ export async function cloneRepository(options: CloneOptions): Promise<string> {
 
   // Handle existing directory
   if (existsSync(targetPath)) {
-    targetPath = findAvailablePath(targetDirectory, repoName);
+    targetPath = generateUniquePath(targetDirectory, repoName);
   }
 
   // Execute clone with progress callback
