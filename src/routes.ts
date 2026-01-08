@@ -8,6 +8,7 @@ import { validateJsonRpcMessage, type JsonRpcMessage } from './jsonrpc.js';
 import { checkReadiness } from './claudeInstaller.js';
 import { registerCredentialRoutes } from './routes/credentials.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.js';
+import { registerDiscoveryRoutes } from './routes/discovery.js';
 
 interface CreateSessionBody {
   agent?: AgentType;
@@ -35,6 +36,9 @@ export async function registerRoutes(
 
   // Register workspace management routes
   await registerWorkspaceRoutes(fastify, database || null);
+
+  // Register discovery routes
+  await registerDiscoveryRoutes(fastify);
 
   // Health check - always returns 200
   fastify.get('/healthz', async () => {
