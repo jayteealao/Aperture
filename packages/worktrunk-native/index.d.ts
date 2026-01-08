@@ -11,6 +11,7 @@ export interface EnsureRepoReadyParams {
 export interface EnsureRepoReadyResult {
   isGitRepo: boolean
   defaultBranch?: string
+  remoteUrl?: string
 }
 /** Parameters for ensureWorktree */
 export interface EnsureWorktreeParams {
@@ -48,3 +49,12 @@ export declare function ensureWorktree(params: EnsureWorktreeParams): Promise<En
 export declare function listWorktrees(params: ListWorktreesParams): Promise<Array<WorktreeInfo>>
 /** Remove a worktree by branch name */
 export declare function removeWorktree(params: RemoveWorktreeParams): Promise<void>
+/** Clone progress information */
+export interface CloneProgress {
+  phase: string
+  current: number
+  total: number
+  percent: number
+}
+/** Clone a repository from a URL to a target path */
+export declare function cloneRepository(url: string, targetPath: string, progressCallback: (progress: CloneProgress) => void): string

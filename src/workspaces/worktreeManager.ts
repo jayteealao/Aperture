@@ -4,7 +4,7 @@ import type { WorktreeManagerInterface } from './types.js';
  * Type definition for the native addon module
  */
 interface NativeAddonModule {
-  ensureRepoReady(params: { repoRoot: string }): Promise<{ isGitRepo: boolean; defaultBranch: string | null }>;
+  ensureRepoReady(params: { repoRoot: string }): Promise<{ isGitRepo: boolean; defaultBranch: string | null; remoteUrl: string | null }>;
   ensureWorktree(params: {
     repoRoot: string;
     branch: string;
@@ -18,6 +18,7 @@ interface NativeAddonModule {
     isLocked: boolean;
   }>>;
   removeWorktree(params: { repoRoot: string; branch: string }): Promise<void>;
+  cloneRepository(url: string, targetPath: string, progressCallback: (progress: { phase: string; current: number; total: number; percent: number }) => void): Promise<string>;
 }
 
 /**
@@ -47,13 +48,13 @@ export class WorktreeManagerNative implements WorktreeManagerInterface {
     return this.nativeModule;
   }
 
-  async ensureRepoReady(repoRoot: string): Promise<{ defaultBranch: string | null }> {
+  async ensureRepoReady(repoRoot: string): Promise<{ defaultBranch: string | null; remoteUrl: string | null }> {
     const native = await this.ensureNativeModule();
     const result = await native.ensureRepoReady({ repoRoot });
     if (!result.isGitRepo) {
       throw new Error(`Not a git repository: ${repoRoot}`);
     }
-    return { defaultBranch: result.defaultBranch };
+    return { defaultBranch: result.defaultBranch, remoteUrl: result.remoteUrl };
   }
 
   async ensureWorktree(params: {
@@ -90,9 +91,9 @@ export class WorktreeManagerNative implements WorktreeManagerInterface {
  * Stub implementation for when the native addon is not available
  */
 export class WorktreeManagerStub implements WorktreeManagerInterface {
-  async ensureRepoReady(_repoRoot: string): Promise<{ defaultBranch: string | null }> {
+  async ensureRepoReady(_repoRoot: string): Promise<{ defaultBranch: string | null; remoteUrl: string | null }> {
     console.warn('[WorktreeManagerStub] ensureRepoReady called - native addon not available');
-    return { defaultBranch: null };
+    return { defaultBranch: null, remoteUrl: null };
   }
 
   async ensureWorktree(_params: {

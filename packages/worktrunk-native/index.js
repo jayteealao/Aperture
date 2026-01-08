@@ -310,9 +310,10 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { ensureRepoReady, ensureWorktree, listWorktrees, removeWorktree } = nativeBinding
+const { ensureRepoReady, ensureWorktree, listWorktrees, removeWorktree, cloneRepository } = nativeBinding
 
 module.exports.ensureRepoReady = ensureRepoReady
 module.exports.ensureWorktree = ensureWorktree
 module.exports.listWorktrees = listWorktrees
 module.exports.removeWorktree = removeWorktree
+module.exports.cloneRepository = cloneRepository

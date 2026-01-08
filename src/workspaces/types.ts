@@ -3,7 +3,7 @@
  */
 
 export interface WorktreeManagerInterface {
-  ensureRepoReady(repoRoot: string): Promise<{ defaultBranch: string | null }>;
+  ensureRepoReady(repoRoot: string): Promise<{ defaultBranch: string | null; remoteUrl: string | null }>;
   ensureWorktree(params: {
     repoRoot: string;
     branch: string;
