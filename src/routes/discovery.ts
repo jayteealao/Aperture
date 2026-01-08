@@ -48,7 +48,6 @@ export async function registerDiscoveryRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({
         error: 'SCAN_FAILED',
         message: 'Failed to scan for repositories',
-        details: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   });
