@@ -13,8 +13,16 @@ pub struct WorktreeInfo {
     pub is_locked: bool,
 }
 
+/// Result from ensure_repo_ready containing repo info
+#[derive(Debug, Clone)]
+pub struct RepoReadyResult {
+    pub is_git_repo: bool,
+    pub default_branch: Option<String>,
+    pub remote_url: Option<String>,
+}
+
 /// Check if a directory is a git repository
-pub fn ensure_repo_ready(repo_root: &str) -> Result<(bool, Option<String>), WorktreeError> {
+pub fn ensure_repo_ready(repo_root: &str) -> Result<RepoReadyResult, WorktreeError> {
     let repo_path = Path::new(repo_root);
 
     if !repo_path.exists() {
@@ -34,7 +42,17 @@ pub fn ensure_repo_ready(repo_root: &str) -> Result<(bool, Option<String>), Work
         .ok()
         .and_then(|head| head.shorthand().map(|s| s.to_string()));
 
-    Ok((true, default_branch))
+    // Try to get the origin remote URL
+    let remote_url = repo
+        .find_remote("origin")
+        .ok()
+        .and_then(|remote| remote.url().map(|s| s.to_string()));
+
+    Ok(RepoReadyResult {
+        is_git_repo: true,
+        default_branch,
+        remote_url,
+    })
 }
 
 /// Sanitize a branch name to be used as a worktree name (for .git/worktrees/)
@@ -334,9 +352,11 @@ mod tests {
     #[test]
     fn test_ensure_repo_ready() {
         let (_temp, repo_path) = init_test_repo();
-        let (is_repo, branch) = ensure_repo_ready(repo_path.to_str().unwrap()).unwrap();
-        assert!(is_repo);
-        assert!(branch.is_some());
+        let result = ensure_repo_ready(repo_path.to_str().unwrap()).unwrap();
+        assert!(result.is_git_repo);
+        assert!(result.default_branch.is_some());
+        // No remote configured in test repo
+        assert!(result.remote_url.is_none());
     }
 
     #[test]
