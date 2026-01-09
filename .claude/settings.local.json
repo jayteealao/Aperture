@@ -10,7 +10,14 @@
       "Bash(git commit:*)",
       "Bash(timeout:*)",
       "Bash(ping:*)",
-      "Bash(npm run type-check:*)"
+      "Bash(npm run type-check:*)",
+      "Bash(pnpm build:*)",
+      "Bash(ls:*)",
+      "Bash(cargo check:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm test:*)",
+      "Bash(cargo clippy:*)"
     ]
   }
 }
