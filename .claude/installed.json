@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "installedAt": "2026-01-08T00:50:25.572Z",
-  "updatedAt": "2026-01-09T11:02:30.171Z",
+  "updatedAt": "2026-01-10T11:08:50.036Z",
   "plugins": [
     {
       "name": "compound-engineering",
@@ -16,5 +16,11 @@
         "variants": 0
       }
     }
-  ]
+  ],
+  "variant": {
+    "name": "Typescript",
+    "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\agent-skills\\variants\\Typescript",
+    "checksum": "7b8398ebd03ffffbbc3b09c55e33a5759e6bf8116511c1ddc74650b4677a7645",
+    "installedAt": "2026-01-10T11:08:50.036Z"
+  }
 }
