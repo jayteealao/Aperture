@@ -59,8 +59,9 @@ COPY package*.json pnpm-* ./
 COPY --from=builder /build/node_modules ./node_modules
 
 # Rebuild native modules for the production container's architecture
-# This is required because pnpm uses symlinks that may break when copied
-RUN pnpm rebuild better-sqlite3
+# Use npm rebuild (not pnpm) because it works directly with node_modules
+# without needing workspace configuration
+RUN npm rebuild better-sqlite3
 
 # Install ACP agents globally
 # - claude-code-acp for Claude Code agent
