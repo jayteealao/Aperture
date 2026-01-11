@@ -32,6 +32,8 @@ services:
       RPC_REQUEST_TIMEOUT_MS: ${RPC_REQUEST_TIMEOUT_MS:-300000}
       SESSION_IDLE_TIMEOUT_MS: ${SESSION_IDLE_TIMEOUT_MS:-600000}
       CLAUDE_CODE_EXECUTABLE: ${CLAUDE_CODE_EXECUTABLE:-}
+      # Database path - use /app/data/db which is created with correct permissions in Dockerfile
+      DATABASE_PATH: ${DATABASE_PATH:-/app/data/db/aperture.db}
     volumes:
       # Persist Claude Code home directory for subscription auth
       - claude-data:/home/app/.claude
