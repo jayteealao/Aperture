@@ -38,9 +38,9 @@ RUN pnpm build
 # Production stage
 FROM node:20-slim
 
-# Install runtime dependencies (git, curl, bash)
+# Install runtime dependencies (git, curl, bash) AND build tools for native modules
 RUN apt-get update && \
-    apt-get install -y git curl bash && \
+    apt-get install -y git curl bash build-essential python3 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -55,9 +55,12 @@ RUN npm install -g pnpm
 # Copy package files for reference
 COPY package*.json pnpm-* ./
 
-# Copy pre-built node_modules from builder (includes compiled native bindings)
-# This preserves better-sqlite3 and worktrunk-native native modules
+# Copy pre-built node_modules from builder
 COPY --from=builder /build/node_modules ./node_modules
+
+# Rebuild native modules for the production container's architecture
+# This is required because pnpm uses symlinks that may break when copied
+RUN pnpm rebuild better-sqlite3
 
 # Install ACP agents globally
 # - claude-code-acp for Claude Code agent
