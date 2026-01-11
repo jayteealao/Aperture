@@ -52,12 +52,12 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm
 
-# Copy package files
+# Copy package files for reference
 COPY package*.json pnpm-* ./
-COPY packages/worktrunk-native/package*.json packages/worktrunk-native/
 
-# Install production dependencies only
-RUN pnpm install --prod --frozen-lockfile
+# Copy pre-built node_modules from builder (includes compiled native bindings)
+# This preserves better-sqlite3 and worktrunk-native native modules
+COPY --from=builder /build/node_modules ./node_modules
 
 # Install ACP agents globally
 # - claude-code-acp for Claude Code agent
