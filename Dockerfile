@@ -79,11 +79,11 @@ COPY --from=builder /build/packages/worktrunk-native/*.node ./packages/worktrunk
 COPY --from=builder /build/packages/worktrunk-native/index.d.ts ./packages/worktrunk-native/
 COPY --from=builder /build/packages/worktrunk-native/index.js ./packages/worktrunk-native/
 
+# Copy migrations to dist directory (where runtime code expects them)
+COPY src/migrations ./dist/migrations
+
 # Create necessary directories
 RUN mkdir -p /app/data /app/data/db && chown -R app:app /app
-
-# Copy migrations
-COPY src/migrations ./src/migrations
 
 # Switch to non-root user
 USER app
