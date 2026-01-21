@@ -1,26 +1,155 @@
 {
   "version": "1.0.0",
-  "installedAt": "2026-01-08T00:50:25.572Z",
-  "updatedAt": "2026-01-10T11:08:50.036Z",
+  "installedAt": "2026-01-21T17:19:52.735Z",
+  "updatedAt": "2026-01-21T17:20:08.729Z",
   "plugins": [
     {
-      "name": "compound-engineering",
-      "version": "2.28.0",
-      "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\compound-engineering-plugin",
-      "installedAt": "2026-01-08T00:50:25.572Z",
+      "name": "session-workflow",
+      "version": "1.8.1",
+      "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\agent-skills",
+      "installedAt": "2026-01-21T17:19:52.735Z",
       "components": {
-        "agents": 38,
-        "commands": 32,
-        "skills": 21,
-        "mcpServers": 2,
+        "agents": 5,
+        "commands": 46,
+        "skills": 1,
+        "mcpServers": 0,
         "variants": 0
+      },
+      "installedTo": [
+        "claude"
+      ],
+      "installedFiles": {
+        "claude": {
+          "agents": [
+            "codebase-mapper.md",
+            "design-options.md",
+            "edge-case-generator.md",
+            "risk-analyzer.md",
+            "web-research.md"
+          ],
+          "commands": [
+            "close-session.md",
+            "compat-check.md",
+            "debt-register.md",
+            "decision-record.md",
+            "handoff.md",
+            "prod-readiness.md",
+            "refactor-followups.md",
+            "repro-harness.md",
+            "research-plan.md",
+            "review\\accessibility.md",
+            "review\\api-contracts.md",
+            "review\\architecture.md",
+            "review\\backend-concurrency.md",
+            "review\\ci.md",
+            "review\\correctness.md",
+            "review\\cost.md",
+            "review\\data-integrity.md",
+            "review\\docs.md",
+            "review\\dx.md",
+            "review\\frontend-accessibility.md",
+            "review\\frontend-performance.md",
+            "review\\infra-security.md",
+            "review\\infra.md",
+            "review\\logging.md",
+            "review\\maintainability.md",
+            "review\\migrations.md",
+            "review\\observability.md",
+            "review\\overengineering.md",
+            "review\\performance.md",
+            "review\\privacy.md",
+            "review\\refactor-safety.md",
+            "review\\release.md",
+            "review\\reliability.md",
+            "review\\scalability.md",
+            "review\\security.md",
+            "review\\style-consistency.md",
+            "review\\supply-chain.md",
+            "review\\testing.md",
+            "review\\ux-copy.md",
+            "scope-triage.md",
+            "setup-wide-logging.md",
+            "spec-crystallize.md",
+            "start-session.md",
+            "test-matrix.md",
+            "work.md",
+            "write-docs.md"
+          ],
+          "skills": [
+            "wide-event-observability"
+          ],
+          "isSymlinked": false
+        }
+      }
+    },
+    {
+      "name": "daily-carry",
+      "version": "1.2.0",
+      "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\agent-skills",
+      "installedAt": "2026-01-21T17:20:01.559Z",
+      "components": {
+        "agents": 0,
+        "commands": 1,
+        "skills": 5,
+        "mcpServers": 0,
+        "variants": 0
+      },
+      "installedTo": [
+        "claude"
+      ],
+      "installedFiles": {
+        "claude": {
+          "agents": [
+            ".gitkeep"
+          ],
+          "commands": [
+            ".gitkeep",
+            "deploy-otterstack.md"
+          ],
+          "skills": [
+            "debug-vps-deployment",
+            "otterstack-usage",
+            "portainer",
+            "prepare-otterstack-deployment",
+            "tech-research-enforcer"
+          ],
+          "isSymlinked": false
+        }
+      }
+    },
+    {
+      "name": "release-automation",
+      "version": "2.0.0",
+      "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\agent-skills",
+      "installedAt": "2026-01-21T17:20:08.729Z",
+      "components": {
+        "agents": 0,
+        "commands": 1,
+        "skills": 7,
+        "mcpServers": 0,
+        "variants": 0
+      },
+      "installedTo": [
+        "claude"
+      ],
+      "installedFiles": {
+        "claude": {
+          "agents": [],
+          "commands": [
+            "release.md"
+          ],
+          "skills": [
+            "changelog-update",
+            "detect-project-type",
+            "detect-release-scope",
+            "documentation-sync",
+            "git-release-workflow",
+            "pre-release-validation",
+            "version-bump"
+          ],
+          "isSymlinked": false
+        }
       }
     }
-  ],
-  "variant": {
-    "name": "Typescript",
-    "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\agent-skills\\variants\\Typescript",
-    "checksum": "7b8398ebd03ffffbbc3b09c55e33a5759e6bf8116511c1ddc74650b4677a7645",
-    "installedAt": "2026-01-10T11:08:50.036Z"
-  }
+  ]
 }
