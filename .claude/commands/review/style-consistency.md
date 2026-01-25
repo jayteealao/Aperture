@@ -1,5 +1,7 @@
 ---
 name: review:style-consistency
+user-invocable: false
+disable-model-invocation: true
 description: Enforce consistency with existing codebase style and language idioms to reduce cognitive load
 args:
   SESSION_SLUG:

@@ -1,5 +1,7 @@
 ---
 name: review:data-integrity
+user-invocable: false
+disable-model-invocation: true
 description: Review data integrity - ensure stored data remains correct over time, across failures, retries, and concurrent writes
 usage: /review:data-integrity [SCOPE] [TARGET] [PATHS] [CONTEXT]
 arguments:

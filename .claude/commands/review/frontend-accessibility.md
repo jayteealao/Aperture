@@ -1,5 +1,7 @@
 ---
 name: review:frontend-accessibility
+user-invocable: false
+disable-model-invocation: true
 description: Review frontend code for accessibility issues in modern SPAs (React, Vue, Angular)
 args:
   SESSION_SLUG:

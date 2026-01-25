@@ -1,5 +1,7 @@
 ---
 name: review:accessibility
+user-invocable: false
+disable-model-invocation: true
 description: Review UI changes for keyboard and assistive technology usability, avoid ARIA misuse
 usage: /review:accessibility [SCOPE] [TARGET] [PATHS] [CONTEXT]
 arguments:

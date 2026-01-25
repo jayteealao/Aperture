@@ -1,5 +1,7 @@
 ---
 name: review:testing
+user-invocable: false
+disable-model-invocation: true
 description: Review test quality, coverage, and reliability to ensure changes are well-verified
 args:
   SESSION_SLUG:

@@ -1,17 +1,17 @@
 {
   "version": "1.0.0",
   "installedAt": "2026-01-21T17:19:52.735Z",
-  "updatedAt": "2026-01-21T17:20:08.729Z",
+  "updatedAt": "2026-01-25T11:27:22.886Z",
   "plugins": [
     {
       "name": "session-workflow",
-      "version": "1.8.1",
+      "version": "1.9.0",
       "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\agent-skills",
       "installedAt": "2026-01-21T17:19:52.735Z",
       "components": {
-        "agents": 5,
-        "commands": 46,
-        "skills": 1,
+        "agents": 18,
+        "commands": 45,
+        "skills": 12,
         "mcpServers": 0,
         "variants": 0
       },
@@ -21,14 +21,26 @@
       "installedFiles": {
         "claude": {
           "agents": [
-            "codebase-mapper.md",
-            "design-options.md",
-            "edge-case-generator.md",
-            "risk-analyzer.md",
-            "web-research.md"
+            "research\\best-practices-researcher.md",
+            "research\\codebase-mapper.md",
+            "research\\design-options.md",
+            "research\\edge-case-generator.md",
+            "research\\framework-docs-researcher.md",
+            "research\\git-history-analyzer.md",
+            "research\\repo-research-analyst.md",
+            "research\\risk-analyzer.md",
+            "research\\web-research.md",
+            "review\\architecture-strategist.md",
+            "review\\code-simplicity-reviewer.md",
+            "review\\framework-conventions-reviewer.md",
+            "review\\pattern-recognition-specialist.md",
+            "review\\performance-oracle.md",
+            "review\\security-sentinel.md",
+            "review\\senior-code-reviewer.md",
+            "senior-review-specialist.md",
+            "workflow\\spec-flow-analyzer.md"
           ],
           "commands": [
-            "close-session.md",
             "compat-check.md",
             "debt-register.md",
             "decision-record.md",
@@ -36,7 +48,6 @@
             "prod-readiness.md",
             "refactor-followups.md",
             "repro-harness.md",
-            "research-plan.md",
             "review\\accessibility.md",
             "review\\api-contracts.md",
             "review\\architecture.md",
@@ -69,13 +80,25 @@
             "review\\ux-copy.md",
             "scope-triage.md",
             "setup-wide-logging.md",
-            "spec-crystallize.md",
-            "start-session.md",
             "test-matrix.md",
-            "work.md",
+            "workflows\\deepen-plan.md",
+            "workflows\\plan-review.md",
+            "workflows\\plan.md",
+            "workflows\\work.md",
             "write-docs.md"
           ],
           "skills": [
+            "error-analysis",
+            "framework-conventions-guide",
+            "refactoring-patterns",
+            "review-all",
+            "review-architecture",
+            "review-infra",
+            "review-pre-merge",
+            "review-quick",
+            "review-security",
+            "review-ux",
+            "test-patterns",
             "wide-event-observability"
           ],
           "isSymlinked": false

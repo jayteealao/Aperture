@@ -1,5 +1,7 @@
 ---
 name: review:reliability
+user-invocable: false
+disable-model-invocation: true
 description: Review code for reliability, failure modes, and operational safety under partial outages
 usage: /review:reliability [SCOPE] [TARGET] [PATHS] [CONTEXT]
 arguments:

@@ -1,5 +1,7 @@
 ---
 name: review:scalability
+user-invocable: false
+disable-model-invocation: true
 description: Review code for scalability issues under higher load, larger datasets, and more tenants
 usage: /review:scalability [SCOPE] [TARGET] [PATHS] [CONTEXT]
 arguments:

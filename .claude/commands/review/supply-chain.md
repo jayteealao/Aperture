@@ -1,5 +1,7 @@
 ---
 name: review:supply-chain
+user-invocable: false
+disable-model-invocation: true
 description: Review dependency and build integrity risks, lockfiles, build scripts, and artifact provenance
 args:
   SESSION_SLUG:
