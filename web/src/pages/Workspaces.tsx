@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { useToast } from '@/components/ui/Toast'
@@ -34,6 +34,8 @@ interface WorkspaceWithData extends WorkspaceRecord {
 export default function Workspaces() {
   const navigate = useNavigate()
   const toast = useToast()
+  const toastRef = useRef(toast)
+  toastRef.current = toast
   const [workspaces, setWorkspaces] = useState<WorkspaceWithData[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -72,7 +74,7 @@ export default function Workspaces() {
 
       setWorkspaces(workspacesWithData)
     } catch (error) {
-      toast.error(
+      toastRef.current.error(
         'Failed to load workspaces',
         error instanceof Error ? error.message : 'Unknown error'
       )
@@ -80,7 +82,7 @@ export default function Workspaces() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [toast])
+  }, [])
 
   useEffect(() => {
     loadWorkspaces()

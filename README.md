@@ -171,7 +171,7 @@ curl -X POST http://localhost:8080/v1/sessions \
   -H "Authorization: Bearer your-token" \
   -H "Content-Type: application/json" \
   -d '{
-    "agent": "claude_code",
+    "agent": "claude_acp",
     "auth": {
       "mode": "interactive",
       "apiKeyRef": "none"
@@ -183,10 +183,10 @@ curl -X POST http://localhost:8080/v1/sessions \
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
-  "agent": "claude_code",
+  "agent": "claude_acp",
   "status": {
     "id": "550e8400-...",
-    "agent": "claude_code",
+    "agent": "claude_acp",
     "authMode": "interactive",
     "running": true,
     "pendingRequests": 0,
@@ -205,7 +205,7 @@ curl -X POST http://localhost:8080/v1/sessions \
   -H "Authorization: Bearer your-token" \
   -H "Content-Type: application/json" \
   -d '{
-    "agent": "claude_code",
+    "agent": "claude_acp",
     "auth": {
       "mode": "api_key",
       "providerKey": "anthropic",
@@ -689,7 +689,7 @@ Create a new agent session.
 **Request Body**:
 ```typescript
 {
-  agent?: "claude_code" | "codex",  // default: "claude_code"
+  agent?: "claude_acp" | "codex",  // default: "claude_acp"
   auth?: {
     mode: "interactive" | "api_key",
     providerKey?: "anthropic" | "openai",  // auto-derived from agent
@@ -702,7 +702,7 @@ Create a new agent session.
 ```
 
 **Defaults**:
-- `agent`: `"claude_code"`
+- `agent`: `"claude_acp"`
 - `auth.mode`: `"interactive"`
 - `auth.apiKeyRef`: `"none"`
 - `auth.providerKey`: auto-derived (`"anthropic"` for Claude, `"openai"` for Codex)
@@ -711,10 +711,10 @@ Create a new agent session.
 ```json
 {
   "id": "550e8400-...",
-  "agent": "claude_code",
+  "agent": "claude_acp",
   "status": {
     "id": "550e8400-...",
-    "agent": "claude_code",
+    "agent": "claude_acp",
     "authMode": "interactive",
     "running": true,
     "pendingRequests": 0,
@@ -1181,7 +1181,7 @@ Or send periodic keepalive messages.
    **After**:
    ```json
    {
-     "agent": "claude_code",
+     "agent": "claude_acp",
      "auth": {
        "mode": "api_key",
        "apiKeyRef": "inline",

@@ -20,7 +20,8 @@ export const STORAGE_KEYS = {
 } as const
 
 export const AGENT_LABELS: Record<string, string> = {
-  claude_code: 'Claude Code',
+  claude_acp: 'Claude(ACP)',
+  claude_sdk: 'Claude(SDK)',
   codex: 'Codex',
   gemini: 'Gemini',
 }
@@ -37,3 +38,10 @@ export const PROVIDER_LABELS: Record<string, string> = {
   openai: 'OpenAI',
   google: 'Google',
 }
+
+// Default SDK models to show before first prompt (SDK requires active query for real model list)
+export const DEFAULT_SDK_MODELS = [
+  { value: 'claude-sonnet-4-20250514', displayName: 'Claude Sonnet 4', description: 'Latest Sonnet model' },
+  { value: 'claude-opus-4-20250514', displayName: 'Claude Opus 4', description: 'Most capable model' },
+  { value: 'claude-3-5-haiku-20241022', displayName: 'Claude 3.5 Haiku', description: 'Fast and efficient' },
+] as const

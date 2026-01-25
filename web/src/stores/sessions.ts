@@ -10,9 +10,35 @@ import type {
   ConnectionStatus,
   JsonRpcMessage,
   ContentBlock,
+  SdkSessionConfig,
+  SessionResult,
+  AccountInfo,
+  ModelInfo,
+  SlashCommand,
+  McpServerStatus,
+  RewindFilesResult,
+  PermissionMode,
 } from '@/api/types'
 import { api } from '@/api/client'
 import { wsManager } from '@/api/websocket'
+import { DEFAULT_SDK_MODELS } from '@/utils/constants'
+
+// SDK session state
+interface SdkLoadingState {
+  config?: boolean
+  models?: boolean
+  commands?: boolean
+  mcpStatus?: boolean
+  accountInfo?: boolean
+  checkpoints?: boolean
+}
+
+interface SdkErrorState {
+  models?: string
+  commands?: string
+  mcpStatus?: string
+  accountInfo?: string
+}
 
 interface SessionsState {
   // Data
@@ -27,6 +53,18 @@ interface SessionsState {
     toolCall: unknown
     options: unknown[]
   }>
+
+  // SDK State
+  sdkConfig: Record<string, SdkSessionConfig>
+  sdkUsage: Record<string, SessionResult | null>
+  sdkAccountInfo: Record<string, AccountInfo | null>
+  sdkModels: Record<string, ModelInfo[]>
+  sdkCommands: Record<string, SlashCommand[]>
+  sdkMcpStatus: Record<string, McpServerStatus[]>
+  sdkCheckpoints: Record<string, string[]>
+  sdkLoading: Record<string, SdkLoadingState>
+  sdkErrors: Record<string, SdkErrorState>
+  sdkRewindResult: Record<string, RewindFilesResult | null>
 
   // Actions - Sessions
   setSessions: (sessions: Session[]) => void
@@ -52,6 +90,18 @@ interface SessionsState {
   // Actions - Permissions
   addPendingPermission: (sessionId: string, permission: { toolCallId: string; toolCall: unknown; options: unknown[] }) => void
   removePendingPermission: (sessionId: string, toolCallId: string) => void
+
+  // Actions - SDK State
+  setSdkConfig: (sessionId: string, config: SdkSessionConfig) => void
+  setSdkUsage: (sessionId: string, usage: SessionResult | null) => void
+  setSdkAccountInfo: (sessionId: string, info: AccountInfo | null) => void
+  setSdkModels: (sessionId: string, models: ModelInfo[]) => void
+  setSdkCommands: (sessionId: string, commands: SlashCommand[]) => void
+  setSdkMcpStatus: (sessionId: string, status: McpServerStatus[]) => void
+  setSdkCheckpoints: (sessionId: string, checkpoints: string[]) => void
+  setSdkLoading: (sessionId: string, loading: Partial<SdkLoadingState>) => void
+  setSdkErrors: (sessionId: string, errors: Partial<SdkErrorState>) => void
+  setSdkRewindResult: (sessionId: string, result: RewindFilesResult | null) => void
 
   // WebSocket
   connectSession: (sessionId: string) => void
@@ -84,6 +134,18 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   activeSessionId: null,
   pendingPermissions: {},
 
+  // SDK initial state
+  sdkConfig: {},
+  sdkUsage: {},
+  sdkAccountInfo: {},
+  sdkModels: {},
+  sdkCommands: {},
+  sdkMcpStatus: {},
+  sdkCheckpoints: {},
+  sdkLoading: {},
+  sdkErrors: {},
+  sdkRewindResult: {},
+
   // Sessions actions
   setSessions: (sessions) => {
     const connections: Record<string, ConnectionState> = {}
@@ -94,13 +156,23 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   },
 
   addSession: async (session) => {
-    set((state) => ({
-      sessions: [...state.sessions.filter((s) => s.id !== session.id), session],
-      connections: {
-        ...state.connections,
-        [session.id]: state.connections[session.id] || defaultConnectionState(),
-      },
-    }))
+    set((state) => {
+      const updates: Partial<SessionsState> = {
+        sessions: [...state.sessions.filter((s) => s.id !== session.id), session],
+        connections: {
+          ...state.connections,
+          [session.id]: state.connections[session.id] || defaultConnectionState(),
+        },
+      }
+      // Initialize SDK sessions with default models
+      if (session.agent === 'claude_sdk') {
+        updates.sdkModels = {
+          ...state.sdkModels,
+          [session.id]: [...DEFAULT_SDK_MODELS],
+        }
+      }
+      return updates
+    })
     // Persist to IndexedDB
     await idbSet(`session:${session.id}`, session)
   },
@@ -112,11 +184,42 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       delete newConnections[sessionId]
       const newMessages = { ...state.messages }
       delete newMessages[sessionId]
+      // Clean up SDK state
+      const newSdkConfig = { ...state.sdkConfig }
+      delete newSdkConfig[sessionId]
+      const newSdkUsage = { ...state.sdkUsage }
+      delete newSdkUsage[sessionId]
+      const newSdkAccountInfo = { ...state.sdkAccountInfo }
+      delete newSdkAccountInfo[sessionId]
+      const newSdkModels = { ...state.sdkModels }
+      delete newSdkModels[sessionId]
+      const newSdkCommands = { ...state.sdkCommands }
+      delete newSdkCommands[sessionId]
+      const newSdkMcpStatus = { ...state.sdkMcpStatus }
+      delete newSdkMcpStatus[sessionId]
+      const newSdkCheckpoints = { ...state.sdkCheckpoints }
+      delete newSdkCheckpoints[sessionId]
+      const newSdkLoading = { ...state.sdkLoading }
+      delete newSdkLoading[sessionId]
+      const newSdkErrors = { ...state.sdkErrors }
+      delete newSdkErrors[sessionId]
+      const newSdkRewindResult = { ...state.sdkRewindResult }
+      delete newSdkRewindResult[sessionId]
       return {
         sessions: state.sessions.filter((s) => s.id !== sessionId),
         connections: newConnections,
         messages: newMessages,
         activeSessionId: state.activeSessionId === sessionId ? null : state.activeSessionId,
+        sdkConfig: newSdkConfig,
+        sdkUsage: newSdkUsage,
+        sdkAccountInfo: newSdkAccountInfo,
+        sdkModels: newSdkModels,
+        sdkCommands: newSdkCommands,
+        sdkMcpStatus: newSdkMcpStatus,
+        sdkCheckpoints: newSdkCheckpoints,
+        sdkLoading: newSdkLoading,
+        sdkErrors: newSdkErrors,
+        sdkRewindResult: newSdkRewindResult,
       }
     })
     // Remove from IndexedDB
@@ -268,6 +371,73 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     })
   },
 
+  // SDK State actions
+  setSdkConfig: (sessionId, config) => {
+    set((state) => ({
+      sdkConfig: { ...state.sdkConfig, [sessionId]: config },
+    }))
+  },
+
+  setSdkUsage: (sessionId, usage) => {
+    set((state) => ({
+      sdkUsage: { ...state.sdkUsage, [sessionId]: usage },
+    }))
+  },
+
+  setSdkAccountInfo: (sessionId, info) => {
+    set((state) => ({
+      sdkAccountInfo: { ...state.sdkAccountInfo, [sessionId]: info },
+    }))
+  },
+
+  setSdkModels: (sessionId, models) => {
+    set((state) => ({
+      sdkModels: { ...state.sdkModels, [sessionId]: models },
+    }))
+  },
+
+  setSdkCommands: (sessionId, commands) => {
+    set((state) => ({
+      sdkCommands: { ...state.sdkCommands, [sessionId]: commands },
+    }))
+  },
+
+  setSdkMcpStatus: (sessionId, status) => {
+    set((state) => ({
+      sdkMcpStatus: { ...state.sdkMcpStatus, [sessionId]: status },
+    }))
+  },
+
+  setSdkCheckpoints: (sessionId, checkpoints) => {
+    set((state) => ({
+      sdkCheckpoints: { ...state.sdkCheckpoints, [sessionId]: checkpoints },
+    }))
+  },
+
+  setSdkLoading: (sessionId, loading) => {
+    set((state) => ({
+      sdkLoading: {
+        ...state.sdkLoading,
+        [sessionId]: { ...state.sdkLoading[sessionId], ...loading },
+      },
+    }))
+  },
+
+  setSdkErrors: (sessionId, errors) => {
+    set((state) => ({
+      sdkErrors: {
+        ...state.sdkErrors,
+        [sessionId]: { ...state.sdkErrors[sessionId], ...errors },
+      },
+    }))
+  },
+
+  setSdkRewindResult: (sessionId, result) => {
+    set((state) => ({
+      sdkRewindResult: { ...state.sdkRewindResult, [sessionId]: result },
+    }))
+  },
+
   // WebSocket actions
   connectSession: (sessionId) => {
     const wsUrl = api.getWebSocketUrl(sessionId)
@@ -365,6 +535,16 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       connections: {},
       activeSessionId: null,
       pendingPermissions: {},
+      sdkConfig: {},
+      sdkUsage: {},
+      sdkAccountInfo: {},
+      sdkModels: {},
+      sdkCommands: {},
+      sdkMcpStatus: {},
+      sdkCheckpoints: {},
+      sdkLoading: {},
+      sdkErrors: {},
+      sdkRewindResult: {},
     })
   },
 }))
@@ -389,6 +569,57 @@ function handleWebSocketMessage(
   } else if (data.method === 'session/error') {
     const params = data.params as { message?: string }
     console.error('[WS] Session error:', params?.message)
+  } else if (data.method === 'session/supported_models') {
+    console.log('[WS] Received session/supported_models:', data.params)
+    const params = data.params as { models?: ModelInfo[]; error?: string }
+    if (params.error) {
+      get().setSdkErrors(sessionId, { models: params.error })
+    } else if (params.models) {
+      get().setSdkModels(sessionId, params.models)
+      get().setSdkErrors(sessionId, { models: undefined })
+    }
+    get().setSdkLoading(sessionId, { models: false })
+  } else if (data.method === 'session/supported_commands') {
+    const params = data.params as { commands?: SlashCommand[]; error?: string }
+    if (params.error) {
+      get().setSdkErrors(sessionId, { commands: params.error })
+    } else if (params.commands) {
+      get().setSdkCommands(sessionId, params.commands)
+      get().setSdkErrors(sessionId, { commands: undefined })
+    }
+    get().setSdkLoading(sessionId, { commands: false })
+  } else if (data.method === 'session/mcp_status') {
+    const params = data.params as { servers?: McpServerStatus[]; error?: string }
+    if (params.error) {
+      get().setSdkErrors(sessionId, { mcpStatus: params.error })
+    } else if (params.servers) {
+      get().setSdkMcpStatus(sessionId, params.servers)
+      get().setSdkErrors(sessionId, { mcpStatus: undefined })
+    }
+    get().setSdkLoading(sessionId, { mcpStatus: false })
+  } else if (data.method === 'session/account_info') {
+    const params = data.params as (AccountInfo & { error?: string }) | { error: string }
+    if ('error' in params && params.error) {
+      get().setSdkErrors(sessionId, { accountInfo: params.error })
+    } else {
+      get().setSdkAccountInfo(sessionId, params as AccountInfo)
+      get().setSdkErrors(sessionId, { accountInfo: undefined })
+    }
+    get().setSdkLoading(sessionId, { accountInfo: false })
+  } else if (data.method === 'session/config_updated') {
+    const params = data.params as { config: SdkSessionConfig }
+    get().setSdkConfig(sessionId, params.config)
+    get().setSdkLoading(sessionId, { config: false })
+  } else if (data.method === 'session/checkpoints') {
+    const params = data.params as { checkpoints: string[] }
+    get().setSdkCheckpoints(sessionId, params.checkpoints)
+    get().setSdkLoading(sessionId, { checkpoints: false })
+  } else if (data.method === 'session/rewind_result') {
+    const params = data.params as RewindFilesResult
+    get().setSdkRewindResult(sessionId, params)
+  } else if (data.method === 'session/usage_update') {
+    const params = data.params as SessionResult
+    get().setSdkUsage(sessionId, params)
   } else if (data.result) {
     // Response to a prompt - streaming finished
     const result = data.result as { stopReason?: string }
@@ -400,7 +631,7 @@ function handleWebSocketMessage(
 
 function handleSessionUpdate(
   sessionId: string,
-  params: { update: { sessionUpdate: string; content?: ContentBlock } },
+  params: { update: { sessionUpdate: string; content?: ContentBlock; [key: string]: unknown } },
   get: () => SessionsState,
   isActive: boolean
 ) {
@@ -445,6 +676,16 @@ function handleSessionUpdate(
     if (!isActive) {
       get().incrementUnread(sessionId)
     }
+  } else if (updateType === 'prompt_complete' || updateType === 'prompt_error') {
+    // Stop streaming when prompt finishes
+    get().setStreaming(sessionId, false)
+  } else if (updateType === 'config_changed') {
+    // Handle config changes (model, permissionMode, etc.)
+    const currentConfig = get().sdkConfig[sessionId] || {}
+    const newConfig: SdkSessionConfig = { ...currentConfig }
+    if ('model' in update) newConfig.model = update.model as string | undefined
+    if ('permissionMode' in update) newConfig.permissionMode = update.permissionMode as PermissionMode
+    get().setSdkConfig(sessionId, newConfig)
   }
 }
 

@@ -313,7 +313,7 @@ function NewSessionDialog({
   const queryClient = useQueryClient()
   const { addSession } = useSessionsStore()
 
-  const [agent, setAgent] = useState<AgentType>('claude_code')
+  const [agent, setAgent] = useState<AgentType>('claude_acp')
   const [authMode, setAuthMode] = useState<AuthMode>('interactive')
   const [apiKey, setApiKey] = useState('')
   const [repoSelection, setRepoSelection] = useState<RepoSelection | null>(null)
@@ -349,14 +349,19 @@ function NewSessionDialog({
   }, [open])
 
   const agentOptions = [
-    { value: 'claude_code', label: 'Claude Code' },
+    { value: 'claude_acp', label: 'Claude(ACP)' },
+    { value: 'claude_sdk', label: 'Claude(SDK)' },
     { value: 'codex', label: 'Codex (OpenAI)' },
     { value: 'gemini', label: 'Gemini (Google)' },
   ]
 
   const authOptions: Record<AgentType, { value: AuthMode; label: string }[]> = {
-    claude_code: [
+    claude_acp: [
       { value: 'interactive', label: 'Interactive (Subscription)' },
+      { value: 'api_key', label: 'API Key' },
+    ],
+    claude_sdk: [
+      { value: 'oauth', label: 'OAuth (Pre-authenticated)' },
       { value: 'api_key', label: 'API Key' },
     ],
     codex: [

@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'child_process';
+import type { SdkSessionConfig } from './sdk-types.js';
 
 /**
  * Authentication mode for an agent session
@@ -34,7 +35,7 @@ export interface SessionAuth {
 /**
  * Agent type
  */
-export type AgentType = 'claude_code' | 'codex' | 'gemini';
+export type AgentType = 'claude_acp' | 'codex' | 'gemini' | 'claude_sdk';
 
 /**
  * Session configuration for creating an agent
@@ -44,6 +45,7 @@ export interface SessionConfig {
   agent: AgentType;
   auth: SessionAuth;
   env?: Record<string, string>;
+  sdk?: SdkSessionConfig; // SDK-specific configuration
 }
 
 /**
@@ -90,4 +92,27 @@ export interface AgentBackend {
    * Spawn the agent process with the given configuration
    */
   spawn(config: SessionConfig, resolvedApiKey?: string): Promise<SpawnedAgent>;
+}
+
+/**
+ * SDK-based agent backend interface
+ * For agents that use library calls instead of spawning processes
+ */
+export interface SdkAgentBackend {
+  /** Agent name */
+  readonly name: string;
+
+  /** Agent type identifier */
+  readonly type: AgentType;
+
+  /**
+   * Check if agent dependencies are installed and ready
+   */
+  ensureInstalled(): Promise<AgentReadiness>;
+
+  /**
+   * Validate authentication configuration for this agent
+   * Throws user-facing errors if invalid
+   */
+  validateAuth(sessionAuth: SessionAuth, hostedMode: boolean, allowInteractiveAuth?: boolean): void;
 }

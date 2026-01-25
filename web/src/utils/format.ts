@@ -57,3 +57,21 @@ export function formatBytes(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
+
+export function formatNumber(num: number): string {
+  if (num >= 1_000_000) {
+    return `${(num / 1_000_000).toFixed(1)}M`
+  } else if (num >= 1_000) {
+    return `${(num / 1_000).toFixed(1)}K`
+  }
+  return num.toLocaleString()
+}
+
+export function formatCurrency(amount: number): string {
+  if (amount < 0.01) {
+    return `$${amount.toFixed(4)}`
+  } else if (amount < 1) {
+    return `$${amount.toFixed(3)}`
+  }
+  return `$${amount.toFixed(2)}`
+}

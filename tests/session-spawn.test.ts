@@ -43,7 +43,7 @@ describe('Session spawn - Environment variable isolation', () => {
       const claude = new ClaudeBackend();
       const config: SessionConfig = {
         id: 'test-session',
-        agent: 'claude_code',
+        agent: 'claude_acp',
         auth: {
           mode: 'interactive',
           providerKey: 'anthropic',
@@ -68,7 +68,7 @@ describe('Session spawn - Environment variable isolation', () => {
       const claude = new ClaudeBackend();
       const config: SessionConfig = {
         id: 'test-session',
-        agent: 'claude_code',
+        agent: 'claude_acp',
         auth: {
           mode: 'api_key',
           providerKey: 'anthropic',
@@ -92,7 +92,7 @@ describe('Session spawn - Environment variable isolation', () => {
       const claude = new ClaudeBackend();
       const config: SessionConfig = {
         id: 'test-session',
-        agent: 'claude_code',
+        agent: 'claude_acp',
         auth: {
           mode: 'interactive',
           providerKey: 'anthropic',
@@ -112,7 +112,7 @@ describe('Session spawn - Environment variable isolation', () => {
       const claude = new ClaudeBackend();
       const config: SessionConfig = {
         id: 'test-session',
-        agent: 'claude_code',
+        agent: 'claude_acp',
         auth: {
           mode: 'api_key',
           providerKey: 'anthropic',
@@ -209,7 +209,7 @@ describe('Session spawn - Environment variable isolation', () => {
       // Session 1: interactive mode (should delete API key)
       const config1: SessionConfig = {
         id: 'session-1',
-        agent: 'claude_code',
+        agent: 'claude_acp',
         auth: { mode: 'interactive', providerKey: 'anthropic', apiKeyRef: 'none' },
       };
 
@@ -219,7 +219,7 @@ describe('Session spawn - Environment variable isolation', () => {
       // Session 2: api_key mode (should use session key)
       const config2: SessionConfig = {
         id: 'session-2',
-        agent: 'claude_code',
+        agent: 'claude_acp',
         auth: {
           mode: 'api_key',
           providerKey: 'anthropic',

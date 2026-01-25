@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { cn } from '@/utils/cn'
 import { useSessionsStore } from '@/stores/sessions'
+import { useAppStore } from '@/stores/app'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/Textarea'
@@ -14,6 +15,7 @@ import { Card } from '@/components/ui/Card'
 import { SaveRepoPrompt } from '@/components/session/SaveRepoPrompt'
 import { ToolCallDisplay } from '@/components/session/ToolCallDisplay'
 import { AskUserQuestionDisplay, isAskUserQuestionInput } from '@/components/session/AskUserQuestionDisplay'
+import { SdkControlPanel } from '@/components/sdk'
 import type { Message, ContentBlock, PermissionOption } from '@/api/types'
 import {
   Send,
@@ -48,6 +50,8 @@ export default function Workspace() {
     addUserMessageOnly,
   } = useSessionsStore()
 
+  const { sdkPanelOpen, toggleSdkPanel } = useAppStore()
+
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -70,6 +74,18 @@ export default function Workspace() {
       }
     }
   }, [])
+
+  // Keyboard shortcut for SDK panel toggle (Cmd+. or Ctrl+.)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+        e.preventDefault()
+        toggleSdkPanel()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [toggleSdkPanel])
 
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === activeSessionId),
@@ -167,39 +183,44 @@ export default function Workspace() {
     )
   }
 
-  return (
-    <div className="h-full flex flex-col">
-      {/* Save repo prompt */}
-      {showSaveRepoPrompt && pendingSaveRepoPath && (
-        <SaveRepoPrompt
-          open={showSaveRepoPrompt}
-          onClose={() => {
-            setShowSaveRepoPrompt(false)
-            setPendingSaveRepoPath(null)
-          }}
-          repoPath={pendingSaveRepoPath}
-        />
-      )}
+  // Check if this is an SDK session
+  const isSdkSession = activeSession.agent === 'claude_sdk'
 
-      {/* Session header */}
-      <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <ConnectionStatus status={connection?.status || 'disconnected'} />
-          <div>
-            <h3 className="font-mono text-sm text-[var(--color-text-primary)]">
-              {activeSession.id.slice(0, 12)}...
-            </h3>
-            <p className="text-xs text-[var(--color-text-muted)]">{activeSession.agent}</p>
+  return (
+    <div className="h-full flex">
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Save repo prompt */}
+        {showSaveRepoPrompt && pendingSaveRepoPath && (
+          <SaveRepoPrompt
+            open={showSaveRepoPrompt}
+            onClose={() => {
+              setShowSaveRepoPrompt(false)
+              setPendingSaveRepoPath(null)
+            }}
+            repoPath={pendingSaveRepoPath}
+          />
+        )}
+
+        {/* Session header */}
+        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <ConnectionStatus status={connection?.status || 'disconnected'} />
+            <div>
+              <h3 className="font-mono text-sm text-[var(--color-text-primary)]">
+                {activeSession.id.slice(0, 12)}...
+              </h3>
+              <p className="text-xs text-[var(--color-text-muted)]">{activeSession.agent}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {connection?.isStreaming && (
+              <Badge variant="accent" size="sm" className="animate-pulse">
+                Streaming...
+              </Badge>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {connection?.isStreaming && (
-            <Badge variant="accent" size="sm" className="animate-pulse">
-              Streaming...
-            </Badge>
-          )}
-        </div>
-      </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
@@ -280,10 +301,20 @@ export default function Workspace() {
                 'Disconnected'
               )}
             </span>
-            <span>Press Enter to send</span>
+            <span>Press Enter to send{isSdkSession && ' | Cmd+. for SDK panel'}</span>
           </div>
         </div>
       </div>
+      </div>
+
+      {/* SDK Control Panel - only for claude_sdk sessions */}
+      {isSdkSession && (
+        <SdkControlPanel
+          sessionId={activeSessionId!}
+          isOpen={sdkPanelOpen}
+          onToggle={toggleSdkPanel}
+        />
+      )}
     </div>
   )
 }

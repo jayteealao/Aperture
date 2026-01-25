@@ -11,8 +11,8 @@ import type {
  * Claude Code ACP backend
  */
 export class ClaudeBackend implements AgentBackend {
-  readonly name = 'Claude Code';
-  readonly type = 'claude_code' as const;
+  readonly name = 'Claude(ACP)';
+  readonly type = 'claude_acp' as const;
 
   private claudeCodeExecutable?: string;
 
@@ -121,7 +121,7 @@ export class ClaudeBackend implements AgentBackend {
 
     return {
       child,
-      agentType: 'claude_code',
+      agentType: 'claude_acp',
     };
   }
 }

@@ -37,9 +37,17 @@ export interface RemoveWorktreeParams {
   branch: string;
 }
 
-// Import native module
+// Lazy-load native module (avoids top-level await for CJS compatibility)
 // @ts-ignore
-const nativeBinding = await import('./worktrunk-native.node');
+let nativeBinding: typeof import('./worktrunk-native.node') | null = null;
+
+async function getNativeBinding() {
+  if (!nativeBinding) {
+    // @ts-ignore
+    nativeBinding = await import('./worktrunk-native.node');
+  }
+  return nativeBinding;
+}
 
 /**
  * Ensure a repository is ready and return basic info
@@ -48,7 +56,8 @@ const nativeBinding = await import('./worktrunk-native.node');
 export async function ensureRepoReady(
   params: EnsureRepoReadyParams
 ): Promise<EnsureRepoReadyResult> {
-  return nativeBinding.ensureRepoReady(params);
+  const binding = await getNativeBinding();
+  return binding.ensureRepoReady(params);
 }
 
 /**
@@ -59,7 +68,8 @@ export async function ensureRepoReady(
 export async function ensureWorktree(
   params: EnsureWorktreeParams
 ): Promise<EnsureWorktreeResult> {
-  return nativeBinding.ensureWorktree(params);
+  const binding = await getNativeBinding();
+  return binding.ensureWorktree(params);
 }
 
 /**
@@ -69,7 +79,8 @@ export async function ensureWorktree(
 export async function listWorktrees(
   params: ListWorktreesParams
 ): Promise<WorktreeInfo[]> {
-  return nativeBinding.listWorktrees(params);
+  const binding = await getNativeBinding();
+  return binding.listWorktrees(params);
 }
 
 /**
@@ -79,7 +90,8 @@ export async function listWorktrees(
 export async function removeWorktree(
   params: RemoveWorktreeParams
 ): Promise<void> {
-  return nativeBinding.removeWorktree(params);
+  const binding = await getNativeBinding();
+  return binding.removeWorktree(params);
 }
 
 // Export error class for better error handling

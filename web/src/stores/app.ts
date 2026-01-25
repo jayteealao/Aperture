@@ -17,6 +17,7 @@ interface AppState {
   // UI state
   sidebarOpen: boolean
   commandPaletteOpen: boolean
+  sdkPanelOpen: boolean
 
   // Actions
   setGatewayUrl: (url: string) => void
@@ -28,6 +29,8 @@ interface AppState {
   toggleSidebar: () => void
   setCommandPaletteOpen: (open: boolean) => void
   toggleCommandPalette: () => void
+  setSdkPanelOpen: (open: boolean) => void
+  toggleSdkPanel: () => void
 
   // Initialization
   initFromStorage: () => boolean
@@ -50,6 +53,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   theme: 'dark',
   sidebarOpen: true,
   commandPaletteOpen: false,
+  sdkPanelOpen: true,
 
   // Actions
   setGatewayUrl: (url) => {
@@ -83,6 +87,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
+
+  setSdkPanelOpen: (open) => set({ sdkPanelOpen: open }),
+  toggleSdkPanel: () => set((s) => ({ sdkPanelOpen: !s.sdkPanelOpen })),
 
   initFromStorage: () => {
     const gatewayUrl = localStorage.getItem(STORAGE_KEYS.gatewayUrl) || 'http://localhost:8080'

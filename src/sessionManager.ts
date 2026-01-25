@@ -1,8 +1,9 @@
 import { randomUUID } from 'crypto';
 import type { Config } from './config.js';
 import { Session } from './session.js';
-import { getAgentBackend } from './agents/index.js';
-import type { SessionAuth, AgentType, SessionConfig } from './agents/index.js';
+import { SdkSession } from './sdk-session.js';
+import { getAgentBackend, isSdkBackend } from './agents/index.js';
+import type { SessionAuth, AgentType, SessionConfig, SdkSessionConfig } from './agents/index.js';
 import type { CredentialStore } from './credentials.js';
 import type { ApertureDatabase } from './database.js';
 
@@ -12,13 +13,14 @@ export interface CreateSessionOptions {
   env?: Record<string, string>;
   workspaceId?: string; // Optional workspace ID for workspace-backed sessions
   repoPath?: string; // Optional repo path for sessions without workspace (no worktree isolation)
+  sdk?: SdkSessionConfig; // SDK-specific configuration
 }
 
 /**
  * Manages all active sessions
  */
 export class SessionManager {
-  private sessions: Map<string, Session> = new Map();
+  private sessions: Map<string, Session | SdkSession> = new Map();
   private config: Config;
   private claudeCodeExecutable?: string;
   private credentialStore?: CredentialStore;
@@ -58,7 +60,7 @@ export class SessionManager {
   /**
    * Creates a new session
    */
-  async createSession(options: CreateSessionOptions = {}): Promise<Session> {
+  async createSession(options: CreateSessionOptions = {}): Promise<Session | SdkSession> {
     // Check max sessions limit
     if (this.sessions.size >= this.config.maxConcurrentSessions) {
       throw new Error(
@@ -67,7 +69,7 @@ export class SessionManager {
     }
 
     const id = randomUUID();
-    const agent = options.agent || 'claude_code'; // Default to Claude Code for backwards compatibility
+    const agent = options.agent || 'claude_acp'; // Default to Claude(ACP) for backwards compatibility
 
     // Determine default provider based on agent
     let defaultProvider: 'anthropic' | 'openai' | 'google' = 'anthropic';
@@ -96,6 +98,7 @@ export class SessionManager {
       agent,
       auth,
       env: options.env,
+      sdk: options.sdk,
     };
 
     // Get agent backend
@@ -210,12 +213,24 @@ export class SessionManager {
       console.log(`[SessionManager] Using direct repo path for session ${id}: ${sessionCwd}`);
     }
 
-    // Create session
-    const session = new Session(sessionConfig, backend, this.config, this.database, resolvedApiKey);
+    // Create session based on backend type
+    let session: Session | SdkSession;
 
-    // Pass working directory to session if available (worktree or direct repo path)
-    if (sessionCwd) {
-      session.setWorktreePath(sessionCwd);
+    if (isSdkBackend(backend)) {
+      // SDK-based session requires API key for api_key mode, but not for oauth mode
+      if (auth.mode === 'api_key' && !resolvedApiKey) {
+        throw new Error('Claude SDK api_key mode requires an API key.');
+      }
+      // For oauth mode, resolvedApiKey will be undefined - SDK uses pre-existing auth
+      session = new SdkSession(sessionConfig, this.config, this.database, resolvedApiKey, sessionCwd);
+    } else {
+      // Process-based session
+      session = new Session(sessionConfig, backend, this.config, this.database, resolvedApiKey);
+
+      // Pass working directory to session if available (worktree or direct repo path)
+      if (sessionCwd) {
+        session.setWorktreePath(sessionCwd);
+      }
     }
 
     // Persist to database
@@ -278,7 +293,7 @@ export class SessionManager {
   /**
    * Gets a session by ID
    */
-  getSession(id: string): Session | undefined {
+  getSession(id: string): Session | SdkSession | undefined {
     return this.sessions.get(id);
   }
 
@@ -303,7 +318,7 @@ export class SessionManager {
   /**
    * Gets all sessions
    */
-  getAllSessions(): Session[] {
+  getAllSessions(): (Session | SdkSession)[] {
     return Array.from(this.sessions.values());
   }
 

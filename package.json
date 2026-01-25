@@ -1,6 +1,6 @@
 {
   "name": "aperture",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Production-ready WebSocket + HTTP gateway for @zed-industries/claude-code-acp",
   "main": "dist/index.js",
   "type": "module",
@@ -26,6 +26,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.19",
     "@fastify/cors": "^9.0.1",
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/static": "^7.0.4",

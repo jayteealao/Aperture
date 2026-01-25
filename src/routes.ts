@@ -1,14 +1,29 @@
 import type { FastifyInstance } from 'fastify';
 import type { SessionManager } from './sessionManager.js';
 import type { Config } from './config.js';
-import type { SessionAuth, AgentType } from './agents/index.js';
+import type {
+  SessionAuth,
+  AgentType,
+  SdkSessionConfig,
+  PermissionMode,
+  McpServerConfig,
+} from './agents/index.js';
 import type { CredentialStore } from './credentials.js';
 import type { ApertureDatabase } from './database.js';
+import type { Session } from './session.js';
+import { SdkSession } from './sdk-session.js';
 import { validateJsonRpcMessage, type JsonRpcMessage } from './jsonrpc.js';
 import { checkReadiness } from './claudeInstaller.js';
 import { registerCredentialRoutes } from './routes/credentials.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.js';
 import { registerDiscoveryRoutes } from './routes/discovery.js';
+
+/**
+ * Type guard to check if a session supports raw JSON-RPC messages
+ */
+function isProcessBasedSession(session: unknown): session is Session {
+  return session !== null && typeof session === 'object' && 'send' in session;
+}
 
 interface CreateSessionBody {
   agent?: AgentType;
@@ -16,6 +31,14 @@ interface CreateSessionBody {
   env?: Record<string, string>;
   workspaceId?: string; // Optional workspace ID for workspace-backed sessions
   repoPath?: string; // Optional repo path for sessions without workspace (no worktree isolation)
+  sdk?: SdkSessionConfig; // SDK-specific configuration
+}
+
+/**
+ * Type guard to check if a session is an SDK session
+ */
+function isSdkSession(session: unknown): session is SdkSession {
+  return session !== null && typeof session === 'object' && session instanceof SdkSession;
 }
 
 interface SendRpcBody {
@@ -68,9 +91,9 @@ export async function registerRoutes(
     '/v1/sessions',
     async (request, reply) => {
       try {
-        const { agent, auth, env, workspaceId, repoPath } = request.body || {};
+        const { agent, auth, env, workspaceId, repoPath, sdk } = request.body || {};
 
-        const session = await sessionManager.createSession({ agent, auth, env, workspaceId, repoPath });
+        const session = await sessionManager.createSession({ agent, auth, env, workspaceId, repoPath, sdk });
 
         return reply.code(201).send({
           id: session.id,
@@ -211,6 +234,13 @@ export async function registerRoutes(
         });
       }
 
+      // SDK sessions don't support raw JSON-RPC messages
+      if (!isProcessBasedSession(session)) {
+        return reply.code(400).send({
+          error: 'SDK sessions do not support raw JSON-RPC messages. Use WebSocket with user_message type instead.',
+        });
+      }
+
       const { message } = request.body;
 
       // Validate JSON-RPC message
@@ -239,6 +269,260 @@ export async function registerRoutes(
           error: 'Failed to send message',
           message: error.message,
         });
+      }
+    }
+  );
+
+  // ===========================================================================
+  // SDK Session Endpoints
+  // ===========================================================================
+
+  // Get session configuration
+  fastify.get<{ Params: { id: string } }>(
+    '/v1/sessions/:id/config',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      return session.getConfig();
+    }
+  );
+
+  // Update session configuration
+  fastify.patch<{ Params: { id: string }; Body: Partial<SdkSessionConfig> }>(
+    '/v1/sessions/:id/config',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      session.updateConfig(request.body);
+      return { success: true, config: session.getConfig() };
+    }
+  );
+
+  // Resume a session
+  fastify.post<{ Params: { id: string }; Body: { messageId?: string; fork?: boolean } }>(
+    '/v1/sessions/:id/resume',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      const { messageId, fork } = request.body || {};
+      session.updateConfig({
+        resume: session.sdkSessionId ?? undefined,
+        resumeSessionAt: messageId,
+        forkSession: fork,
+      });
+      return { success: true, sessionId: session.id };
+    }
+  );
+
+  // Rewind files to checkpoint
+  fastify.post<{ Params: { id: string }; Body: { messageId: string; dryRun?: boolean } }>(
+    '/v1/sessions/:id/rewind',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      try {
+        const result = await session.rewindFiles(request.body.messageId, request.body.dryRun);
+        return result;
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
+    }
+  );
+
+  // Get checkpoint message IDs
+  fastify.get<{ Params: { id: string } }>(
+    '/v1/sessions/:id/checkpoints',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      return { checkpoints: session.getCheckpointMessageIds() };
+    }
+  );
+
+  // Get MCP server status
+  fastify.get<{ Params: { id: string } }>(
+    '/v1/sessions/:id/mcp/status',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      try {
+        const status = await session.getMcpServerStatus();
+        return { servers: status };
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
+    }
+  );
+
+  // Update MCP servers
+  fastify.post<{ Params: { id: string }; Body: { servers: Record<string, McpServerConfig> } }>(
+    '/v1/sessions/:id/mcp/servers',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      try {
+        const result = await session.setMcpServers(request.body.servers);
+        return result;
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
+    }
+  );
+
+  // Get account info
+  fastify.get<{ Params: { id: string } }>(
+    '/v1/sessions/:id/account',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      try {
+        const info = await session.getAccountInfo();
+        return info;
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
+    }
+  );
+
+  // Get supported models
+  fastify.get<{ Params: { id: string } }>(
+    '/v1/sessions/:id/models',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      try {
+        const models = await session.getSupportedModels();
+        return { models };
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
+    }
+  );
+
+  // Get supported commands/skills
+  fastify.get<{ Params: { id: string } }>(
+    '/v1/sessions/:id/commands',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      try {
+        const commands = await session.getSupportedCommands();
+        return { commands };
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
+    }
+  );
+
+  // Set permission mode
+  fastify.post<{ Params: { id: string }; Body: { mode: PermissionMode } }>(
+    '/v1/sessions/:id/permission-mode',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      try {
+        await session.setPermissionMode(request.body.mode);
+        return { success: true, mode: request.body.mode };
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
+    }
+  );
+
+  // Set model
+  fastify.post<{ Params: { id: string }; Body: { model?: string } }>(
+    '/v1/sessions/:id/model',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      try {
+        await session.setModel(request.body.model);
+        return { success: true, model: request.body.model };
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
+    }
+  );
+
+  // Set thinking token limit
+  fastify.post<{ Params: { id: string }; Body: { tokens: number | null } }>(
+    '/v1/sessions/:id/thinking-tokens',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      try {
+        await session.setMaxThinkingTokens(request.body.tokens);
+        return { success: true };
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
+      }
+    }
+  );
+
+  // Get session result/usage
+  fastify.get<{ Params: { id: string } }>(
+    '/v1/sessions/:id/result',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      const result = session.getLastResult();
+      return result || { error: 'No result available' };
+    }
+  );
+
+  // Get permission denials
+  fastify.get<{ Params: { id: string } }>(
+    '/v1/sessions/:id/permission-denials',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      return { denials: session.getPermissionDenials() };
+    }
+  );
+
+  // Interrupt current query
+  fastify.post<{ Params: { id: string } }>(
+    '/v1/sessions/:id/interrupt',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session || !isSdkSession(session)) {
+        return reply.code(404).send({ error: 'SDK session not found' });
+      }
+      try {
+        await session.interrupt();
+        return { success: true };
+      } catch (err) {
+        return reply.code(400).send({ error: (err as Error).message });
       }
     }
   );
@@ -437,9 +721,143 @@ export async function registerRoutes(
           } else if (obj.type === 'cancel') {
             // Handle cancel request
             await session.cancelPrompt();
+          } else if (obj.type === 'interrupt') {
+            // Handle interrupt request (SDK sessions only)
+            if (isSdkSession(session)) {
+              await session.interrupt();
+            }
+          } else if (obj.type === 'set_permission_mode' && typeof obj.mode === 'string') {
+            // Set permission mode (SDK sessions only)
+            if (isSdkSession(session)) {
+              await session.setPermissionMode(obj.mode as PermissionMode);
+            }
+          } else if (obj.type === 'set_model') {
+            // Set model (SDK sessions only)
+            if (isSdkSession(session)) {
+              await session.setModel(obj.model as string | undefined);
+            }
+          } else if (obj.type === 'set_thinking_tokens') {
+            // Set thinking tokens (SDK sessions only)
+            if (isSdkSession(session)) {
+              await session.setMaxThinkingTokens(obj.tokens as number | null);
+            }
+          } else if (obj.type === 'rewind_files' && typeof obj.messageId === 'string') {
+            // Rewind files to checkpoint (SDK sessions only)
+            if (isSdkSession(session)) {
+              const result = await session.rewindFiles(obj.messageId, obj.dryRun as boolean | undefined);
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'session/rewind_result',
+                params: result,
+              }));
+            }
+          } else if (obj.type === 'get_mcp_status') {
+            // Get MCP server status (SDK sessions only)
+            if (isSdkSession(session)) {
+              try {
+                const status = await session.getMcpServerStatus();
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/mcp_status',
+                  params: { servers: status },
+                }));
+              } catch (err) {
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/mcp_status',
+                  params: { error: (err as Error).message },
+                }));
+              }
+            }
+          } else if (obj.type === 'set_mcp_servers' && obj.servers) {
+            // Set MCP servers (SDK sessions only)
+            if (isSdkSession(session)) {
+              try {
+                const result = await session.setMcpServers(obj.servers as Record<string, McpServerConfig>);
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/mcp_servers_updated',
+                  params: result,
+                }));
+              } catch (err) {
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/mcp_servers_updated',
+                  params: { error: (err as Error).message },
+                }));
+              }
+            }
+          } else if (obj.type === 'get_account_info') {
+            // Get account info (SDK sessions only)
+            if (isSdkSession(session)) {
+              try {
+                const info = await session.getAccountInfo();
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/account_info',
+                  params: info,
+                }));
+              } catch (err) {
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/account_info',
+                  params: { error: (err as Error).message },
+                }));
+              }
+            }
+          } else if (obj.type === 'get_supported_models') {
+            // Get supported models (SDK sessions only)
+            if (isSdkSession(session)) {
+              try {
+                const models = await session.getSupportedModels();
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/supported_models',
+                  params: { models },
+                }));
+              } catch (err) {
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/supported_models',
+                  params: { error: (err as Error).message },
+                }));
+              }
+            }
+          } else if (obj.type === 'get_supported_commands') {
+            // Get supported commands/skills (SDK sessions only)
+            if (isSdkSession(session)) {
+              try {
+                const commands = await session.getSupportedCommands();
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/supported_commands',
+                  params: { commands },
+                }));
+              } catch (err) {
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/supported_commands',
+                  params: { error: (err as Error).message },
+                }));
+              }
+            }
+          } else if (obj.type === 'update_config' && obj.config) {
+            // Update session config (SDK sessions only)
+            if (isSdkSession(session)) {
+              session.updateConfig(obj.config as Partial<SdkSessionConfig>);
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'session/config_updated',
+                params: { config: session.getConfig() },
+              }));
+            }
           } else if (validateJsonRpcMessage(obj)) {
-            // Raw JSON-RPC message - forward directly
-            await session.send(obj as JsonRpcMessage);
+            // Raw JSON-RPC message - forward directly (only for process-based sessions)
+            if (isProcessBasedSession(session)) {
+              await session.send(obj as JsonRpcMessage);
+            } else {
+              throw new Error('SDK sessions do not support raw JSON-RPC messages');
+            }
           } else {
             throw new Error('Unknown message type');
           }
