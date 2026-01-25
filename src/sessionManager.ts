@@ -11,6 +11,7 @@ export interface CreateSessionOptions {
   auth?: SessionAuth;
   env?: Record<string, string>;
   workspaceId?: string; // Optional workspace ID for workspace-backed sessions
+  repoPath?: string; // Optional repo path for sessions without workspace (no worktree isolation)
 }
 
 /**
@@ -135,9 +136,11 @@ export class SessionManager {
     }
     // Note: oauth and vertex modes don't need API key resolution here
 
-    // Handle workspace-backed sessions
-    let worktreePath: string | undefined;
+    // Handle workspace-backed sessions or direct repo path
+    let sessionCwd: string | undefined;
+
     if (options.workspaceId && this.database) {
+      // Workspace mode: create worktree for isolation
       const { createWorktreeManager } = await import('./workspaces/worktreeManager.js');
       const worktreeManager = createWorktreeManager();
 
@@ -158,7 +161,7 @@ export class SessionManager {
           pathTemplate: '{worktreeBaseDir}/{branch}',
         });
 
-        worktreePath = worktreeResult.worktreePath;
+        sessionCwd = worktreeResult.worktreePath;
 
         // Save workspace agent mapping
         this.database.saveWorkspaceAgent({
@@ -166,24 +169,53 @@ export class SessionManager {
           workspace_id: options.workspaceId,
           session_id: id,
           branch,
-          worktree_path: worktreePath,
+          worktree_path: sessionCwd,
           created_at: Date.now(),
           updated_at: Date.now(),
         });
 
-        console.log(`[SessionManager] Created worktree for session ${id} at ${worktreePath}`);
+        console.log(`[SessionManager] Created worktree for session ${id} at ${sessionCwd}`);
       } catch (error) {
         console.error(`[SessionManager] Failed to create worktree:`, error);
         throw new Error(`Failed to create worktree for workspace: ${error}`);
       }
+    } else if (options.repoPath) {
+      // Direct repo path mode: use provided path without worktree isolation
+      const { stat } = await import('fs/promises');
+      const { resolve, join } = await import('path');
+
+      const resolvedPath = resolve(options.repoPath);
+
+      // Verify path exists and is a directory
+      try {
+        const pathStat = await stat(resolvedPath);
+        if (!pathStat.isDirectory()) {
+          throw new Error(`Path is not a directory: ${resolvedPath}`);
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          throw new Error(`Path does not exist: ${resolvedPath}`);
+        }
+        throw error;
+      }
+
+      // Verify it's a git repository
+      try {
+        await stat(join(resolvedPath, '.git'));
+      } catch {
+        throw new Error(`Path is not a git repository: ${resolvedPath}`);
+      }
+
+      sessionCwd = resolvedPath;
+      console.log(`[SessionManager] Using direct repo path for session ${id}: ${sessionCwd}`);
     }
 
     // Create session
     const session = new Session(sessionConfig, backend, this.config, this.database, resolvedApiKey);
 
-    // Pass worktree path to session if available
-    if (worktreePath) {
-      session.setWorktreePath(worktreePath);
+    // Pass working directory to session if available (worktree or direct repo path)
+    if (sessionCwd) {
+      session.setWorktreePath(sessionCwd);
     }
 
     // Persist to database

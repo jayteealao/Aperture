@@ -301,6 +301,128 @@ export async function registerWorkspaceRoutes(
   });
 
   /**
+   * POST /v1/workspaces/init
+   * Initialize a new git repository and optionally create a workspace
+   */
+  fastify.post<{
+    Body: { path?: string; name?: string; createWorkspace?: boolean };
+  }>('/v1/workspaces/init', { preHandler: checkDatabase }, async (request, reply) => {
+    const { path: targetPath, name, createWorkspace = false } = request.body;
+
+    // Validation
+    if (!targetPath || typeof targetPath !== 'string') {
+      return reply.status(400).send({
+        error: 'INVALID_PATH',
+        message: 'Missing or invalid field: path',
+      });
+    }
+
+    const { resolve, join } = await import('path');
+    const { stat, mkdir } = await import('fs/promises');
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
+    const resolvedPath = resolve(targetPath);
+
+    try {
+      // Check if directory exists
+      try {
+        const pathStat = await stat(resolvedPath);
+        if (!pathStat.isDirectory()) {
+          return reply.status(400).send({
+            error: 'INVALID_PATH',
+            message: `Path exists but is not a directory: ${resolvedPath}`,
+          });
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          // Create directory if it doesn't exist
+          await mkdir(resolvedPath, { recursive: true });
+          console.log(`[Workspace API] Created directory: ${resolvedPath}`);
+        } else {
+          throw error;
+        }
+      }
+
+      // Check if already a git repository
+      try {
+        await stat(join(resolvedPath, '.git'));
+        return reply.status(400).send({
+          error: 'ALREADY_INITIALIZED',
+          message: `Directory is already a git repository: ${resolvedPath}`,
+        });
+      } catch {
+        // Not a git repo, continue with init
+      }
+
+      // Run git init
+      try {
+        await execAsync('git init', { cwd: resolvedPath });
+        console.log(`[Workspace API] Initialized git repository at: ${resolvedPath}`);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return reply.status(500).send({
+          error: 'GIT_INIT_FAILED',
+          message: `Failed to initialize git repository: ${errorMessage}`,
+        });
+      }
+
+      // Optionally create workspace record
+      if (createWorkspace) {
+        const repoName = resolvedPath.split(/[\/\\]/).pop() || 'repository';
+        const workspaceName = name || repoName;
+
+        const workspace: WorkspaceRecord = {
+          id: randomUUID(),
+          name: workspaceName,
+          repo_root: resolvedPath,
+          description: 'Newly initialized repository',
+          created_at: Date.now(),
+          updated_at: Date.now(),
+          metadata: null,
+        };
+
+        try {
+          database!.saveWorkspace(workspace);
+        } catch (err: unknown) {
+          const error = err as { code?: string };
+          if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.code === 'SQLITE_CONSTRAINT') {
+            return reply.status(409).send({
+              error: 'DUPLICATE_WORKSPACE',
+              message: 'A workspace already exists for this repository path',
+            });
+          }
+          throw err;
+        }
+
+        return reply.status(201).send({
+          path: resolvedPath,
+          workspace: {
+            id: workspace.id,
+            name: workspace.name,
+            repoRoot: workspace.repo_root,
+            description: workspace.description,
+            createdAt: new Date(workspace.created_at).toISOString(),
+            updatedAt: new Date(workspace.updated_at).toISOString(),
+          },
+        });
+      }
+
+      return reply.status(201).send({
+        path: resolvedPath,
+        workspace: null,
+      });
+    } catch (error) {
+      console.error('[Workspace API] Init repository error:', error);
+      return reply.status(500).send({
+        error: 'INIT_FAILED',
+        message: 'Failed to initialize repository',
+      });
+    }
+  });
+
+  /**
    * GET /v1/workspaces
    * List all workspaces
    */

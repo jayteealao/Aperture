@@ -23,6 +23,8 @@ export interface CreateSessionRequest {
   agent?: AgentType
   auth?: SessionAuth
   env?: Record<string, string>
+  workspaceId?: string
+  repoPath?: string
 }
 
 export interface SessionStatus {
@@ -121,6 +123,7 @@ export interface PermissionResponse {
   type: 'permission_response'
   toolCallId: string
   optionId: string | null
+  answers?: Record<string, string>  // For AskUserQuestion tool
 }
 
 export interface CancelMessage {
@@ -250,4 +253,15 @@ export interface CloneWorkspaceRequest {
 
 export interface CloneWorkspaceResponse {
   workspace: WorkspaceRecord
+}
+
+export interface InitRepoRequest {
+  path: string
+  name?: string
+  createWorkspace?: boolean
+}
+
+export interface InitRepoResponse {
+  path: string
+  workspace: WorkspaceRecord | null
 }

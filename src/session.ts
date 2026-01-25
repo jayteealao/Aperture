@@ -287,8 +287,13 @@ export class Session extends EventEmitter {
 
   /**
    * Responds to a permission request from the agent
+   * @param toolCallId - The tool call ID
+   * @param optionId - The selected permission option ID
+   * @param answers - Optional answers for AskUserQuestion tool
    */
-  async respondToPermission(toolCallId: string, optionId: string): Promise<void> {
+  async respondToPermission(toolCallId: string, optionId: string, answers?: Record<string, string>): Promise<void> {
+    console.log('[Session] respondToPermission called:', JSON.stringify({ toolCallId, optionId, answers }, null, 2));
+
     const pending = this.pendingPermissions.get(toolCallId);
     if (!pending) {
       throw new Error(`No pending permission request for toolCallId: ${toolCallId}`);
@@ -296,7 +301,11 @@ export class Session extends EventEmitter {
 
     const result: RequestPermissionResult = {
       outcome: { outcome: 'selected', optionId },
+      // Include answers in _meta for AskUserQuestion tool
+      ...(answers && { _meta: { answers } }),
     };
+
+    console.log('[Session] Sending RequestPermissionResult:', JSON.stringify(result, null, 2));
 
     await this.sendResponse(pending.requestId, result);
     this.pendingPermissions.delete(toolCallId);

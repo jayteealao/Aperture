@@ -11,6 +11,9 @@ import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/Textarea'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
+import { SaveRepoPrompt } from '@/components/session/SaveRepoPrompt'
+import { ToolCallDisplay } from '@/components/session/ToolCallDisplay'
+import { AskUserQuestionDisplay, isAskUserQuestionInput } from '@/components/session/AskUserQuestionDisplay'
 import type { Message, ContentBlock, PermissionOption } from '@/api/types'
 import {
   Send,
@@ -42,11 +45,31 @@ export default function Workspace() {
     sendMessage,
     sendPermissionResponse,
     cancelPrompt,
+    addUserMessageOnly,
   } = useSessionsStore()
 
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Save repo prompt state
+  const [showSaveRepoPrompt, setShowSaveRepoPrompt] = useState(false)
+  const [pendingSaveRepoPath, setPendingSaveRepoPath] = useState<string | null>(null)
+
+  // Check for pending save repo prompt on mount
+  useEffect(() => {
+    const pending = sessionStorage.getItem('pendingSaveRepo')
+    if (pending) {
+      try {
+        const { repoPath } = JSON.parse(pending)
+        setPendingSaveRepoPath(repoPath)
+        setShowSaveRepoPrompt(true)
+        sessionStorage.removeItem('pendingSaveRepo')
+      } catch {
+        sessionStorage.removeItem('pendingSaveRepo')
+      }
+    }
+  }, [])
 
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === activeSessionId),
@@ -146,6 +169,18 @@ export default function Workspace() {
 
   return (
     <div className="h-full flex flex-col">
+      {/* Save repo prompt */}
+      {showSaveRepoPrompt && pendingSaveRepoPath && (
+        <SaveRepoPrompt
+          open={showSaveRepoPrompt}
+          onClose={() => {
+            setShowSaveRepoPrompt(false)
+            setPendingSaveRepoPath(null)
+          }}
+          repoPath={pendingSaveRepoPath}
+        />
+      )}
+
       {/* Session header */}
       <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -198,6 +233,7 @@ export default function Workspace() {
             sessionId={activeSessionId!}
             permission={activePermissions[0]}
             onRespond={sendPermissionResponse}
+            onAddUserMessage={addUserMessageOnly}
           />
         </div>
       )}
@@ -441,52 +477,117 @@ function PermissionRequest({
   sessionId,
   permission,
   onRespond,
+  onAddUserMessage,
 }: {
   sessionId: string
   permission: { toolCallId: string; toolCall: unknown; options: unknown[] }
-  onRespond: (sessionId: string, toolCallId: string, optionId: string | null) => void
+  onRespond: (sessionId: string, toolCallId: string, optionId: string | null, answers?: Record<string, string>) => void
+  onAddUserMessage: (sessionId: string, content: string) => Promise<void>
 }) {
-  const toolCall = permission.toolCall as { title?: string; rawInput?: unknown }
+  const toolCall = permission.toolCall as { name?: string; title?: string; rawInput?: unknown }
   const options = permission.options as PermissionOption[]
 
+  // Check if this is an AskUserQuestion tool - check both name and title
+  const toolName = toolCall?.name || toolCall?.title
+  const isAskUserQuestion = toolName === 'AskUserQuestion' && isAskUserQuestionInput(toolCall.rawInput)
+
+  // Find the "allow" option to use when submitting answers
+  const allowOption = options.find(opt => opt.kind?.includes('allow'))
+
+  const handleAskUserQuestionSubmit = async (answers: Record<string, string>) => {
+    console.log('[AskUserQuestion] Submitting answers:', answers)
+    // Submit with the allow option and include the answers
+    if (allowOption) {
+      // 1. Add answer message FIRST (before agent can start responding)
+      const answerText = Object.entries(answers)
+        .map(([header, value]) => `${header}: ${value}`)
+        .join('\n')
+      await onAddUserMessage(sessionId, `My answers:\n${answerText}`)
+
+      // 2. THEN send permission response
+      onRespond(sessionId, permission.toolCallId, allowOption.optionId, answers)
+    }
+  }
+
   return (
-    <Card variant="glass" padding="md" className="border-l-4 border-l-warning">
+    <Card variant="glass" padding="md" className={cn(
+      "border-l-4",
+      isAskUserQuestion ? "border-l-accent" : "border-l-warning"
+    )}>
       <div className="flex items-start gap-3">
-        <AlertCircle size={20} className="text-warning shrink-0 mt-0.5" />
+        <AlertCircle size={20} className={cn(
+          "shrink-0 mt-0.5",
+          isAskUserQuestion ? "text-accent" : "text-warning"
+        )} />
         <div className="flex-1 min-w-0">
           <h4 className="font-medium text-[var(--color-text-primary)]">
-            Permission Required
+            {isAskUserQuestion ? 'Question from Agent' : 'Permission Required'}
           </h4>
-          <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-            {toolCall?.title || 'The agent wants to perform an action'}
-          </p>
-          {toolCall?.rawInput ? (
-            <pre className="mt-2 p-2 rounded bg-[var(--color-bg-tertiary)] text-xs overflow-x-auto">
-              {JSON.stringify(toolCall.rawInput, null, 2)}
-            </pre>
-          ) : null}
-          <div className="flex flex-wrap gap-2 mt-3">
-            {options.map((opt) => {
-              const isAllow = opt.kind?.includes('allow')
-              return (
+          {!isAskUserQuestion && (
+            <p className="text-sm text-[var(--color-text-secondary)] mt-1">
+              {toolCall?.title || 'The agent wants to perform an action'}
+            </p>
+          )}
+
+          {/* Render AskUserQuestion specially, otherwise use ToolCallDisplay */}
+          {isAskUserQuestion ? (
+            <AskUserQuestionDisplay
+              input={toolCall.rawInput as { questions: Array<{ question: string; header: string; options: Array<{ label: string; description: string }>; multiSelect: boolean }> }}
+              onSubmit={handleAskUserQuestionSubmit}
+            />
+          ) : toolCall?.rawInput ? (
+            <>
+              <ToolCallDisplay
+                name={toolCall.name}
+                rawInput={toolCall.rawInput as Record<string, unknown>}
+              />
+              <div className="flex flex-wrap gap-2 mt-3">
+                {options.map((opt) => {
+                  const isAllow = opt.kind?.includes('allow')
+                  return (
+                    <Button
+                      key={opt.optionId}
+                      variant={isAllow ? 'primary' : 'secondary'}
+                      size="sm"
+                      onClick={() => onRespond(sessionId, permission.toolCallId, opt.optionId)}
+                    >
+                      {opt.name}
+                    </Button>
+                  )
+                })}
                 <Button
-                  key={opt.optionId}
-                  variant={isAllow ? 'primary' : 'secondary'}
+                  variant="ghost"
                   size="sm"
-                  onClick={() => onRespond(sessionId, permission.toolCallId, opt.optionId)}
+                  onClick={() => onRespond(sessionId, permission.toolCallId, null)}
                 >
-                  {opt.name}
+                  Deny
                 </Button>
-              )
-            })}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onRespond(sessionId, permission.toolCallId, null)}
-            >
-              Deny
-            </Button>
-          </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {options.map((opt) => {
+                const isAllow = opt.kind?.includes('allow')
+                return (
+                  <Button
+                    key={opt.optionId}
+                    variant={isAllow ? 'primary' : 'secondary'}
+                    size="sm"
+                    onClick={() => onRespond(sessionId, permission.toolCallId, opt.optionId)}
+                  >
+                    {opt.name}
+                  </Button>
+                )
+              })}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onRespond(sessionId, permission.toolCallId, null)}
+              >
+                Deny
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </Card>

@@ -77,6 +77,19 @@ export function Sidebar({ className }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-2">
+          {/* New Session button */}
+          <Button
+            variant="primary"
+            className="w-full mb-3 justify-start"
+            onClick={() => {
+              navigate('/sessions/new')
+              setSidebarOpen(false)
+            }}
+            leftIcon={<Plus size={18} />}
+          >
+            New Session
+          </Button>
+
           <div className="space-y-1">
             {navItems.map(({ to, icon: Icon, label }) => (
               <NavLink

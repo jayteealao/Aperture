@@ -15,6 +15,7 @@ interface CreateSessionBody {
   auth?: SessionAuth;
   env?: Record<string, string>;
   workspaceId?: string; // Optional workspace ID for workspace-backed sessions
+  repoPath?: string; // Optional repo path for sessions without workspace (no worktree isolation)
 }
 
 interface SendRpcBody {
@@ -67,9 +68,9 @@ export async function registerRoutes(
     '/v1/sessions',
     async (request, reply) => {
       try {
-        const { agent, auth, env, workspaceId } = request.body || {};
+        const { agent, auth, env, workspaceId, repoPath } = request.body || {};
 
-        const session = await sessionManager.createSession({ agent, auth, env, workspaceId });
+        const session = await sessionManager.createSession({ agent, auth, env, workspaceId, repoPath });
 
         return reply.code(201).send({
           id: session.id,
@@ -424,9 +425,12 @@ export async function registerRoutes(
             // Handle permission response from frontend
             const toolCallId = obj.toolCallId as string;
             const optionId = obj.optionId as string;
+            const answers = obj.answers as Record<string, string> | undefined;
+
+            console.log('[WS] Received permission_response:', JSON.stringify({ toolCallId, optionId, answers }, null, 2));
 
             if (optionId) {
-              await session.respondToPermission(toolCallId, optionId);
+              await session.respondToPermission(toolCallId, optionId, answers);
             } else {
               await session.cancelPermission(toolCallId);
             }

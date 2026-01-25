@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useSessionsStore } from '@/stores/sessions'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Select } from '@/components/ui/Select'
+import { Dropdown } from '@/components/ui/Dropdown'
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Dialog, ConfirmDialog } from '@/components/ui/Dialog'
 import { SkeletonCard } from '@/components/ui/Skeleton'
+import { Spinner } from '@/components/ui/Spinner'
+import { RepoSelector, type RepoSelection } from '@/components/session/RepoSelector'
 import type { AgentType, AuthMode, Session } from '@/api/types'
 import {
   Plus,
@@ -20,11 +22,13 @@ import {
   Clock,
   Cpu,
   RefreshCw,
+  AlertCircle,
 } from 'lucide-react'
 
 export default function Sessions() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const toast = useToast()
 
@@ -39,11 +43,21 @@ export default function Sessions() {
   const [search, setSearch] = useState('')
   const [showNewSession, setShowNewSession] = useState(location.pathname.includes('/new'))
   const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null)
+  const [preselectedWorkspaceId, setPreselectedWorkspaceId] = useState<string | null>(null)
 
-  // Sync with location
+  // Sync with location and query params
   useEffect(() => {
-    setShowNewSession(location.pathname.includes('/new'))
-  }, [location.pathname])
+    const isNewPath = location.pathname.includes('/new')
+    setShowNewSession(isNewPath)
+
+    // Check for preselected workspace from query param
+    const workspaceId = searchParams.get('workspaceId')
+    if (isNewPath && workspaceId) {
+      setPreselectedWorkspaceId(workspaceId)
+    } else {
+      setPreselectedWorkspaceId(null)
+    }
+  }, [location.pathname, searchParams])
 
   // Fetch sessions from server
   const { isLoading, refetch } = useQuery({
@@ -177,15 +191,22 @@ export default function Sessions() {
           open={showNewSession}
           onClose={() => {
             setShowNewSession(false)
+            setPreselectedWorkspaceId(null)
             navigate('/sessions')
           }}
-          onCreated={(session) => {
+          onCreated={(session, shouldPromptSave, repoPath) => {
             setShowNewSession(false)
+            setPreselectedWorkspaceId(null)
             navigate('/sessions')
             setActiveSession(session.id)
             connectSession(session.id)
+            // If we should prompt to save, store in session storage for later
+            if (shouldPromptSave && repoPath) {
+              sessionStorage.setItem('pendingSaveRepo', JSON.stringify({ repoPath }))
+            }
             navigate('/workspace')
           }}
+          preselectedWorkspaceId={preselectedWorkspaceId}
         />
 
         {/* Delete Confirmation */}
@@ -281,18 +302,51 @@ function NewSessionDialog({
   open,
   onClose,
   onCreated,
+  preselectedWorkspaceId,
 }: {
   open: boolean
   onClose: () => void
-  onCreated: (session: Session) => void
+  onCreated: (session: Session, shouldPromptSave?: boolean, repoPath?: string) => void
+  preselectedWorkspaceId?: string | null
 }) {
   const toast = useToast()
+  const queryClient = useQueryClient()
   const { addSession } = useSessionsStore()
 
   const [agent, setAgent] = useState<AgentType>('claude_code')
   const [authMode, setAuthMode] = useState<AuthMode>('interactive')
   const [apiKey, setApiKey] = useState('')
+  const [repoSelection, setRepoSelection] = useState<RepoSelection | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const [creationStep, setCreationStep] = useState<string | null>(null)
+
+  // Fetch workspace for preselected ID
+  const { data: preselectedWorkspace } = useQuery({
+    queryKey: ['workspace', preselectedWorkspaceId],
+    queryFn: () => preselectedWorkspaceId ? api.getWorkspace(preselectedWorkspaceId) : null,
+    enabled: !!preselectedWorkspaceId,
+  })
+
+  // Set preselected workspace when loaded
+  useEffect(() => {
+    if (preselectedWorkspace) {
+      setRepoSelection({
+        mode: 'workspace',
+        workspaceId: preselectedWorkspace.id,
+        workspace: preselectedWorkspace,
+        repoPath: preselectedWorkspace.repoRoot,
+      })
+    }
+  }, [preselectedWorkspace])
+
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setRepoSelection(null)
+      setCreationStep(null)
+      setApiKey('')
+    }
+  }, [open])
 
   const agentOptions = [
     { value: 'claude_code', label: 'Claude Code' },
@@ -317,8 +371,49 @@ function NewSessionDialog({
   }
 
   async function handleCreate() {
+    if (!repoSelection) {
+      toast.error('Repository required', 'Please select a repository for this session')
+      return
+    }
+
     setIsCreating(true)
+    let repoPath: string | undefined
+    let workspaceId: string | undefined
+    let shouldPromptSave = false
+
     try {
+      // Handle different repo selection modes
+      if (repoSelection.mode === 'workspace') {
+        workspaceId = repoSelection.workspaceId
+        repoPath = repoSelection.repoPath
+      } else if (repoSelection.mode === 'browse' || repoSelection.mode === 'direct') {
+        repoPath = repoSelection.repoPath
+        shouldPromptSave = true // Prompt to save browsed repo
+      } else if (repoSelection.mode === 'clone') {
+        // Clone the repository first
+        setCreationStep('Cloning repository...')
+        const cloneResult = await api.cloneWorkspace({
+          remoteUrl: repoSelection.cloneUrl!,
+          targetDirectory: repoSelection.cloneTarget!,
+        })
+        workspaceId = cloneResult.workspace.id
+        repoPath = cloneResult.workspace.repoRoot
+        // Invalidate workspaces query to refresh the list
+        queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+      } else if (repoSelection.mode === 'init') {
+        // Initialize new repository
+        setCreationStep('Initializing repository...')
+        const initResult = await api.initRepo({
+          path: repoSelection.initPath!,
+          name: repoSelection.initName,
+          createWorkspace: false, // Don't auto-create, let user decide
+        })
+        repoPath = initResult.path
+        shouldPromptSave = true // Prompt to save initialized repo
+      }
+
+      // Create the session
+      setCreationStep('Creating session...')
       const session = await api.createSession({
         agent,
         auth: {
@@ -326,6 +421,8 @@ function NewSessionDialog({
           apiKeyRef: authMode === 'api_key' ? 'inline' : 'none',
           apiKey: authMode === 'api_key' ? apiKey : undefined,
         },
+        workspaceId,
+        repoPath: workspaceId ? undefined : repoPath, // Only pass repoPath if no workspaceId
       })
 
       await addSession({
@@ -335,34 +432,58 @@ function NewSessionDialog({
       })
 
       toast.success('Session created', `Session ${session.id.slice(0, 8)} is ready`)
-      onCreated({ id: session.id, agent: session.agent, status: session.status })
+      onCreated({ id: session.id, agent: session.agent, status: session.status }, shouldPromptSave, repoPath)
     } catch (error) {
       toast.error('Failed to create session', error instanceof Error ? error.message : 'Unknown error')
     } finally {
       setIsCreating(false)
+      setCreationStep(null)
     }
   }
 
+  const canCreate = repoSelection && (authMode !== 'api_key' || apiKey)
+
   return (
-    <Dialog open={open} onClose={onClose} title="Create New Session" size="md">
+    <Dialog open={open} onClose={onClose} title="Create New Session" size="lg">
       <div className="space-y-4">
-        <Select
+        {/* Repository Selection */}
+        <RepoSelector
+          label="Repository"
+          value={repoSelection}
+          onChange={setRepoSelection}
+          error={!repoSelection ? undefined : undefined}
+        />
+
+        {/* Info box about repo requirement */}
+        {!repoSelection && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
+            <AlertCircle size={16} className="text-accent shrink-0 mt-0.5" />
+            <div className="text-xs text-[var(--color-text-secondary)]">
+              <p>
+                Sessions require a git repository. Select from your saved repos, browse for a local repo,
+                clone from a URL, or initialize a new one.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <Dropdown
           label="Agent"
           options={agentOptions}
           value={agent}
-          onChange={(e) => {
-            const newAgent = e.target.value as AgentType
+          onChange={(value) => {
+            const newAgent = value as AgentType
             setAgent(newAgent)
             // Reset auth mode to first option for new agent
             setAuthMode(authOptions[newAgent][0].value)
           }}
         />
 
-        <Select
+        <Dropdown
           label="Authentication"
           options={authOptions[agent]}
           value={authMode}
-          onChange={(e) => setAuthMode(e.target.value as AuthMode)}
+          onChange={(value) => setAuthMode(value as AuthMode)}
         />
 
         {authMode === 'api_key' && (
@@ -376,6 +497,14 @@ function NewSessionDialog({
           />
         )}
 
+        {/* Creation progress */}
+        {creationStep && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--color-bg-tertiary)]">
+            <Spinner size="sm" />
+            <span className="text-sm text-[var(--color-text-secondary)]">{creationStep}</span>
+          </div>
+        )}
+
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="ghost" onClick={onClose} disabled={isCreating}>
             Cancel
@@ -384,7 +513,7 @@ function NewSessionDialog({
             variant="primary"
             onClick={handleCreate}
             loading={isCreating}
-            disabled={authMode === 'api_key' && !apiKey}
+            disabled={!canCreate}
           >
             Create Session
           </Button>

@@ -38,6 +38,7 @@ interface SessionsState {
 
   // Actions - Messages
   addMessage: (sessionId: string, message: Message) => Promise<void>
+  addUserMessageOnly: (sessionId: string, content: string) => Promise<void>
   updateMessage: (sessionId: string, messageId: string, updates: Partial<Message>) => void
   loadMessagesForSession: (sessionId: string) => Promise<void>
   clearMessages: (sessionId: string) => void
@@ -56,7 +57,7 @@ interface SessionsState {
   connectSession: (sessionId: string) => void
   disconnectSession: (sessionId: string) => void
   sendMessage: (sessionId: string, content: string) => Promise<void>
-  sendPermissionResponse: (sessionId: string, toolCallId: string, optionId: string | null) => void
+  sendPermissionResponse: (sessionId: string, toolCallId: string, optionId: string | null, answers?: Record<string, string>) => void
   cancelPrompt: (sessionId: string) => void
 
   // Persistence
@@ -155,6 +156,19 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     // Persist to IndexedDB
     const messages = get().messages[sessionId] || []
     await idbSet(`messages:${sessionId}`, messages)
+  },
+
+  addUserMessageOnly: async (sessionId, content) => {
+    // Add user message to store without sending via WebSocket
+    // Used for injecting answer messages before permission responses
+    const userMessage: Message = {
+      id: `msg-${Date.now()}`,
+      sessionId,
+      role: 'user',
+      content,
+      timestamp: new Date().toISOString(),
+    }
+    await get().addMessage(sessionId, userMessage)
   },
 
   updateMessage: (sessionId, messageId, updates) => {
@@ -296,12 +310,15 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     }
   },
 
-  sendPermissionResponse: (sessionId, toolCallId, optionId) => {
-    wsManager.send(sessionId, {
+  sendPermissionResponse: (sessionId, toolCallId, optionId, answers) => {
+    const message = {
       type: 'permission_response',
       toolCallId,
       optionId,
-    })
+      ...(answers && { answers }),
+    }
+    console.log('[WS] Sending permission response:', message)
+    wsManager.send(sessionId, message)
     get().removePendingPermission(sessionId, toolCallId)
   },
 
@@ -437,6 +454,10 @@ function handlePermissionRequest(
   get: () => SessionsState
 ) {
   const { toolCallId, toolCall, options } = params
+
+  // Reset streaming state so next response creates a new message bubble
+  get().setStreaming(sessionId, false)
+
   get().addPendingPermission(sessionId, { toolCallId, toolCall, options })
 
   if (sessionId !== get().activeSessionId) {

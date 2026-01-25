@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/client'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
@@ -21,6 +22,7 @@ import {
   FolderSearch,
   Download,
   ExternalLink,
+  Play,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
@@ -30,6 +32,7 @@ interface WorkspaceWithData extends WorkspaceRecord {
 }
 
 export default function Workspaces() {
+  const navigate = useNavigate()
   const toast = useToast()
   const [workspaces, setWorkspaces] = useState<WorkspaceWithData[]>([])
   const [loading, setLoading] = useState(true)
@@ -210,6 +213,7 @@ export default function Workspaces() {
                 onDelete={() => handleDeleteWorkspace(workspace)}
                 onDeleteAgent={(agent) => handleDeleteAgent(workspace, agent)}
                 onRefresh={() => loadWorkspaces(true)}
+                onNewSession={() => navigate(`/sessions/new?workspaceId=${workspace.id}`)}
               />
             ))}
           </div>
@@ -236,11 +240,13 @@ function WorkspaceCard({
   onDelete,
   onDeleteAgent,
   onRefresh,
+  onNewSession,
 }: {
   workspace: WorkspaceWithData
   onDelete: () => void
   onDeleteAgent: (agent: WorkspaceAgentRecord) => void
   onRefresh: () => void
+  onNewSession: () => void
 }) {
   const [showAgents, setShowAgents] = useState(true)
   const [showWorktrees, setShowWorktrees] = useState(true)
@@ -259,6 +265,15 @@ function WorkspaceCard({
             </p>
           </div>
           <div className="flex items-center gap-1 ml-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onNewSession}
+              className="p-1.5"
+              title="New Session"
+            >
+              <Play size={14} />
+            </Button>
             <Button
               variant="ghost"
               size="sm"

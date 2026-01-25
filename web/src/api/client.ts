@@ -20,6 +20,8 @@ import type {
   DiscoveryResult,
   CloneWorkspaceRequest,
   CloneWorkspaceResponse,
+  InitRepoRequest,
+  InitRepoResponse,
 } from './types'
 
 class ApiError extends Error {
@@ -205,6 +207,13 @@ class ApertureClient {
 
   async cloneWorkspace(data: CloneWorkspaceRequest): Promise<CloneWorkspaceResponse> {
     return this.request<CloneWorkspaceResponse>('/v1/workspaces/clone', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async initRepo(data: InitRepoRequest): Promise<InitRepoResponse> {
+    return this.request<InitRepoResponse>('/v1/workspaces/init', {
       method: 'POST',
       body: JSON.stringify(data),
     })

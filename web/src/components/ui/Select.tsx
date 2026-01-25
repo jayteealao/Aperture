@@ -34,6 +34,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               'border border-[var(--color-border)]',
               'focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent',
               'transition-all duration-200 cursor-pointer',
+              '[color-scheme:dark]',
               error && 'border-danger focus:ring-danger',
               className
             )}

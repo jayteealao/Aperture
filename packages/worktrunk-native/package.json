@@ -4,7 +4,6 @@
   "description": "Native Node.js addon for git worktree management using git2-rs",
   "main": "index.js",
   "types": "index.d.ts",
-  "type": "module",
   "napi": {
     "name": "worktrunk-native",
     "triples": {
