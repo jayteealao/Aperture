@@ -40,6 +40,8 @@ export class SessionManager {
 
   /**
    * Restore sessions from database on startup
+   * SDK sessions with sdk_session_id are marked as idle (resumable)
+   * ACP sessions are marked as ended (process-coupled, can't resume)
    */
   async restoreSessions(): Promise<void> {
     if (!this.database) {
@@ -49,12 +51,150 @@ export class SessionManager {
     const activeSessions = this.database.getActiveSessions();
     console.log(`[SessionManager] Found ${activeSessions.length} active sessions in database`);
 
-    // Mark all previous sessions as ended (they can't be resumed after server restart)
+    let acpCount = 0;
+    let sdkResumableCount = 0;
+
     for (const sessionRecord of activeSessions) {
-      this.database.endSession(sessionRecord.id, Date.now());
+      // SDK sessions with sdk_session_id can be resumed
+      if (sessionRecord.sdk_session_id && sessionRecord.agent === 'claude_sdk') {
+        // Mark as idle (not ended) - can be restored later
+        this.database.markSdkSessionsIdle();
+        sdkResumableCount++;
+      } else {
+        // ACP sessions can't be resumed after server restart
+        this.database.endSession(sessionRecord.id, Date.now());
+        acpCount++;
+      }
     }
 
-    console.log('[SessionManager] Marked all previous sessions as ended');
+    console.log(`[SessionManager] Marked ${acpCount} ACP sessions as ended`);
+    console.log(`[SessionManager] Kept ${sdkResumableCount} SDK sessions as idle (resumable)`);
+  }
+
+  /**
+   * Restore/reconnect to an existing SDK session
+   * Creates a new SdkSession instance with resume configuration
+   */
+  async restoreSession(sessionId: string): Promise<SdkSession | null> {
+    if (!this.database) {
+      throw new Error('Database not configured');
+    }
+
+    const sessionRecord = this.database.getSession(sessionId);
+    if (!sessionRecord) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    if (!sessionRecord.sdk_session_id) {
+      throw new Error(`Session ${sessionId} is not an SDK session or has no SDK session ID`);
+    }
+
+    if (sessionRecord.agent !== 'claude_sdk') {
+      throw new Error(`Session ${sessionId} is not an SDK session (agent: ${sessionRecord.agent})`);
+    }
+
+    // Check if session already exists in memory
+    const existingSession = this.sessions.get(sessionId);
+    if (existingSession) {
+      console.log(`[SessionManager] Session ${sessionId} already active in memory`);
+      return existingSession as SdkSession;
+    }
+
+    // Parse stored SDK config
+    let sdkConfig: SdkSessionConfig = {};
+    if (sessionRecord.sdk_config) {
+      try {
+        sdkConfig = JSON.parse(sessionRecord.sdk_config);
+      } catch (e) {
+        console.warn(`[SessionManager] Failed to parse SDK config for session ${sessionId}`);
+      }
+    }
+
+    // Set up resume configuration
+    sdkConfig.resume = sessionRecord.sdk_session_id;
+    sdkConfig.continue = true;
+    sdkConfig.persistSession = true;
+
+    // Build session config
+    const sessionConfig: SessionConfig = {
+      id: sessionId,
+      agent: 'claude_sdk',
+      auth: {
+        mode: sessionRecord.auth_mode as SessionAuth['mode'],
+        providerKey: 'anthropic',
+        apiKeyRef: 'none',
+      },
+      sdk: sdkConfig,
+    };
+
+    // Create new SdkSession with resume config
+    const session = new SdkSession(
+      sessionConfig,
+      this.config,
+      this.database,
+      undefined, // API key not stored - will use oauth/existing auth
+      sessionRecord.working_directory || undefined
+    );
+
+    // Update database status
+    this.database.saveSession({
+      ...sessionRecord,
+      status: 'active',
+      last_activity_at: Date.now(),
+      ended_at: null,
+    });
+
+    // Set up event handlers
+    session.on('exit', () => {
+      this.sessions.delete(sessionId);
+      if (this.database) {
+        this.database.endSession(sessionId, Date.now());
+        this.database.markNonResumable(sessionId);
+      }
+    });
+
+    session.on('idle', () => {
+      console.log(`Session ${sessionId} idle, terminating`);
+      if (this.database) {
+        this.database.endSession(sessionId, Date.now());
+      }
+    });
+
+    session.on('error', (err) => {
+      console.error(`Session ${sessionId} error:`, err);
+    });
+
+    session.on('activity', () => {
+      if (this.database) {
+        this.database.updateSessionActivity(sessionId, Date.now());
+      }
+    });
+
+    // Start the session
+    await session.start();
+
+    this.sessions.set(sessionId, session);
+    console.log(`[SessionManager] Restored SDK session ${sessionId} with SDK session ID ${sessionRecord.sdk_session_id}`);
+
+    return session;
+  }
+
+  /**
+   * Get resumable sessions from database
+   */
+  getResumableSessions(): { id: string; agent: string; sdkSessionId: string; lastActivity: number; workingDirectory: string | null }[] {
+    if (!this.database) {
+      return [];
+    }
+
+    const records = this.database.getResumableSessions();
+    return records.map(r => ({
+      id: r.id,
+      agent: r.agent,
+      sdkSessionId: r.sdk_session_id!,
+      lastActivity: r.last_activity_at,
+      workingDirectory: r.working_directory,
+    }));
   }
 
   /**
@@ -235,6 +375,7 @@ export class SessionManager {
 
     // Persist to database
     if (this.database) {
+      const isSdkSession = agent === 'claude_sdk';
       this.database.saveSession({
         id,
         agent,
@@ -246,25 +387,48 @@ export class SessionManager {
         status: 'active',
         metadata: JSON.stringify({ env: options.env }),
         user_id: null, // Future: extract from auth token
+        // SDK session fields
+        sdk_session_id: null, // Will be updated when SDK returns session_id
+        sdk_config: isSdkSession && options.sdk ? JSON.stringify(options.sdk) : null,
+        is_resumable: isSdkSession ? 1 : 0, // SDK sessions start as potentially resumable
+        working_directory: sessionCwd || null,
       });
     }
 
     // Set up event handlers
+    const isSdkSessionType = agent === 'claude_sdk';
     session.on('exit', () => {
       this.sessions.delete(id);
 
       // Mark session as ended in database
+      // SDK sessions that exit cleanly remain resumable
       if (this.database) {
         this.database.endSession(id, Date.now());
+        // SDK sessions stay resumable even after exit (can reconnect later)
+        // They only become non-resumable on explicit termination via deleteSession
       }
     });
 
     session.on('idle', () => {
       console.log(`Session ${id} idle, terminating`);
 
-      // Mark session as idle in database
+      // Mark session as ended in database
+      // For SDK sessions, they remain resumable even when idle
       if (this.database) {
-        this.database.endSession(id, Date.now());
+        if (isSdkSessionType) {
+          // SDK sessions: mark as idle but keep resumable
+          const record = this.database.getSession(id);
+          if (record) {
+            this.database.saveSession({
+              ...record,
+              status: 'idle',
+              last_activity_at: Date.now(),
+            });
+          }
+        } else {
+          // ACP sessions: mark as ended
+          this.database.endSession(id, Date.now());
+        }
       }
     });
 

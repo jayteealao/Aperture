@@ -37,6 +37,9 @@ export interface SessionStatus {
   lastActivityTime: number
   idleMs: number
   acpSessionId: string | null
+  sdkSessionId: string | null
+  isResumable?: boolean
+  workingDirectory?: string
 }
 
 export interface Session {
@@ -73,6 +76,27 @@ export interface ListSessionsResponse {
   total: number
 }
 
+// Resumable session info
+export interface ResumableSession {
+  id: string
+  agent: string
+  sdkSessionId: string
+  lastActivity: number
+  workingDirectory: string | null
+}
+
+export interface ListResumableSessionsResponse {
+  sessions: ResumableSession[]
+  total: number
+}
+
+export interface ConnectSessionResponse {
+  id: string
+  agent: AgentType
+  status: SessionStatus
+  restored: boolean
+}
+
 export interface ListCredentialsResponse {
   credentials: Credential[]
   total: number
@@ -87,12 +111,17 @@ export interface MessagesResponse {
 
 // Message types for the chat
 export interface ContentBlock {
-  type: 'text' | 'tool_use' | 'tool_result'
+  type: 'text' | 'tool_use' | 'tool_result' | 'thinking'
   text?: string
+  thinking?: string
+  signature?: string
+  id?: string
   name?: string
   input?: unknown
   content?: string | ContentBlock[]
   toolCallId?: string
+  tool_use_id?: string
+  is_error?: boolean
 }
 
 export interface Message {
@@ -265,6 +294,64 @@ export interface InitRepoRequest {
 export interface InitRepoResponse {
   path: string
   workspace: WorkspaceRecord | null
+}
+
+// =============================================================================
+// SDK Content Block Types (First-Class Support)
+// =============================================================================
+
+export interface TextContentBlock {
+  type: 'text'
+  text: string
+}
+
+export interface ThinkingContentBlock {
+  type: 'thinking'
+  thinking: string
+  signature?: string
+}
+
+export interface ToolUseContentBlock {
+  type: 'tool_use'
+  id: string
+  name: string
+  input: unknown
+}
+
+export interface ToolResultContentBlock {
+  type: 'tool_result'
+  tool_use_id: string
+  content: string
+  is_error?: boolean
+}
+
+export type SdkContentBlock =
+  | TextContentBlock
+  | ThinkingContentBlock
+  | ToolUseContentBlock
+  | ToolResultContentBlock
+
+export interface SdkMessage {
+  id: string
+  sessionId: string
+  role: 'user' | 'assistant' | 'system'
+  content: SdkContentBlock[]
+  timestamp: string
+  messageId?: string
+  stopReason?: string
+  usage?: { input_tokens: number; output_tokens: number }
+}
+
+export interface SdkWsMessage {
+  kind: 'sdk'
+  sessionId: string
+  type: string
+  payload: unknown
+}
+
+export function isSdkWsMessage(msg: unknown): msg is SdkWsMessage {
+  return typeof msg === 'object' && msg !== null &&
+         (msg as Record<string, unknown>).kind === 'sdk'
 }
 
 // =============================================================================

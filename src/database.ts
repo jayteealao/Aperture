@@ -13,6 +13,11 @@ export interface SessionRecord {
   status: 'active' | 'idle' | 'ended';
   metadata: string | null;
   user_id: string | null;
+  // SDK session fields (for long-lasting SDK sessions)
+  sdk_session_id: string | null;
+  sdk_config: string | null;
+  is_resumable: number;
+  working_directory: string | null;
 }
 
 export interface MessageRecord {
@@ -133,8 +138,8 @@ export class ApertureDatabase {
   saveSession(session: SessionRecord): void {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO sessions
-      (id, agent, auth_mode, acp_session_id, created_at, last_activity_at, ended_at, status, metadata, user_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, agent, auth_mode, acp_session_id, created_at, last_activity_at, ended_at, status, metadata, user_id, sdk_session_id, sdk_config, is_resumable, working_directory)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -147,7 +152,11 @@ export class ApertureDatabase {
       session.ended_at,
       session.status,
       session.metadata,
-      session.user_id
+      session.user_id,
+      session.sdk_session_id ?? null,
+      session.sdk_config ?? null,
+      session.is_resumable ?? 0,
+      session.working_directory ?? null
     );
   }
 
@@ -198,6 +207,61 @@ export class ApertureDatabase {
   endSession(id: string, timestamp: number = Date.now()): void {
     const stmt = this.db.prepare("UPDATE sessions SET status = 'ended', ended_at = ? WHERE id = ?");
     stmt.run(timestamp, id);
+  }
+
+  /**
+   * Get resumable SDK sessions (sessions with sdk_session_id and is_resumable = 1)
+   */
+  getResumableSessions(): SessionRecord[] {
+    const stmt = this.db.prepare(
+      "SELECT * FROM sessions WHERE is_resumable = 1 AND sdk_session_id IS NOT NULL ORDER BY last_activity_at DESC"
+    );
+    return stmt.all() as SessionRecord[];
+  }
+
+  /**
+   * Update SDK session ID for a session
+   */
+  updateSdkSessionId(id: string, sdkSessionId: string): void {
+    const stmt = this.db.prepare(
+      "UPDATE sessions SET sdk_session_id = ?, is_resumable = 1 WHERE id = ?"
+    );
+    stmt.run(sdkSessionId, id);
+  }
+
+  /**
+   * Update SDK config for a session
+   */
+  updateSdkConfig(id: string, sdkConfig: string): void {
+    const stmt = this.db.prepare("UPDATE sessions SET sdk_config = ? WHERE id = ?");
+    stmt.run(sdkConfig, id);
+  }
+
+  /**
+   * Mark a session as non-resumable
+   */
+  markNonResumable(id: string): void {
+    const stmt = this.db.prepare("UPDATE sessions SET is_resumable = 0 WHERE id = ?");
+    stmt.run(id);
+  }
+
+  /**
+   * Update working directory for a session
+   */
+  updateWorkingDirectory(id: string, workingDirectory: string): void {
+    const stmt = this.db.prepare("UPDATE sessions SET working_directory = ? WHERE id = ?");
+    stmt.run(workingDirectory, id);
+  }
+
+  /**
+   * Mark SDK sessions as idle (for server restart recovery)
+   * Unlike ACP sessions, SDK sessions can potentially be resumed
+   */
+  markSdkSessionsIdle(): void {
+    const stmt = this.db.prepare(
+      "UPDATE sessions SET status = 'idle' WHERE status = 'active' AND sdk_session_id IS NOT NULL AND is_resumable = 1"
+    );
+    stmt.run();
   }
 
   /**

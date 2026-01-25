@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import type { Config } from './config.js';
+import type { ApertureDatabase } from './database.js';
 import type { AgentType, SessionConfig } from './agents/index.js';
 import type {
   SdkSessionConfig,
@@ -41,6 +42,42 @@ interface PendingPermission {
   signal: AbortSignal;
 }
 
+// SDK WebSocket message (first-class, no JSON-RPC wrapper)
+export interface SdkWsMessage {
+  kind: 'sdk';
+  sessionId: string;
+  type: string;
+  payload: unknown;
+}
+
+// SDK content block types
+export interface SdkTextBlock {
+  type: 'text';
+  text: string;
+}
+
+export interface SdkThinkingBlock {
+  type: 'thinking';
+  thinking: string;
+  signature?: string;
+}
+
+export interface SdkToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+export interface SdkToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string;
+  is_error?: boolean;
+}
+
+export type SdkContentBlock = SdkTextBlock | SdkThinkingBlock | SdkToolUseBlock | SdkToolResultBlock;
+
 /**
  * Manages a single Claude SDK session (non-process based)
  * Provides the same event interface as Session for frontend compatibility
@@ -65,6 +102,7 @@ export class SdkSession extends EventEmitter {
   private config: Config;
   private sessionConfig: SessionConfig;
   private sdkConfig: SdkSessionConfig;
+  private database?: ApertureDatabase;
   private resolvedApiKey?: string;
   private worktreePath?: string;
   private abortController: AbortController | null = null;
@@ -89,7 +127,7 @@ export class SdkSession extends EventEmitter {
   constructor(
     sessionConfig: SessionConfig,
     config: Config,
-    _database: unknown,
+    database?: ApertureDatabase,
     resolvedApiKey?: string,
     cwd?: string
   ) {
@@ -98,6 +136,7 @@ export class SdkSession extends EventEmitter {
     this.agentType = sessionConfig.agent;
     this.sessionConfig = sessionConfig;
     this.config = config;
+    this.database = database;
     this.sdkConfig = sessionConfig.sdk || {};
     this.resolvedApiKey = resolvedApiKey;
     if (cwd) {
@@ -184,11 +223,11 @@ export class SdkSession extends EventEmitter {
       includePartialMessages: true,
       stderr: (data: string) => this.emit('stderr', data),
 
-      // Session resumption
+      // Session resumption: auto-continue when resuming within the same Aperture session
       resume: this.sdkConfig.resume || (this.sdkSessionId !== this.id ? this.sdkSessionId ?? undefined : undefined),
       resumeSessionAt: this.sdkConfig.resumeSessionAt,
       forkSession: this.sdkConfig.forkSession,
-      continue: this.sdkConfig.continue,
+      continue: this.sdkConfig.continue ?? (this.sdkSessionId !== this.id ? true : undefined),
       persistSession: this.sdkConfig.persistSession ?? true,
 
       // File checkpointing
@@ -523,9 +562,19 @@ export class SdkSession extends EventEmitter {
    * Process an SDK message and translate to ACP-like format
    */
   private processSDKMessage(message: SDKMessage): void {
-    // Update session ID if available
+    // Update session ID if available and persist to database
     if ('session_id' in message && message.session_id) {
-      this.sdkSessionId = message.session_id;
+      const newSessionId = message.session_id;
+      if (this.sdkSessionId !== newSessionId) {
+        this.sdkSessionId = newSessionId;
+        // Persist SDK session ID to database for resumption
+        if (this.database) {
+          this.database.updateSdkSessionId(this.id, newSessionId);
+          // Also persist current SDK config
+          this.database.updateSdkConfig(this.id, JSON.stringify(this.sdkConfig));
+          console.log(`[SDK-Session] Persisted SDK session ID: ${newSessionId}`);
+        }
+      }
     }
 
     // Store message UUID for checkpointing
@@ -673,11 +722,33 @@ export class SdkSession extends EventEmitter {
 
   /**
    * Handle assistant messages from SDK
+   * Emits both legacy format (for backward compatibility) and first-class SDK message
    */
   private handleAssistantMessage(message: SDKAssistantMessage): void {
     const betaMessage = message.message;
 
-    // Process content blocks
+    // Build native content blocks array
+    const contentBlocks: SdkContentBlock[] = betaMessage.content.map((block: (typeof betaMessage.content)[number]) => {
+      if (block.type === 'text') {
+        return { type: 'text' as const, text: block.text };
+      } else if (block.type === 'tool_use') {
+        return { type: 'tool_use' as const, id: block.id, name: block.name, input: block.input };
+      } else if (block.type === 'thinking') {
+        return { type: 'thinking' as const, thinking: block.thinking, signature: (block as { signature?: string }).signature };
+      }
+      // Fallback for unknown block types
+      return { type: 'text' as const, text: JSON.stringify(block) };
+    });
+
+    // Emit first-class SDK message with all content blocks
+    this.emitSdkMessage('assistant_message', {
+      messageId: message.uuid,
+      stopReason: betaMessage.stop_reason,
+      usage: betaMessage.usage,
+      content: contentBlocks,
+    });
+
+    // Also emit legacy format for backward compatibility
     for (const block of betaMessage.content) {
       if (block.type === 'text') {
         this.emitSessionUpdate('agent_message_chunk', {
@@ -715,6 +786,7 @@ export class SdkSession extends EventEmitter {
 
   /**
    * Handle streaming events (partial messages)
+   * Emits both SDK-native and legacy formats
    */
   private handleStreamEvent(message: SDKMessage): void {
     if (message.type !== 'stream_event') return;
@@ -724,6 +796,14 @@ export class SdkSession extends EventEmitter {
     // Forward relevant stream events
     if (event.type === 'content_block_delta') {
       const delta = event.delta;
+
+      // Emit first-class SDK delta
+      this.emitSdkMessage('assistant_delta', {
+        index: event.index,
+        delta,
+      });
+
+      // Also emit legacy format
       if (delta.type === 'text_delta') {
         this.emitSessionUpdate('agent_message_delta', {
           content: {
@@ -747,11 +827,24 @@ export class SdkSession extends EventEmitter {
         });
       }
     } else if (event.type === 'content_block_start') {
+      // Emit first-class SDK block start
+      this.emitSdkMessage('content_block_start', {
+        index: event.index,
+        contentBlock: event.content_block,
+      });
+
+      // Also emit legacy format
       this.emitSessionUpdate('content_block_start', {
         index: event.index,
         contentBlock: event.content_block,
       });
     } else if (event.type === 'content_block_stop') {
+      // Emit first-class SDK block stop
+      this.emitSdkMessage('content_block_stop', {
+        index: event.index,
+      });
+
+      // Also emit legacy format
       this.emitSessionUpdate('content_block_stop', {
         index: event.index,
       });
@@ -815,7 +908,7 @@ export class SdkSession extends EventEmitter {
     };
 
     if (message.subtype === 'success') {
-      this.emitSessionUpdate('prompt_complete', {
+      const payload = {
         result: message.result,
         numTurns: message.num_turns,
         durationMs: message.duration_ms,
@@ -825,9 +918,15 @@ export class SdkSession extends EventEmitter {
         modelUsage,
         structuredOutput: 'structured_output' in message ? message.structured_output : undefined,
         permissionDenials: this.permissionDenials,
-      });
+      };
+
+      // Emit first-class SDK message
+      this.emitSdkMessage('prompt_complete', payload);
+
+      // Also emit legacy format
+      this.emitSessionUpdate('prompt_complete', payload);
     } else {
-      this.emitSessionUpdate('prompt_error', {
+      const payload = {
         subtype: message.subtype,
         errors: message.errors,
         numTurns: message.num_turns,
@@ -836,12 +935,18 @@ export class SdkSession extends EventEmitter {
         totalCostUsd: message.total_cost_usd,
         modelUsage,
         permissionDenials: this.permissionDenials,
-      });
+      };
+
+      // Emit first-class SDK message
+      this.emitSdkMessage('prompt_error', payload);
+
+      // Also emit legacy format
+      this.emitSessionUpdate('prompt_error', payload);
     }
   }
 
   /**
-   * Emit a session update event
+   * Emit a session update event (legacy JSON-RPC format for backward compatibility)
    */
   private emitSessionUpdate(updateType: string, data: Record<string, unknown>): void {
     const params = {
@@ -860,6 +965,20 @@ export class SdkSession extends EventEmitter {
       method: 'session/update',
       params,
     });
+  }
+
+  /**
+   * Emit a first-class SDK message (no JSON-RPC wrapper)
+   * These messages use the 'kind: sdk' discriminator for frontend routing
+   */
+  private emitSdkMessage(type: string, payload: unknown): void {
+    const message: SdkWsMessage = {
+      kind: 'sdk',
+      sessionId: this.id,
+      type,
+      payload,
+    };
+    this.emit('sdk_message', message);
   }
 
   // ===========================================================================
@@ -1176,8 +1295,11 @@ export class SdkSession extends EventEmitter {
     lastActivityTime: number;
     idleMs: number;
     acpSessionId: string | null;
+    sdkSessionId: string | null;
+    isResumable: boolean;
     config: SdkSessionConfig;
     lastResult: SessionResult | null;
+    workingDirectory: string | undefined;
   } {
     return {
       id: this.id,
@@ -1187,9 +1309,19 @@ export class SdkSession extends EventEmitter {
       pendingRequests: this.pendingPermissions.size,
       lastActivityTime: this.lastActivityTime,
       idleMs: Date.now() - this.lastActivityTime,
-      acpSessionId: this.sdkSessionId,
+      acpSessionId: this.sdkSessionId, // Backward compat
+      sdkSessionId: this.sdkSessionId, // Explicit field
+      isResumable: !this.isShuttingDown && !!this.sdkSessionId,
       config: this.sdkConfig,
       lastResult: this.lastResult,
+      workingDirectory: this.worktreePath,
     };
+  }
+
+  /**
+   * Get the working directory for this session
+   */
+  getWorkingDirectory(): string | undefined {
+    return this.worktreePath;
   }
 }

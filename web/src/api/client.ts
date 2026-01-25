@@ -5,6 +5,8 @@ import type {
   Session,
   SessionStatus,
   ListSessionsResponse,
+  ListResumableSessionsResponse,
+  ConnectSessionResponse,
   Credential,
   CreateCredentialRequest,
   ListCredentialsResponse,
@@ -134,6 +136,18 @@ class ApertureClient {
     return this.request<unknown>(`/v1/sessions/${sessionId}/rpc`, {
       method: 'POST',
       body: JSON.stringify({ message }),
+    })
+  }
+
+  // Get resumable SDK sessions
+  async listResumableSessions(): Promise<ListResumableSessionsResponse> {
+    return this.request<ListResumableSessionsResponse>('/v1/sessions/resumable')
+  }
+
+  // Connect to a session (restores SDK session if needed)
+  async connectSession(sessionId: string): Promise<ConnectSessionResponse> {
+    return this.request<ConnectSessionResponse>(`/v1/sessions/${sessionId}/connect`, {
+      method: 'POST',
     })
   }
 

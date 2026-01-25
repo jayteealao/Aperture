@@ -18,10 +18,35 @@ import type {
   McpServerStatus,
   RewindFilesResult,
   PermissionMode,
+  SdkContentBlock,
+  SdkWsMessage,
 } from '@/api/types'
+import { isSdkWsMessage } from '@/api/types'
 import { api } from '@/api/client'
 import { wsManager } from '@/api/websocket'
 import { DEFAULT_SDK_MODELS } from '@/utils/constants'
+
+// Debounced persistence for high-frequency message updates (streaming)
+const persistenceTimers: Record<string, ReturnType<typeof setTimeout>> = {}
+
+function debouncedPersist(sessionId: string, messages: Message[], delayMs = 500): void {
+  if (persistenceTimers[sessionId]) {
+    clearTimeout(persistenceTimers[sessionId])
+  }
+  persistenceTimers[sessionId] = setTimeout(() => {
+    idbSet(`messages:${sessionId}`, messages)
+    delete persistenceTimers[sessionId]
+  }, delayMs)
+}
+
+function flushPersist(sessionId: string, messages: Message[]): void {
+  // Cancel any pending debounced persist and immediately save
+  if (persistenceTimers[sessionId]) {
+    clearTimeout(persistenceTimers[sessionId])
+    delete persistenceTimers[sessionId]
+  }
+  idbSet(`messages:${sessionId}`, messages)
+}
 
 // SDK session state
 interface SdkLoadingState {
@@ -38,6 +63,13 @@ interface SdkErrorState {
   commands?: string
   mcpStatus?: string
   accountInfo?: string
+}
+
+// SDK streaming state for tracking content blocks during streaming
+interface SdkStreamingState {
+  messageId: string
+  contentBlocks: SdkContentBlock[]
+  currentBlockIndex: number
 }
 
 interface SessionsState {
@@ -65,6 +97,7 @@ interface SessionsState {
   sdkLoading: Record<string, SdkLoadingState>
   sdkErrors: Record<string, SdkErrorState>
   sdkRewindResult: Record<string, RewindFilesResult | null>
+  sdkStreamingState: Record<string, SdkStreamingState | null>
 
   // Actions - Sessions
   setSessions: (sessions: Session[]) => void
@@ -104,7 +137,7 @@ interface SessionsState {
   setSdkRewindResult: (sessionId: string, result: RewindFilesResult | null) => void
 
   // WebSocket
-  connectSession: (sessionId: string) => void
+  connectSession: (sessionId: string) => Promise<void>
   disconnectSession: (sessionId: string) => void
   sendMessage: (sessionId: string, content: string) => Promise<void>
   sendPermissionResponse: (sessionId: string, toolCallId: string, optionId: string | null, answers?: Record<string, string>) => void
@@ -145,6 +178,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   sdkLoading: {},
   sdkErrors: {},
   sdkRewindResult: {},
+  sdkStreamingState: {},
 
   // Sessions actions
   setSessions: (sessions) => {
@@ -205,6 +239,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       delete newSdkErrors[sessionId]
       const newSdkRewindResult = { ...state.sdkRewindResult }
       delete newSdkRewindResult[sessionId]
+      const newSdkStreamingState = { ...state.sdkStreamingState }
+      delete newSdkStreamingState[sessionId]
       return {
         sessions: state.sessions.filter((s) => s.id !== sessionId),
         connections: newConnections,
@@ -220,6 +256,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
         sdkLoading: newSdkLoading,
         sdkErrors: newSdkErrors,
         sdkRewindResult: newSdkRewindResult,
+        sdkStreamingState: newSdkStreamingState,
       }
     })
     // Remove from IndexedDB
@@ -290,6 +327,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
         },
       }
     })
+    // Debounce persistence for high-frequency streaming updates
+    debouncedPersist(sessionId, get().messages[sessionId] || [])
   },
 
   loadMessagesForSession: async (sessionId) => {
@@ -439,11 +478,33 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   },
 
   // WebSocket actions
-  connectSession: (sessionId) => {
+  connectSession: async (sessionId) => {
+    // First, try to restore/connect to the session on the backend
+    // This handles SDK session resumption automatically
+    try {
+      const response = await api.connectSession(sessionId)
+      if (response.restored) {
+        console.log(`[Sessions] Restored SDK session ${sessionId}`)
+        // Update local session status with the restored status
+        get().updateSessionStatus(sessionId, response.status)
+      }
+    } catch (err) {
+      // If the session can't be connected/restored, log but continue
+      // The WebSocket connection will handle the error appropriately
+      console.warn(`[Sessions] Failed to connect/restore session ${sessionId}:`, err)
+    }
+
     const wsUrl = api.getWebSocketUrl(sessionId)
 
-    const messageHandler = (sid: string, data: JsonRpcMessage) => {
-      handleWebSocketMessage(sid, data, get, set)
+    // Message handler that routes both SDK and JSON-RPC messages
+    const messageHandler = (sid: string, data: unknown) => {
+      // Check if this is a first-class SDK message
+      if (isSdkWsMessage(data)) {
+        handleSdkWebSocketMessage(sid, data, get, set)
+        return
+      }
+      // Otherwise treat as JSON-RPC message
+      handleWebSocketMessage(sid, data as JsonRpcMessage, get, set)
     }
 
     const statusHandler = (sid: string, status: ConnectionStatus, error?: string) => {
@@ -499,26 +560,63 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
   // Persistence
   restoreFromStorage: async () => {
-    // Restore sessions
+    // Restore sessions from local IndexedDB
     const allKeys = await idbKeys()
     const sessionKeys = allKeys.filter((k) => typeof k === 'string' && k.startsWith('session:'))
 
-    const sessions: Session[] = []
+    const localSessions: Session[] = []
     for (const key of sessionKeys) {
       const session = await idbGet(key)
       if (session) {
-        sessions.push(session as Session)
+        localSessions.push(session as Session)
       }
     }
 
-    if (sessions.length > 0) {
-      get().setSessions(sessions)
+    // Also fetch resumable sessions from the backend
+    // These are SDK sessions that survived server restarts
+    try {
+      const resumableResponse = await api.listResumableSessions()
+      for (const resumable of resumableResponse.sessions) {
+        // Check if this session is already in local storage
+        const exists = localSessions.find((s) => s.id === resumable.id)
+        if (!exists) {
+          // Add the resumable session to local list
+          const session: Session = {
+            id: resumable.id,
+            agent: resumable.agent as Session['agent'],
+            status: {
+              id: resumable.id,
+              agent: resumable.agent as Session['agent'],
+              authMode: 'oauth', // SDK sessions typically use oauth
+              running: false, // Not running yet - needs restore
+              pendingRequests: 0,
+              lastActivityTime: resumable.lastActivity,
+              idleMs: Date.now() - resumable.lastActivity,
+              acpSessionId: resumable.sdkSessionId,
+              sdkSessionId: resumable.sdkSessionId,
+              isResumable: true,
+              workingDirectory: resumable.workingDirectory || undefined,
+            },
+          }
+          localSessions.push(session)
+          // Save to IndexedDB for consistency
+          await idbSet(`session:${session.id}`, session)
+          console.log(`[Sessions] Discovered resumable SDK session: ${session.id}`)
+        }
+      }
+    } catch (err) {
+      // Backend might not be available yet, that's okay
+      console.warn('[Sessions] Failed to fetch resumable sessions from backend:', err)
+    }
+
+    if (localSessions.length > 0) {
+      get().setSessions(localSessions)
     }
 
     // Restore active session
     const activeId = await idbGet('activeSessionId')
     if (activeId && typeof activeId === 'string') {
-      const exists = sessions.find((s) => s.id === activeId)
+      const exists = localSessions.find((s) => s.id === activeId)
       if (exists) {
         set({ activeSessionId: activeId })
         await get().loadMessagesForSession(activeId)
@@ -545,6 +643,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       sdkLoading: {},
       sdkErrors: {},
       sdkRewindResult: {},
+      sdkStreamingState: {},
     })
   },
 }))
@@ -679,6 +778,8 @@ function handleSessionUpdate(
   } else if (updateType === 'prompt_complete' || updateType === 'prompt_error') {
     // Stop streaming when prompt finishes
     get().setStreaming(sessionId, false)
+    // Flush any pending debounced persistence
+    flushPersist(sessionId, get().messages[sessionId] || [])
   } else if (updateType === 'config_changed') {
     // Handle config changes (model, permissionMode, etc.)
     const currentConfig = get().sdkConfig[sessionId] || {}
@@ -703,5 +804,235 @@ function handlePermissionRequest(
 
   if (sessionId !== get().activeSessionId) {
     get().incrementUnread(sessionId)
+  }
+}
+
+/**
+ * Handle first-class SDK WebSocket messages
+ * These messages use native content block arrays instead of JSON-RPC wrapped format
+ */
+function handleSdkWebSocketMessage(
+  sessionId: string,
+  message: SdkWsMessage,
+  get: () => SessionsState,
+  set: (fn: (state: SessionsState) => Partial<SessionsState>) => void
+) {
+  const { type, payload } = message
+  const { activeSessionId } = get()
+  const isActive = sessionId === activeSessionId
+
+  switch (type) {
+    case 'content_block_start': {
+      const { index, contentBlock } = payload as { index: number; contentBlock: SdkContentBlock }
+
+      // Debug: log thinking blocks
+      if (contentBlock.type === 'thinking') {
+        console.log('[SDK WS] content_block_start: thinking block received', { index, contentBlock })
+      }
+
+      // Initialize streaming state if this is the first block
+      const currentState = get().sdkStreamingState[sessionId]
+      if (!currentState) {
+        const msgId = `msg-${Date.now()}`
+        get().setStreaming(sessionId, true, msgId)
+
+        // Create message with empty content blocks array
+        get().addMessage(sessionId, {
+          id: msgId,
+          sessionId,
+          role: 'assistant',
+          content: [] as unknown as string, // Will be array of content blocks
+          timestamp: new Date().toISOString(),
+        })
+
+        set((state) => ({
+          sdkStreamingState: {
+            ...state.sdkStreamingState,
+            [sessionId]: {
+              messageId: msgId,
+              contentBlocks: [contentBlock],
+              currentBlockIndex: index,
+            },
+          },
+        }))
+      } else {
+        // Add new content block to streaming state
+        set((state) => {
+          const streamState = state.sdkStreamingState[sessionId]
+          if (!streamState) return state
+          const blocks = [...streamState.contentBlocks]
+          blocks[index] = contentBlock
+          return {
+            sdkStreamingState: {
+              ...state.sdkStreamingState,
+              [sessionId]: {
+                ...streamState,
+                contentBlocks: blocks,
+                currentBlockIndex: index,
+              },
+            },
+          }
+        })
+      }
+      break
+    }
+
+    case 'assistant_delta': {
+      const { index, delta } = payload as { index: number; delta: { type: string; text?: string; thinking?: string; partial_json?: string } }
+
+      set((state) => {
+        const streamState = state.sdkStreamingState[sessionId]
+        if (!streamState) return state
+
+        const blocks = [...streamState.contentBlocks]
+        const block = blocks[index]
+        if (!block) return state
+
+        // Apply delta to the current block
+        if (delta.type === 'text_delta' && block.type === 'text') {
+          blocks[index] = { ...block, text: (block.text || '') + (delta.text || '') }
+        } else if (delta.type === 'thinking_delta' && block.type === 'thinking') {
+          console.log('[SDK WS] thinking_delta received:', delta.thinking?.slice(0, 50))
+          blocks[index] = { ...block, thinking: (block.thinking || '') + (delta.thinking || '') }
+        } else if (delta.type === 'input_json_delta' && block.type === 'tool_use') {
+          // Accumulate partial JSON - will be parsed when block stops
+          const currentInput = typeof block.input === 'string' ? block.input : ''
+          blocks[index] = { ...block, input: currentInput + (delta.partial_json || '') }
+        }
+
+        // Update the message content with current blocks
+        const msgId = streamState.messageId
+        const sessionMessages = state.messages[sessionId] || []
+        const msgIndex = sessionMessages.findIndex((m) => m.id === msgId)
+        if (msgIndex === -1) return { sdkStreamingState: { ...state.sdkStreamingState, [sessionId]: { ...streamState, contentBlocks: blocks } } }
+
+        const updatedMessages = [...sessionMessages]
+        updatedMessages[msgIndex] = {
+          ...updatedMessages[msgIndex],
+          content: blocks as unknown as ContentBlock[],
+        }
+
+        return {
+          messages: { ...state.messages, [sessionId]: updatedMessages },
+          sdkStreamingState: { ...state.sdkStreamingState, [sessionId]: { ...streamState, contentBlocks: blocks } },
+        }
+      })
+      // Debounce persist during rapid streaming
+      debouncedPersist(sessionId, get().messages[sessionId] || [])
+      break
+    }
+
+    case 'content_block_stop': {
+      const { index } = payload as { index: number }
+
+      set((state) => {
+        const streamState = state.sdkStreamingState[sessionId]
+        if (!streamState) return state
+
+        const blocks = [...streamState.contentBlocks]
+        const block = blocks[index]
+
+        // Parse tool_use input JSON if needed
+        if (block?.type === 'tool_use' && typeof block.input === 'string') {
+          try {
+            blocks[index] = { ...block, input: JSON.parse(block.input) }
+          } catch {
+            // Keep as string if JSON parse fails
+          }
+        }
+
+        // Update message with finalized blocks
+        const msgId = streamState.messageId
+        const sessionMessages = state.messages[sessionId] || []
+        const msgIndex = sessionMessages.findIndex((m) => m.id === msgId)
+        if (msgIndex === -1) return { sdkStreamingState: { ...state.sdkStreamingState, [sessionId]: { ...streamState, contentBlocks: blocks } } }
+
+        const updatedMessages = [...sessionMessages]
+        updatedMessages[msgIndex] = {
+          ...updatedMessages[msgIndex],
+          content: blocks as unknown as ContentBlock[],
+        }
+
+        return {
+          messages: { ...state.messages, [sessionId]: updatedMessages },
+          sdkStreamingState: { ...state.sdkStreamingState, [sessionId]: { ...streamState, contentBlocks: blocks } },
+        }
+      })
+      // Debounce persist when content block finishes
+      debouncedPersist(sessionId, get().messages[sessionId] || [])
+      break
+    }
+
+    case 'assistant_message': {
+      const { messageId, stopReason, usage, content } = payload as {
+        messageId: string
+        stopReason?: string
+        usage?: { input_tokens: number; output_tokens: number }
+        content: SdkContentBlock[]
+      }
+
+      // Complete message with all content blocks
+      const streamState = get().sdkStreamingState[sessionId]
+      if (streamState) {
+        // Update the streaming message with final content
+        get().updateMessage(sessionId, streamState.messageId, {
+          content: content as unknown as ContentBlock[],
+        })
+      } else {
+        // Create new message if no streaming state (shouldn't happen normally)
+        const msgId = `msg-${messageId || Date.now()}`
+        get().addMessage(sessionId, {
+          id: msgId,
+          sessionId,
+          role: 'assistant',
+          content: content as unknown as ContentBlock[],
+          timestamp: new Date().toISOString(),
+        })
+      }
+
+      // Force immediate persist on message completion (not debounced)
+      flushPersist(sessionId, get().messages[sessionId] || [])
+
+      // Clear streaming state
+      set((state) => ({
+        sdkStreamingState: { ...state.sdkStreamingState, [sessionId]: null },
+      }))
+
+      if (!isActive) {
+        get().incrementUnread(sessionId)
+      }
+      break
+    }
+
+    case 'prompt_complete':
+    case 'prompt_error': {
+      // Stop streaming
+      get().setStreaming(sessionId, false)
+
+      // Flush any pending debounced persistence
+      flushPersist(sessionId, get().messages[sessionId] || [])
+
+      // Clear streaming state
+      set((state) => ({
+        sdkStreamingState: { ...state.sdkStreamingState, [sessionId]: null },
+      }))
+
+      // Update usage if available
+      if (type === 'prompt_complete') {
+        const result = payload as SessionResult
+        get().setSdkUsage(sessionId, result)
+      }
+      break
+    }
+
+    case 'permission_request': {
+      const params = payload as { toolCallId: string; toolCall: unknown; options: unknown[] }
+      handlePermissionRequest(sessionId, params, get)
+      break
+    }
+
+    default:
+      // Unknown SDK message type - log for debugging
+      console.log('[SDK WS] Unknown message type:', type, payload)
   }
 }

@@ -11,7 +11,7 @@ import type {
 import type { CredentialStore } from './credentials.js';
 import type { ApertureDatabase } from './database.js';
 import type { Session } from './session.js';
-import { SdkSession } from './sdk-session.js';
+import { SdkSession, type SdkWsMessage } from './sdk-session.js';
 import { validateJsonRpcMessage, type JsonRpcMessage } from './jsonrpc.js';
 import { checkReadiness } from './claudeInstaller.js';
 import { registerCredentialRoutes } from './routes/credentials.js';
@@ -218,6 +218,64 @@ export async function registerRoutes(
       return {
         sessions,
         total: sessions.length,
+      };
+    }
+  );
+
+  // Get all resumable SDK sessions
+  fastify.get('/v1/sessions/resumable', async () => {
+    const resumableSessions = sessionManager.getResumableSessions();
+    return {
+      sessions: resumableSessions,
+      total: resumableSessions.length,
+    };
+  });
+
+  // Connect to a session (restores SDK session if needed)
+  fastify.post<{ Params: { id: string } }>(
+    '/v1/sessions/:id/connect',
+    async (request, reply) => {
+      const sessionId = request.params.id;
+
+      // Check if session exists in memory
+      let session: Session | SdkSession | undefined = sessionManager.getSession(sessionId);
+      let restored = false;
+
+      if (!session) {
+        // Try to restore from database (SDK sessions only)
+        try {
+          const restoredSession = await sessionManager.restoreSession(sessionId);
+          if (restoredSession) {
+            session = restoredSession;
+            restored = true;
+          }
+        } catch (err) {
+          const error = err as Error;
+          // Check if it's a "not found" error
+          if (error.message.includes('not found') || error.message.includes('not an SDK session')) {
+            return reply.code(404).send({
+              error: 'Session not found or not resumable',
+              message: error.message,
+            });
+          }
+          return reply.code(500).send({
+            error: 'Failed to restore session',
+            message: error.message,
+          });
+        }
+      }
+
+      if (!session) {
+        return reply.code(404).send({
+          error: 'Session not found',
+        });
+      }
+
+      return {
+        id: session.id,
+        agent: session.agentType,
+        status: session.getStatus(),
+        restored,
       };
     }
   );
@@ -662,6 +720,19 @@ export async function registerRoutes(
       session.on('permission_request', permissionRequestHandler);
       session.on('exit', exitHandler);
 
+      // Handle first-class SDK messages (no JSON-RPC wrapper)
+      const sdkMessageHandler = (message: SdkWsMessage) => {
+        try {
+          socket.send(JSON.stringify(message));
+        } catch (err) {
+          request.log.error(err, 'Failed to send SDK WebSocket message');
+        }
+      };
+
+      if (isSdkSession(session)) {
+        session.on('sdk_message', sdkMessageHandler);
+      }
+
       // Handle messages from WebSocket (frontend) to agent
       socket.on('message', async (data: Buffer) => {
         try {
@@ -883,6 +954,9 @@ export async function registerRoutes(
         session.off('session_update', sessionUpdateHandler);
         session.off('permission_request', permissionRequestHandler);
         session.off('exit', exitHandler);
+        if (isSdkSession(session)) {
+          session.off('sdk_message', sdkMessageHandler);
+        }
       });
     }
   );

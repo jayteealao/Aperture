@@ -15,7 +15,7 @@ import { Card } from '@/components/ui/Card'
 import { SaveRepoPrompt } from '@/components/session/SaveRepoPrompt'
 import { ToolCallDisplay } from '@/components/session/ToolCallDisplay'
 import { AskUserQuestionDisplay, isAskUserQuestionInput } from '@/components/session/AskUserQuestionDisplay'
-import { SdkControlPanel } from '@/components/sdk'
+import { SdkControlPanel, ThinkingBlock, ToolUseBlock, ToolCallGroup, LoadingIndicator } from '@/components/sdk'
 import type { Message, ContentBlock, PermissionOption } from '@/api/types'
 import {
   Send,
@@ -29,6 +29,7 @@ import {
   ChevronRight,
   Wrench,
   CheckCircle2,
+  ArrowDown,
 } from 'lucide-react'
 
 export default function Workspace() {
@@ -55,6 +56,8 @@ export default function Workspace() {
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [isAtBottom, setIsAtBottom] = useState(true)
 
   // Save repo prompt state
   const [showSaveRepoPrompt, setShowSaveRepoPrompt] = useState(false)
@@ -110,10 +113,27 @@ export default function Workspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlSessionId, sessions])
 
-  // Auto-scroll to bottom
+  // Track scroll position to determine if user is at bottom
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    const threshold = 100 // pixels from bottom to consider "at bottom"
+    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+    setIsAtBottom(atBottom)
+  }, [])
+
+  // Smart auto-scroll: only scroll if user is already at bottom
   useEffect(() => {
+    if (isAtBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [sessionMessages, isAtBottom])
+
+  // Scroll to bottom helper for FAB
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [sessionMessages])
+    setIsAtBottom(true)
+  }, [])
 
   // Get pending permissions for active session
   const activePermissions = useMemo(() => {
@@ -223,7 +243,11 @@ export default function Workspace() {
         </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto scrollbar-thin relative"
+      >
         <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
           {sessionMessages.length === 0 ? (
             <div className="text-center py-12">
@@ -243,8 +267,26 @@ export default function Workspace() {
               />
             ))
           )}
+          {/* Loading indicator when awaiting SDK response */}
+          {connection?.isStreaming && !sessionMessages.some(m => m.id === connection.currentStreamMessageId) && (
+            <div className="flex justify-start">
+              <div className="glass rounded-2xl rounded-bl-md px-4 py-3">
+                <LoadingIndicator />
+              </div>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
+        {/* Scroll to bottom FAB */}
+        {!isAtBottom && (
+          <button
+            onClick={scrollToBottom}
+            className="sticky bottom-4 left-1/2 -translate-x-1/2 p-3 bg-accent text-[#0a0a0f] rounded-full shadow-lg hover:bg-accent/90 transition-colors z-10"
+            title="Scroll to bottom"
+          >
+            <ArrowDown className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Permission requests */}
@@ -346,13 +388,16 @@ function MessageBubble({
 }) {
   const [copied, setCopied] = useState(false)
   const isUser = message.role === 'user'
-  const { textContent, toolBlocks } = extractContentBlocks(message.content)
+  const { textContent, thinkingBlocks, toolUseBlocks, toolResults } = extractContentBlocks(message.content)
 
   const handleCopy = () => {
     navigator.clipboard.writeText(textContent)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  // Check if we have any content blocks (for SDK native messages)
+  const hasContentBlocks = thinkingBlocks.length > 0 || toolUseBlocks.length > 0 || toolResults.length > 0
 
   return (
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
@@ -379,18 +424,72 @@ function MessageBubble({
             </button>
           )}
         </div>
-        <div className="prose prose-sm max-w-none dark:prose-invert">
-          <MarkdownContent content={textContent} />
-          {isStreaming && <span className="inline-block w-2 h-4 bg-current animate-pulse ml-0.5" />}
-        </div>
-        {/* Tool calls and results */}
-        {toolBlocks.length > 0 && (
-          <div className="mt-3 space-y-2">
-            {toolBlocks.map((block, i) => (
-              <ToolBlock key={i} block={block} />
+
+        {/* Thinking blocks - collapsed by default */}
+        {thinkingBlocks.length > 0 && (
+          <div className="mb-3 space-y-2">
+            {thinkingBlocks.map((block, i) => (
+              <ThinkingBlock
+                key={i}
+                thinking={block.thinking}
+                signature={block.signature}
+                isStreaming={isStreaming && i === thinkingBlocks.length - 1}
+              />
             ))}
           </div>
         )}
+
+        {/* Text content */}
+        {textContent && (
+          <div className="prose prose-sm max-w-none dark:prose-invert">
+            <MarkdownContent content={textContent} />
+            {isStreaming && !hasContentBlocks && (
+              <span className="inline-block w-2 h-4 bg-current animate-pulse ml-0.5" />
+            )}
+          </div>
+        )}
+
+        {/* Tool use blocks with their results */}
+        {toolUseBlocks.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {toolUseBlocks.length >= 2 ? (
+              <ToolCallGroup
+                toolCalls={toolUseBlocks.map((block) => {
+                  const result = toolResults.find(r => r.tool_use_id === block.id)
+                  return {
+                    id: block.id,
+                    name: block.name,
+                    input: block.input,
+                    result: result ? { content: result.content, is_error: result.is_error } : undefined,
+                    isExecuting: isStreaming && !result,
+                  }
+                })}
+              />
+            ) : (
+              toolUseBlocks.map((block) => {
+                const result = toolResults.find(r => r.tool_use_id === block.id)
+                return (
+                  <ToolUseBlock
+                    key={block.id}
+                    id={block.id}
+                    name={block.name}
+                    input={block.input}
+                    result={result ? { content: result.content, is_error: result.is_error } : undefined}
+                    isExecuting={isStreaming && !result}
+                  />
+                )
+              })
+            )}
+          </div>
+        )}
+
+        {/* Orphan tool results (without matching tool_use) - legacy fallback */}
+        {toolResults.filter(r => !toolUseBlocks.find(t => t.id === r.tool_use_id)).map((result, i) => (
+          <div key={i} className="mt-3">
+            <ToolBlock block={{ type: 'tool_result', content: result.content }} />
+          </div>
+        ))}
+
         <div className="mt-2 text-2xs opacity-50">
           {new Date(message.timestamp).toLocaleTimeString()}
         </div>
@@ -625,44 +724,83 @@ function PermissionRequest({
   )
 }
 
-// Helper to extract text and tool blocks from content
-interface ToolBlockData {
-  type: 'tool_use' | 'tool_result'
-  name?: string
-  input?: unknown
-  content?: string | ContentBlock[]
+// Helper to extract content blocks by type
+interface ThinkingBlockData {
+  type: 'thinking'
+  thinking: string
+  signature?: string
 }
 
-function extractContentBlocks(content: string | ContentBlock[]): { textContent: string; toolBlocks: ToolBlockData[] } {
+interface ToolUseBlockData {
+  type: 'tool_use'
+  id: string
+  name: string
+  input: unknown
+}
+
+interface ToolResultBlockData {
+  type: 'tool_result'
+  tool_use_id: string
+  content: string
+  is_error?: boolean
+}
+
+interface ExtractedContent {
+  textContent: string
+  thinkingBlocks: ThinkingBlockData[]
+  toolUseBlocks: ToolUseBlockData[]
+  toolResults: ToolResultBlockData[]
+}
+
+function extractContentBlocks(content: string | ContentBlock[]): ExtractedContent {
   if (typeof content === 'string') {
-    return { textContent: content, toolBlocks: [] }
+    return { textContent: content, thinkingBlocks: [], toolUseBlocks: [], toolResults: [] }
   }
   if (!Array.isArray(content)) {
-    return { textContent: String(content), toolBlocks: [] }
+    return { textContent: String(content), thinkingBlocks: [], toolUseBlocks: [], toolResults: [] }
   }
 
+  // Debug: log raw content blocks
+  console.log('[extractContentBlocks] Raw content blocks:', content)
+
   const textParts: string[] = []
-  const toolBlocks: ToolBlockData[] = []
+  const thinkingBlocks: ThinkingBlockData[] = []
+  const toolUseBlocks: ToolUseBlockData[] = []
+  const toolResults: ToolResultBlockData[] = []
 
   for (const block of content) {
     if (block.type === 'text' && block.text) {
       textParts.push(block.text)
+    } else if (block.type === 'thinking') {
+      console.log('[extractContentBlocks] Found thinking block:', block)
+      thinkingBlocks.push({
+        type: 'thinking',
+        thinking: block.thinking || '',
+        signature: block.signature,
+      })
     } else if (block.type === 'tool_use') {
-      toolBlocks.push({
+      toolUseBlocks.push({
         type: 'tool_use',
-        name: block.name,
+        id: block.id || block.toolCallId || `tool-${Date.now()}`,
+        name: block.name || 'unknown',
         input: block.input,
       })
     } else if (block.type === 'tool_result') {
-      toolBlocks.push({
+      toolResults.push({
         type: 'tool_result',
-        content: block.content,
+        tool_use_id: block.tool_use_id || block.toolCallId || '',
+        content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
+        is_error: block.is_error,
       })
     }
   }
 
+  console.log('[extractContentBlocks] Extracted thinking blocks:', thinkingBlocks.length)
+
   return {
     textContent: textParts.join('\n'),
-    toolBlocks,
+    thinkingBlocks,
+    toolUseBlocks,
+    toolResults,
   }
 }
