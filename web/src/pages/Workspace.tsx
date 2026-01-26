@@ -203,9 +203,6 @@ export default function Workspace() {
     )
   }
 
-  // Check if this is an SDK session
-  const isSdkSession = activeSession.agent === 'claude_sdk'
-
   return (
     <div className="h-full flex">
       {/* Main content area */}
@@ -343,20 +340,18 @@ export default function Workspace() {
                 'Disconnected'
               )}
             </span>
-            <span>Press Enter to send{isSdkSession && ' | Cmd+. for SDK panel'}</span>
+            <span>Press Enter to send | Cmd+. for controls</span>
           </div>
         </div>
       </div>
       </div>
 
-      {/* SDK Control Panel - only for claude_sdk sessions */}
-      {isSdkSession && (
-        <SdkControlPanel
-          sessionId={activeSessionId!}
-          isOpen={sdkPanelOpen}
-          onToggle={toggleSdkPanel}
-        />
-      )}
+      {/* Control Panel */}
+      <SdkControlPanel
+        sessionId={activeSessionId!}
+        isOpen={sdkPanelOpen}
+        onToggle={toggleSdkPanel}
+      />
     </div>
   )
 }

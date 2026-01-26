@@ -1,11 +1,11 @@
-import type { AgentReadiness, SessionAuth, SdkAgentBackend } from './types.js';
+import type { AgentReadiness, SessionAuth, AgentBackend } from './types.js';
 
 /**
  * Claude SDK backend
  * Uses @anthropic-ai/claude-agent-sdk for programmatic interaction
  */
-export class ClaudeSdkBackend implements SdkAgentBackend {
-  readonly name = 'Claude(SDK)';
+export class ClaudeSdkBackend implements AgentBackend {
+  readonly name = 'Claude';
   readonly type = 'claude_sdk' as const;
 
   async ensureInstalled(): Promise<AgentReadiness> {
@@ -42,7 +42,7 @@ export class ClaudeSdkBackend implements SdkAgentBackend {
     // SDK supports api_key mode and oauth mode (pre-authenticated)
     if (sessionAuth.mode !== 'api_key' && sessionAuth.mode !== 'oauth') {
       throw new Error(
-        'Claude SDK only supports api_key or oauth authentication modes. Interactive mode is not supported.'
+        'Claude SDK only supports api_key or oauth authentication modes.'
       );
     }
 
@@ -50,10 +50,9 @@ export class ClaudeSdkBackend implements SdkAgentBackend {
     if (sessionAuth.mode === 'oauth') {
       if (hostedMode) {
         console.warn(
-          'ℹ️  Claude SDK OAuth mode in hosted environment requires one-time login via: docker exec -it <container> claude'
+          'Claude SDK OAuth mode in hosted environment requires one-time login via: docker exec -it <container> claude'
         );
       }
-      // No further validation needed for oauth mode
       return;
     }
 

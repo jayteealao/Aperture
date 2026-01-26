@@ -1,14 +1,12 @@
 import { randomUUID } from 'crypto';
 import type { Config } from './config.js';
-import { Session } from './session.js';
 import { SdkSession } from './sdk-session.js';
-import { getAgentBackend, isSdkBackend } from './agents/index.js';
-import type { SessionAuth, AgentType, SessionConfig, SdkSessionConfig } from './agents/index.js';
+import { ClaudeSdkBackend } from './agents/index.js';
+import type { SessionAuth, SessionConfig, SdkSessionConfig } from './agents/index.js';
 import type { CredentialStore } from './credentials.js';
 import type { ApertureDatabase } from './database.js';
 
 export interface CreateSessionOptions {
-  agent?: AgentType;
   auth?: SessionAuth;
   env?: Record<string, string>;
   workspaceId?: string; // Optional workspace ID for workspace-backed sessions
@@ -20,28 +18,27 @@ export interface CreateSessionOptions {
  * Manages all active sessions
  */
 export class SessionManager {
-  private sessions: Map<string, Session | SdkSession> = new Map();
+  private sessions: Map<string, SdkSession> = new Map();
   private config: Config;
-  private claudeCodeExecutable?: string;
+  private backend: ClaudeSdkBackend;
   private credentialStore?: CredentialStore;
   private database?: ApertureDatabase;
 
   constructor(
     config: Config,
     database?: ApertureDatabase,
-    claudeCodeExecutable?: string,
+    _claudeCodeExecutable?: string,
     credentialStore?: CredentialStore
   ) {
     this.config = config;
     this.database = database;
-    this.claudeCodeExecutable = claudeCodeExecutable;
     this.credentialStore = credentialStore;
+    this.backend = new ClaudeSdkBackend();
   }
 
   /**
    * Restore sessions from database on startup
    * SDK sessions with sdk_session_id are marked as idle (resumable)
-   * ACP sessions are marked as ended (process-coupled, can't resume)
    */
   async restoreSessions(): Promise<void> {
     if (!this.database) {
@@ -51,8 +48,8 @@ export class SessionManager {
     const activeSessions = this.database.getActiveSessions();
     console.log(`[SessionManager] Found ${activeSessions.length} active sessions in database`);
 
-    let acpCount = 0;
     let sdkResumableCount = 0;
+    let endedCount = 0;
 
     for (const sessionRecord of activeSessions) {
       // SDK sessions with sdk_session_id can be resumed
@@ -61,13 +58,15 @@ export class SessionManager {
         this.database.markSdkSessionsIdle();
         sdkResumableCount++;
       } else {
-        // ACP sessions can't be resumed after server restart
+        // Sessions without sdk_session_id can't be resumed
         this.database.endSession(sessionRecord.id, Date.now());
-        acpCount++;
+        endedCount++;
       }
     }
 
-    console.log(`[SessionManager] Marked ${acpCount} ACP sessions as ended`);
+    if (endedCount > 0) {
+      console.log(`[SessionManager] Marked ${endedCount} sessions as ended`);
+    }
     console.log(`[SessionManager] Kept ${sdkResumableCount} SDK sessions as idle (resumable)`);
   }
 
@@ -86,18 +85,18 @@ export class SessionManager {
     }
 
     if (!sessionRecord.sdk_session_id) {
-      throw new Error(`Session ${sessionId} is not an SDK session or has no SDK session ID`);
+      throw new Error(`Session ${sessionId} has no SDK session ID`);
     }
 
     if (sessionRecord.agent !== 'claude_sdk') {
-      throw new Error(`Session ${sessionId} is not an SDK session (agent: ${sessionRecord.agent})`);
+      throw new Error(`Session ${sessionId} is not a Claude SDK session (agent: ${sessionRecord.agent})`);
     }
 
     // Check if session already exists in memory
     const existingSession = this.sessions.get(sessionId);
     if (existingSession) {
       console.log(`[SessionManager] Session ${sessionId} already active in memory`);
-      return existingSession as SdkSession;
+      return existingSession;
     }
 
     // Parse stored SDK config
@@ -200,7 +199,7 @@ export class SessionManager {
   /**
    * Creates a new session
    */
-  async createSession(options: CreateSessionOptions = {}): Promise<Session | SdkSession> {
+  async createSession(options: CreateSessionOptions = {}): Promise<SdkSession> {
     // Check max sessions limit
     if (this.sessions.size >= this.config.maxConcurrentSessions) {
       throw new Error(
@@ -209,43 +208,27 @@ export class SessionManager {
     }
 
     const id = randomUUID();
-    const agent = options.agent || 'claude_acp'; // Default to Claude(ACP) for backwards compatibility
-
-    // Determine default provider based on agent
-    let defaultProvider: 'anthropic' | 'openai' | 'google' = 'anthropic';
-    if (agent === 'codex') {
-      defaultProvider = 'openai';
-    } else if (agent === 'gemini') {
-      defaultProvider = 'google';
-    }
 
     // Build session auth configuration with defaults
     const auth: SessionAuth = {
-      mode: options.auth?.mode || 'interactive',
-      providerKey: options.auth?.providerKey || defaultProvider,
+      mode: options.auth?.mode || 'oauth',
+      providerKey: 'anthropic',
       apiKeyRef: options.auth?.apiKeyRef || 'none',
       apiKey: options.auth?.apiKey,
       storedCredentialId: options.auth?.storedCredentialId,
-      // Vertex AI specific fields
-      vertexProjectId: options.auth?.vertexProjectId,
-      vertexLocation: options.auth?.vertexLocation,
-      vertexCredentialsPath: options.auth?.vertexCredentialsPath,
     };
 
     // Build session config
     const sessionConfig: SessionConfig = {
       id,
-      agent,
+      agent: 'claude_sdk',
       auth,
       env: options.env,
       sdk: options.sdk,
     };
 
-    // Get agent backend
-    const backend = getAgentBackend(agent, this.claudeCodeExecutable, this.config.geminiHomePath);
-
-    // Validate auth for this backend
-    backend.validateAuth(auth, this.config.hostedMode, this.config.allowInteractiveAuth);
+    // Validate auth
+    this.backend.validateAuth(auth, this.config.hostedMode, this.config.allowInteractiveAuth);
 
     // Resolve API key if needed (only for api_key mode)
     let resolvedApiKey: string | undefined;
@@ -277,7 +260,6 @@ export class SessionManager {
         throw new Error('API key mode requires apiKeyRef to be "inline" or "stored"');
       }
     }
-    // Note: oauth and vertex modes don't need API key resolution here
 
     // Handle workspace-backed sessions or direct repo path
     let sessionCwd: string | undefined;
@@ -353,81 +335,51 @@ export class SessionManager {
       console.log(`[SessionManager] Using direct repo path for session ${id}: ${sessionCwd}`);
     }
 
-    // Create session based on backend type
-    let session: Session | SdkSession;
-
-    if (isSdkBackend(backend)) {
-      // SDK-based session requires API key for api_key mode, but not for oauth mode
-      if (auth.mode === 'api_key' && !resolvedApiKey) {
-        throw new Error('Claude SDK api_key mode requires an API key.');
-      }
-      // For oauth mode, resolvedApiKey will be undefined - SDK uses pre-existing auth
-      session = new SdkSession(sessionConfig, this.config, this.database, resolvedApiKey, sessionCwd);
-    } else {
-      // Process-based session
-      session = new Session(sessionConfig, backend, this.config, this.database, resolvedApiKey);
-
-      // Pass working directory to session if available (worktree or direct repo path)
-      if (sessionCwd) {
-        session.setWorktreePath(sessionCwd);
-      }
+    // Create SDK session
+    if (auth.mode === 'api_key' && !resolvedApiKey) {
+      throw new Error('Claude SDK api_key mode requires an API key.');
     }
+
+    const session = new SdkSession(sessionConfig, this.config, this.database, resolvedApiKey, sessionCwd);
 
     // Persist to database
     if (this.database) {
-      const isSdkSession = agent === 'claude_sdk';
       this.database.saveSession({
         id,
-        agent,
+        agent: 'claude_sdk',
         auth_mode: auth.mode,
-        acp_session_id: null, // Will be updated after initialization
+        acp_session_id: null,
         created_at: Date.now(),
         last_activity_at: Date.now(),
         ended_at: null,
         status: 'active',
         metadata: JSON.stringify({ env: options.env }),
-        user_id: null, // Future: extract from auth token
-        // SDK session fields
+        user_id: null,
         sdk_session_id: null, // Will be updated when SDK returns session_id
-        sdk_config: isSdkSession && options.sdk ? JSON.stringify(options.sdk) : null,
-        is_resumable: isSdkSession ? 1 : 0, // SDK sessions start as potentially resumable
+        sdk_config: options.sdk ? JSON.stringify(options.sdk) : null,
+        is_resumable: 1, // SDK sessions start as potentially resumable
         working_directory: sessionCwd || null,
       });
     }
 
     // Set up event handlers
-    const isSdkSessionType = agent === 'claude_sdk';
     session.on('exit', () => {
       this.sessions.delete(id);
-
-      // Mark session as ended in database
-      // SDK sessions that exit cleanly remain resumable
       if (this.database) {
         this.database.endSession(id, Date.now());
-        // SDK sessions stay resumable even after exit (can reconnect later)
-        // They only become non-resumable on explicit termination via deleteSession
       }
     });
 
     session.on('idle', () => {
       console.log(`Session ${id} idle, terminating`);
-
-      // Mark session as ended in database
-      // For SDK sessions, they remain resumable even when idle
       if (this.database) {
-        if (isSdkSessionType) {
-          // SDK sessions: mark as idle but keep resumable
-          const record = this.database.getSession(id);
-          if (record) {
-            this.database.saveSession({
-              ...record,
-              status: 'idle',
-              last_activity_at: Date.now(),
-            });
-          }
-        } else {
-          // ACP sessions: mark as ended
-          this.database.endSession(id, Date.now());
+        const record = this.database.getSession(id);
+        if (record) {
+          this.database.saveSession({
+            ...record,
+            status: 'idle',
+            last_activity_at: Date.now(),
+          });
         }
       }
     });
@@ -457,7 +409,7 @@ export class SessionManager {
   /**
    * Gets a session by ID
    */
-  getSession(id: string): Session | SdkSession | undefined {
+  getSession(id: string): SdkSession | undefined {
     return this.sessions.get(id);
   }
 
@@ -482,7 +434,7 @@ export class SessionManager {
   /**
    * Gets all sessions
    */
-  getAllSessions(): (Session | SdkSession)[] {
+  getAllSessions(): SdkSession[] {
     return Array.from(this.sessions.values());
   }
 
