@@ -20,8 +20,7 @@ services:
       CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY:-}
     volumes:
       - claude-data:/home/app/.claude
-      - codex-data:/home/app/.codex
-      - gemini-data:/home/app/.gemini
+      - pi-data:/home/app/.pi
       - credentials-data:/home/app/data
     networks: [default]
     healthcheck:
@@ -87,9 +86,7 @@ networks:
 volumes:
   claude-data:
     name: aperture-claude-data
-  codex-data:
-    name: aperture-codex-data
-  gemini-data:
-    name: aperture-gemini-data
+  pi-data:
+    name: aperture-pi-data
   credentials-data:
     name: aperture-credentials-data

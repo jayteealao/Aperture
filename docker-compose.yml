@@ -35,13 +35,11 @@ services:
       # Database path - use /app/data/db which is created with correct permissions in Dockerfile
       DATABASE_PATH: ${DATABASE_PATH:-/app/data/db/aperture.db}
     volumes:
-      # Persist Claude Code home directory for subscription auth
+      # Persist Claude SDK home directory for OAuth/subscription auth
       - claude-data:/home/app/.claude
-      # Persist Codex home directory for subscription auth
-      - codex-data:/home/app/.codex
-      # Persist Gemini CLI home directory for OAuth cache
-      - gemini-data:/home/app/.gemini
-      # Persist encrypted credentials
+      # Persist Pi SDK home directory for OAuth cache
+      - pi-data:/home/app/.pi
+      # Persist encrypted credentials and database
       - credentials-data:/home/app/data
     networks: [default]
     healthcheck:
@@ -112,9 +110,7 @@ networks:
 volumes:
   claude-data:
     name: aperture-claude-data
-  codex-data:
-    name: aperture-codex-data
-  gemini-data:
-    name: aperture-gemini-data
+  pi-data:
+    name: aperture-pi-data
   credentials-data:
     name: aperture-credentials-data

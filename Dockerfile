@@ -63,15 +63,8 @@ COPY --from=builder /build/node_modules ./node_modules
 # without needing workspace configuration
 RUN npm rebuild better-sqlite3
 
-# Install ACP agents globally
-# - claude-code-acp for Claude Code agent
-# - codex-acp for Codex agent (if available)
-# - @openai/codex for Codex CLI
-# - @google/gemini-cli for Gemini CLI (with ACP mode support)
-RUN npm install -g @zed-industries/claude-code-acp && \
-    npm install -g @zed-industries/codex-acp || echo "codex-acp not available, skipping" && \
-    npm install -g @openai/codex || echo "codex not available, skipping" && \
-    npm install -g @google/gemini-cli || echo "gemini-cli not available, skipping"
+# Note: Claude SDK and Pi SDK are bundled as npm dependencies
+# No global CLI installations needed - SDKs are used as libraries
 
 # Copy built files from builder
 COPY --from=builder /build/dist ./dist
