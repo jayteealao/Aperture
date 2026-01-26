@@ -280,7 +280,7 @@ export async function registerRoutes(
   // SDK Session Endpoints
   // ===========================================================================
 
-  // Get session configuration
+  // Get session configuration (Claude SDK only)
   fastify.get<{ Params: { id: string } }>(
     '/v1/sessions/:id/config',
     async (request, reply) => {
@@ -288,11 +288,14 @@ export async function registerRoutes(
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
       }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
+      }
       return session.getConfig();
     }
   );
 
-  // Update session configuration
+  // Update session configuration (Claude SDK only)
   fastify.patch<{ Params: { id: string }; Body: Partial<SdkSessionConfig> }>(
     '/v1/sessions/:id/config',
     async (request, reply) => {
@@ -300,18 +303,24 @@ export async function registerRoutes(
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
       }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
+      }
       session.updateConfig(request.body);
       return { success: true, config: session.getConfig() };
     }
   );
 
-  // Resume a session
+  // Resume a session (Claude SDK only)
   fastify.post<{ Params: { id: string }; Body: { messageId?: string; fork?: boolean } }>(
     '/v1/sessions/:id/resume',
     async (request, reply) => {
       const session = sessionManager.getSession(request.params.id);
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
+      }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
       }
       const { messageId, fork } = request.body || {};
       session.updateConfig({
@@ -323,13 +332,16 @@ export async function registerRoutes(
     }
   );
 
-  // Rewind files to checkpoint
+  // Rewind files to checkpoint (Claude SDK only)
   fastify.post<{ Params: { id: string }; Body: { messageId: string; dryRun?: boolean } }>(
     '/v1/sessions/:id/rewind',
     async (request, reply) => {
       const session = sessionManager.getSession(request.params.id);
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
+      }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
       }
       try {
         const result = await session.rewindFiles(request.body.messageId, request.body.dryRun);
@@ -340,7 +352,7 @@ export async function registerRoutes(
     }
   );
 
-  // Get checkpoint message IDs
+  // Get checkpoint message IDs (Claude SDK only)
   fastify.get<{ Params: { id: string } }>(
     '/v1/sessions/:id/checkpoints',
     async (request, reply) => {
@@ -348,17 +360,23 @@ export async function registerRoutes(
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
       }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
+      }
       return { checkpoints: session.getCheckpointMessageIds() };
     }
   );
 
-  // Get MCP server status
+  // Get MCP server status (Claude SDK only)
   fastify.get<{ Params: { id: string } }>(
     '/v1/sessions/:id/mcp/status',
     async (request, reply) => {
       const session = sessionManager.getSession(request.params.id);
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
+      }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
       }
       try {
         const status = await session.getMcpServerStatus();
@@ -369,13 +387,16 @@ export async function registerRoutes(
     }
   );
 
-  // Update MCP servers
+  // Update MCP servers (Claude SDK only)
   fastify.post<{ Params: { id: string }; Body: { servers: Record<string, McpServerConfig> } }>(
     '/v1/sessions/:id/mcp/servers',
     async (request, reply) => {
       const session = sessionManager.getSession(request.params.id);
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
+      }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
       }
       try {
         const result = await session.setMcpServers(request.body.servers);
@@ -386,13 +407,16 @@ export async function registerRoutes(
     }
   );
 
-  // Get account info
+  // Get account info (Claude SDK only)
   fastify.get<{ Params: { id: string } }>(
     '/v1/sessions/:id/account',
     async (request, reply) => {
       const session = sessionManager.getSession(request.params.id);
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
+      }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
       }
       try {
         const info = await session.getAccountInfo();
@@ -403,7 +427,7 @@ export async function registerRoutes(
     }
   );
 
-  // Get supported models
+  // Get supported models (works for both SDKs with different implementations)
   fastify.get<{ Params: { id: string } }>(
     '/v1/sessions/:id/models',
     async (request, reply) => {
@@ -412,21 +436,30 @@ export async function registerRoutes(
         return reply.code(404).send({ error: 'Session not found' });
       }
       try {
-        const models = await session.getSupportedModels();
-        return { models };
+        if (isSdkSession(session)) {
+          const models = await session.getSupportedModels();
+          return { models };
+        } else if (isPiSession(session)) {
+          const models = await session.getAvailableModels();
+          return { models };
+        }
+        return reply.code(400).send({ error: 'Unknown session type' });
       } catch (err) {
         return reply.code(400).send({ error: (err as Error).message });
       }
     }
   );
 
-  // Get supported commands/skills
+  // Get supported commands/skills (Claude SDK only)
   fastify.get<{ Params: { id: string } }>(
     '/v1/sessions/:id/commands',
     async (request, reply) => {
       const session = sessionManager.getSession(request.params.id);
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
+      }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
       }
       try {
         const commands = await session.getSupportedCommands();
@@ -437,13 +470,16 @@ export async function registerRoutes(
     }
   );
 
-  // Set permission mode
+  // Set permission mode (Claude SDK only)
   fastify.post<{ Params: { id: string }; Body: { mode: PermissionMode } }>(
     '/v1/sessions/:id/permission-mode',
     async (request, reply) => {
       const session = sessionManager.getSession(request.params.id);
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
+      }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
       }
       try {
         await session.setPermissionMode(request.body.mode);
@@ -454,8 +490,8 @@ export async function registerRoutes(
     }
   );
 
-  // Set model
-  fastify.post<{ Params: { id: string }; Body: { model?: string } }>(
+  // Set model (different signature for Claude SDK vs Pi SDK)
+  fastify.post<{ Params: { id: string }; Body: { model?: string; provider?: string; modelId?: string } }>(
     '/v1/sessions/:id/model',
     async (request, reply) => {
       const session = sessionManager.getSession(request.params.id);
@@ -463,21 +499,34 @@ export async function registerRoutes(
         return reply.code(404).send({ error: 'Session not found' });
       }
       try {
-        await session.setModel(request.body.model);
-        return { success: true, model: request.body.model };
+        if (isSdkSession(session)) {
+          await session.setModel(request.body.model);
+          return { success: true, model: request.body.model };
+        } else if (isPiSession(session)) {
+          const { provider, modelId } = request.body;
+          if (!provider || !modelId) {
+            return reply.code(400).send({ error: 'Pi SDK requires both provider and modelId' });
+          }
+          await session.setModel(provider, modelId);
+          return { success: true, provider, modelId };
+        }
+        return reply.code(400).send({ error: 'Unknown session type' });
       } catch (err) {
         return reply.code(400).send({ error: (err as Error).message });
       }
     }
   );
 
-  // Set thinking token limit
+  // Set thinking token limit (Claude SDK only)
   fastify.post<{ Params: { id: string }; Body: { tokens: number | null } }>(
     '/v1/sessions/:id/thinking-tokens',
     async (request, reply) => {
       const session = sessionManager.getSession(request.params.id);
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
+      }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions. Use /v1/sessions/:id/thinking-level for Pi SDK.' });
       }
       try {
         await session.setMaxThinkingTokens(request.body.tokens);
@@ -488,7 +537,7 @@ export async function registerRoutes(
     }
   );
 
-  // Get session result/usage
+  // Get session result/usage (Claude SDK only)
   fastify.get<{ Params: { id: string } }>(
     '/v1/sessions/:id/result',
     async (request, reply) => {
@@ -496,18 +545,27 @@ export async function registerRoutes(
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
       }
-      const result = session.getLastResult();
-      return result || { error: 'No result available' };
+      if (isSdkSession(session)) {
+        const result = session.getLastResult();
+        return result || { error: 'No result available' };
+      } else if (isPiSession(session)) {
+        const stats = await session.getStats();
+        return stats || { error: 'No stats available' };
+      }
+      return reply.code(400).send({ error: 'Unknown session type' });
     }
   );
 
-  // Get permission denials
+  // Get permission denials (Claude SDK only)
   fastify.get<{ Params: { id: string } }>(
     '/v1/sessions/:id/permission-denials',
     async (request, reply) => {
       const session = sessionManager.getSession(request.params.id);
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
+      }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
       }
       return { denials: session.getPermissionDenials() };
     }
@@ -722,87 +780,123 @@ export async function registerRoutes(
               }));
             });
           } else if (obj.type === 'permission_response') {
-            const toolCallId = obj.toolCallId as string;
-            const optionId = obj.optionId as string;
-            const answers = obj.answers as Record<string, string> | undefined;
+            // Claude SDK only - Pi SDK handles permissions via extension system
+            if (isSdkSession(session)) {
+              const toolCallId = obj.toolCallId as string;
+              const optionId = obj.optionId as string;
+              const answers = obj.answers as Record<string, string> | undefined;
 
-            console.log('[WS] Received permission_response:', JSON.stringify({ toolCallId, optionId, answers }, null, 2));
+              console.log('[WS] Received permission_response:', JSON.stringify({ toolCallId, optionId, answers }, null, 2));
 
-            if (optionId) {
-              await session.respondToPermission(toolCallId, optionId, answers);
-            } else {
-              await session.cancelPermission(toolCallId);
+              if (optionId) {
+                await session.respondToPermission(toolCallId, optionId, answers);
+              } else {
+                await session.cancelPermission(toolCallId);
+              }
             }
           } else if (obj.type === 'cancel') {
             await session.cancelPrompt();
           } else if (obj.type === 'interrupt') {
             await session.interrupt();
           } else if (obj.type === 'set_permission_mode' && typeof obj.mode === 'string') {
-            await session.setPermissionMode(obj.mode as PermissionMode);
-          } else if (obj.type === 'set_model') {
-            await session.setModel(obj.model as string | undefined);
-          } else if (obj.type === 'set_thinking_tokens') {
-            await session.setMaxThinkingTokens(obj.tokens as number | null);
-          } else if (obj.type === 'rewind_files' && typeof obj.messageId === 'string') {
-            const result = await session.rewindFiles(obj.messageId, obj.dryRun as boolean | undefined);
-            socket.send(JSON.stringify({
-              jsonrpc: '2.0',
-              method: 'session/rewind_result',
-              params: result,
-            }));
-          } else if (obj.type === 'get_mcp_status') {
-            try {
-              const status = await session.getMcpServerStatus();
-              socket.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'session/mcp_status',
-                params: { servers: status },
-              }));
-            } catch (err) {
-              socket.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'session/mcp_status',
-                params: { error: (err as Error).message },
-              }));
+            // Claude SDK only
+            if (isSdkSession(session)) {
+              await session.setPermissionMode(obj.mode as PermissionMode);
             }
-          } else if (obj.type === 'set_mcp_servers' && obj.servers) {
-            try {
-              const result = await session.setMcpServers(obj.servers as Record<string, McpServerConfig>);
+          } else if (obj.type === 'set_model') {
+            // Different signatures for Claude SDK vs Pi SDK
+            if (isSdkSession(session)) {
+              await session.setModel(obj.model as string | undefined);
+            } else if (isPiSession(session) && obj.provider && obj.modelId) {
+              await session.setModel(obj.provider as string, obj.modelId as string);
+            }
+          } else if (obj.type === 'set_thinking_tokens') {
+            // Claude SDK only
+            if (isSdkSession(session)) {
+              await session.setMaxThinkingTokens(obj.tokens as number | null);
+            }
+          } else if (obj.type === 'rewind_files' && typeof obj.messageId === 'string') {
+            // Claude SDK only
+            if (isSdkSession(session)) {
+              const result = await session.rewindFiles(obj.messageId, obj.dryRun as boolean | undefined);
               socket.send(JSON.stringify({
                 jsonrpc: '2.0',
-                method: 'session/mcp_servers_updated',
+                method: 'session/rewind_result',
                 params: result,
               }));
-            } catch (err) {
-              socket.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'session/mcp_servers_updated',
-                params: { error: (err as Error).message },
-              }));
+            }
+          } else if (obj.type === 'get_mcp_status') {
+            // Claude SDK only
+            if (isSdkSession(session)) {
+              try {
+                const status = await session.getMcpServerStatus();
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/mcp_status',
+                  params: { servers: status },
+                }));
+              } catch (err) {
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/mcp_status',
+                  params: { error: (err as Error).message },
+                }));
+              }
+            }
+          } else if (obj.type === 'set_mcp_servers' && obj.servers) {
+            // Claude SDK only
+            if (isSdkSession(session)) {
+              try {
+                const result = await session.setMcpServers(obj.servers as Record<string, McpServerConfig>);
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/mcp_servers_updated',
+                  params: result,
+                }));
+              } catch (err) {
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/mcp_servers_updated',
+                  params: { error: (err as Error).message },
+                }));
+              }
             }
           } else if (obj.type === 'get_account_info') {
-            try {
-              const info = await session.getAccountInfo();
-              socket.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'session/account_info',
-                params: info,
-              }));
-            } catch (err) {
-              socket.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'session/account_info',
-                params: { error: (err as Error).message },
-              }));
+            // Claude SDK only
+            if (isSdkSession(session)) {
+              try {
+                const info = await session.getAccountInfo();
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/account_info',
+                  params: info,
+                }));
+              } catch (err) {
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/account_info',
+                  params: { error: (err as Error).message },
+                }));
+              }
             }
           } else if (obj.type === 'get_supported_models') {
+            // Both SDKs support this with different implementations
             try {
-              const models = await session.getSupportedModels();
-              socket.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'session/supported_models',
-                params: { models },
-              }));
+              if (isSdkSession(session)) {
+                const models = await session.getSupportedModels();
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/supported_models',
+                  params: { models },
+                }));
+              } else if (isPiSession(session)) {
+                const models = await session.getAvailableModels();
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/supported_models',
+                  params: { models },
+                }));
+              }
             } catch (err) {
               socket.send(JSON.stringify({
                 jsonrpc: '2.0',
@@ -811,19 +905,22 @@ export async function registerRoutes(
               }));
             }
           } else if (obj.type === 'get_supported_commands') {
-            try {
-              const commands = await session.getSupportedCommands();
-              socket.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'session/supported_commands',
-                params: { commands },
-              }));
-            } catch (err) {
-              socket.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'session/supported_commands',
-                params: { error: (err as Error).message },
-              }));
+            // Claude SDK only
+            if (isSdkSession(session)) {
+              try {
+                const commands = await session.getSupportedCommands();
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/supported_commands',
+                  params: { commands },
+                }));
+              } catch (err) {
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'session/supported_commands',
+                  params: { error: (err as Error).message },
+                }));
+              }
             }
           } else if (obj.type === 'update_config' && obj.config) {
             if (isSdkSession(session)) {
@@ -879,12 +976,16 @@ export async function registerRoutes(
           } else if (obj.type === 'pi_set_thinking_level') {
             // Set thinking level (Pi SDK only)
             if (isPiSession(session) && obj.level) {
-              await session.setThinkingLevel(obj.level as string);
-              socket.send(JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'pi/thinking_level_set',
-                params: { level: obj.level },
-              }));
+              const validLevels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+              const level = obj.level as string;
+              if (validLevels.includes(level)) {
+                await session.setThinkingLevel(level as 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh');
+                socket.send(JSON.stringify({
+                  jsonrpc: '2.0',
+                  method: 'pi/thinking_level_set',
+                  params: { level: obj.level },
+                }));
+              }
             }
           } else if (obj.type === 'pi_cycle_thinking') {
             // Cycle thinking level (Pi SDK only)

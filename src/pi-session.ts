@@ -41,7 +41,8 @@ export class PiSession extends EventEmitter {
   private sessionConfig: SessionConfig;
   private piConfig: PiSessionConfig;
   private database?: ApertureDatabase;
-  private resolvedApiKey?: string;
+  // Note: In Pi SDK 0.50.0, API keys are configured via ~/.pi/agent/auth.json
+  // or environment variables in models.json headers, not via runtime override
   private worktreePath?: string;
 
   private agentSession: AgentSession | null = null;
@@ -61,7 +62,7 @@ export class PiSession extends EventEmitter {
     sessionConfig: SessionConfig,
     config: Config,
     database?: ApertureDatabase,
-    resolvedApiKey?: string,
+    _resolvedApiKey?: string, // Unused in Pi SDK 0.50.0 - keys via auth.json or env vars
     cwd?: string
   ) {
     super();
@@ -70,7 +71,6 @@ export class PiSession extends EventEmitter {
     this.config = config;
     this.database = database;
     this.piConfig = sessionConfig.pi || {};
-    this.resolvedApiKey = resolvedApiKey;
     this.worktreePath = cwd;
     this.currentThinkingLevel = this.piConfig.thinkingLevel || 'off';
   }
@@ -94,24 +94,23 @@ export class PiSession extends EventEmitter {
 
     const cwd = this.worktreePath || process.cwd();
 
-    // Set up auth storage
+    // Set up auth storage (0.50.0: takes path string directly, defaults to ~/.pi/agent)
     const authStoragePath = this.piConfig.agentDir
       ? `${this.piConfig.agentDir}/auth.json`
       : undefined;
-    const authStorage = new AuthStorage(authStoragePath ? { authPath: authStoragePath } : undefined);
+    const authStorage = new AuthStorage(authStoragePath);
 
-    // Set runtime override if API key provided
-    if (this.resolvedApiKey && this.sessionConfig.auth?.providerKey) {
-      authStorage.setRuntimeOverride(this.sessionConfig.auth.providerKey, this.resolvedApiKey);
-    }
+    // Set up model registry (0.50.0: takes authStorage directly)
+    const modelRegistry = new ModelRegistry(authStorage);
 
-    // Set up model registry
-    const modelRegistry = new ModelRegistry({ authStorage });
-
-    // Determine model
+    // Determine model (0.50.0: use getAvailable and find)
     let model = undefined;
     if (this.piConfig.model) {
-      model = modelRegistry.getModel(this.piConfig.model.provider, this.piConfig.model.modelId);
+      const availableModels = modelRegistry.getAvailable();
+      model = availableModels.find(
+        (m: { api: string; id: string }) =>
+          m.api === this.piConfig.model!.provider && m.id === this.piConfig.model!.modelId
+      );
       if (model) {
         this.currentModel = this.piConfig.model;
       }
@@ -170,21 +169,25 @@ export class PiSession extends EventEmitter {
     this.agentSession = session;
     this.currentThinkingLevel = this.piConfig.thinkingLevel || 'off';
 
-    // Store session path for resumption
-    if (sessionManager && typeof sessionManager.getPath === 'function') {
-      this.piSessionPath = sessionManager.getPath();
-      if (this.database && this.piSessionPath) {
+    // Store session path for resumption (0.50.0: access path from session state)
+    const sessionPath = (session.state as { sessionPath?: string } | undefined)?.sessionPath;
+    if (sessionPath) {
+      this.piSessionPath = sessionPath;
+      if (this.database) {
         this.database.updatePiSessionPath(this.id, this.piSessionPath);
         this.database.updateSdkConfig(this.id, JSON.stringify(this.piConfig));
       }
     }
 
-    // Subscribe to events
-    this.unsubscribe = session.subscribe((event: PiEvent) => {
-      this.handlePiEvent(event);
+    // Subscribe to events (0.50.0: event shape may differ, handle safely)
+    this.unsubscribe = session.subscribe((event: unknown) => {
+      this.handlePiEvent(event as PiEvent);
     });
 
-    // Emit init message for frontend
+    // Emit init message for frontend (0.50.0: extensionsResult renamed to packagesResult)
+    const packagesLoaded = extensionsResult
+      ? (Array.isArray(extensionsResult) ? extensionsResult.length : 0)
+      : 0;
     const initMessage = {
       jsonrpc: '2.0' as const,
       method: 'session/update',
@@ -195,7 +198,7 @@ export class PiSession extends EventEmitter {
           agentType: 'pi_sdk',
           config: this.piConfig,
           modelFallbackMessage,
-          extensionsLoaded: extensionsResult?.loaded?.length || 0,
+          extensionsLoaded: packagesLoaded,
           thinkingLevel: this.currentThinkingLevel,
         },
       },
@@ -481,15 +484,18 @@ export class PiSession extends EventEmitter {
   }
 
   /**
-   * Set the model
+   * Set the model (0.50.0: use getAvailable and find)
    */
   async setModel(provider: string, modelId: string): Promise<void> {
     if (!this.agentSession) return;
 
     const { ModelRegistry, AuthStorage } = await import('@mariozechner/pi-coding-agent');
     const authStorage = new AuthStorage();
-    const registry = new ModelRegistry({ authStorage });
-    const model = registry.getModel(provider, modelId);
+    const registry = new ModelRegistry(authStorage);
+    const availableModels = registry.getAvailable();
+    const model = availableModels.find(
+      (m: { api: string; id: string }) => m.api === provider && m.id === modelId
+    );
 
     if (model) {
       this.agentSession.setModel(model);
@@ -502,20 +508,24 @@ export class PiSession extends EventEmitter {
   }
 
   /**
-   * Cycle to the next model in the scoped models list
+   * Cycle to the next model in the scoped models list (0.50.0: returns Promise)
    */
   async cycleModel(): Promise<PiModelConfig | null> {
     if (!this.agentSession) return null;
 
-    const result = this.agentSession.cycleModel();
+    const result = await this.agentSession.cycleModel();
     if (result) {
+      // 0.50.0: Model uses 'api' and 'id' properties
+      const model = result as { api?: string; id?: string; provider?: string; modelId?: string };
+      const provider = model.api || model.provider || '';
+      const modelId = model.id || model.modelId || '';
       this.currentModel = {
-        provider: result.provider as PiModelConfig['provider'],
-        modelId: result.modelId,
+        provider: provider as PiModelConfig['provider'],
+        modelId,
       };
       this.emitSessionUpdate('model_changed', {
-        provider: result.provider,
-        modelId: result.modelId,
+        provider,
+        modelId,
       });
       return this.currentModel;
     }
@@ -628,6 +638,7 @@ export class PiSession extends EventEmitter {
 
   /**
    * Get forkable entries (user messages that can be branched from)
+   * 0.50.0: UserMessage no longer has 'id' property
    */
   async getForkableEntries(): Promise<PiForkableEntry[]> {
     if (!this.agentSession) return [];
@@ -636,15 +647,18 @@ export class PiSession extends EventEmitter {
     const messages = this.agentSession.state?.messages || [];
     const forkable: PiForkableEntry[] = [];
 
+    let index = 0;
     for (const msg of messages) {
       if (msg.role === 'user' && typeof msg.content === 'string') {
+        const msgWithMeta = msg as { content: string; timestamp?: number };
         forkable.push({
-          id: msg.id || `msg-${forkable.length}`,
+          id: `msg-${index}`,
           type: 'user_message',
-          content: msg.content,
-          timestamp: msg.timestamp || Date.now(),
+          content: msgWithMeta.content,
+          timestamp: msgWithMeta.timestamp || Date.now(),
         });
       }
+      index++;
     }
 
     return forkable;
@@ -665,20 +679,28 @@ export class PiSession extends EventEmitter {
   }
 
   /**
-   * Get available models
+   * Get available models (0.50.0: Model uses 'api' and 'id' properties)
    */
   async getAvailableModels(): Promise<PiModelInfo[]> {
     if (this.cachedModels) return this.cachedModels;
 
     const { ModelRegistry, AuthStorage } = await import('@mariozechner/pi-coding-agent');
     const authStorage = new AuthStorage();
-    const registry = new ModelRegistry({ authStorage });
+    const registry = new ModelRegistry(authStorage);
     const available = registry.getAvailable();
 
-    this.cachedModels = available.map((m: { provider: string; modelId: string; displayName?: string; supportsThinking?: boolean; contextWindow?: number; maxOutputTokens?: number }) => ({
-      provider: m.provider as PiModelInfo['provider'],
-      modelId: m.modelId,
-      displayName: m.displayName || m.modelId,
+    // 0.50.0: Model<Api> has 'api' (provider), 'id' (modelId), 'displayName', etc.
+    this.cachedModels = available.map((m: {
+      api: string;
+      id: string;
+      displayName?: string;
+      supportsThinking?: boolean;
+      contextWindow?: number;
+      maxOutputTokens?: number;
+    }) => ({
+      provider: m.api as PiModelInfo['provider'],
+      modelId: m.id,
+      displayName: m.displayName || m.id,
       supportsThinking: m.supportsThinking || false,
       contextWindow: m.contextWindow,
       maxOutputTokens: m.maxOutputTokens,
