@@ -1,12 +1,12 @@
 // API Types for Aperture Gateway
 
-export type AgentType = 'claude_acp' | 'codex' | 'gemini' | 'claude_sdk'
+export type AgentType = 'claude_sdk'
 
-export type AuthMode = 'interactive' | 'api_key' | 'oauth' | 'vertex'
+export type AuthMode = 'api_key' | 'oauth'
 
 export type ApiKeyRef = 'inline' | 'stored' | 'none'
 
-export type ProviderKey = 'anthropic' | 'openai' | 'google'
+export type ProviderKey = 'anthropic'
 
 export interface SessionAuth {
   mode: AuthMode
@@ -14,13 +14,9 @@ export interface SessionAuth {
   apiKeyRef?: ApiKeyRef
   apiKey?: string
   storedCredentialId?: string
-  vertexProjectId?: string
-  vertexLocation?: string
-  vertexCredentialsPath?: string
 }
 
 export interface CreateSessionRequest {
-  agent?: AgentType
   auth?: SessionAuth
   env?: Record<string, string>
   workspaceId?: string

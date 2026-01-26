@@ -13,7 +13,7 @@ import { Dialog, ConfirmDialog } from '@/components/ui/Dialog'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { RepoSelector, type RepoSelection } from '@/components/session/RepoSelector'
-import type { AgentType, AuthMode, Session } from '@/api/types'
+import type { AuthMode, Session } from '@/api/types'
 import {
   Plus,
   Search,
@@ -313,8 +313,7 @@ function NewSessionDialog({
   const queryClient = useQueryClient()
   const { addSession } = useSessionsStore()
 
-  const [agent, setAgent] = useState<AgentType>('claude_acp')
-  const [authMode, setAuthMode] = useState<AuthMode>('interactive')
+  const [authMode, setAuthMode] = useState<AuthMode>('oauth')
   const [apiKey, setApiKey] = useState('')
   const [repoSelection, setRepoSelection] = useState<RepoSelection | null>(null)
   const [isCreating, setIsCreating] = useState(false)
@@ -348,32 +347,10 @@ function NewSessionDialog({
     }
   }, [open])
 
-  const agentOptions = [
-    { value: 'claude_acp', label: 'Claude(ACP)' },
-    { value: 'claude_sdk', label: 'Claude(SDK)' },
-    { value: 'codex', label: 'Codex (OpenAI)' },
-    { value: 'gemini', label: 'Gemini (Google)' },
+  const authOptions = [
+    { value: 'oauth', label: 'OAuth (Pre-authenticated)' },
+    { value: 'api_key', label: 'API Key' },
   ]
-
-  const authOptions: Record<AgentType, { value: AuthMode; label: string }[]> = {
-    claude_acp: [
-      { value: 'interactive', label: 'Interactive (Subscription)' },
-      { value: 'api_key', label: 'API Key' },
-    ],
-    claude_sdk: [
-      { value: 'oauth', label: 'OAuth (Pre-authenticated)' },
-      { value: 'api_key', label: 'API Key' },
-    ],
-    codex: [
-      { value: 'api_key', label: 'API Key' },
-      { value: 'interactive', label: 'Interactive' },
-    ],
-    gemini: [
-      { value: 'api_key', label: 'API Key' },
-      { value: 'oauth', label: 'OAuth' },
-      { value: 'vertex', label: 'Vertex AI' },
-    ],
-  }
 
   async function handleCreate() {
     if (!repoSelection) {
@@ -420,7 +397,6 @@ function NewSessionDialog({
       // Create the session
       setCreationStep('Creating session...')
       const session = await api.createSession({
-        agent,
         auth: {
           mode: authMode,
           apiKeyRef: authMode === 'api_key' ? 'inline' : 'none',
@@ -473,20 +449,8 @@ function NewSessionDialog({
         )}
 
         <Dropdown
-          label="Agent"
-          options={agentOptions}
-          value={agent}
-          onChange={(value) => {
-            const newAgent = value as AgentType
-            setAgent(newAgent)
-            // Reset auth mode to first option for new agent
-            setAuthMode(authOptions[newAgent][0].value)
-          }}
-        />
-
-        <Dropdown
           label="Authentication"
-          options={authOptions[agent]}
+          options={authOptions}
           value={authMode}
           onChange={(value) => setAuthMode(value as AuthMode)}
         />

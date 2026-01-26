@@ -20,23 +20,16 @@ export const STORAGE_KEYS = {
 } as const
 
 export const AGENT_LABELS: Record<string, string> = {
-  claude_acp: 'Claude(ACP)',
-  claude_sdk: 'Claude(SDK)',
-  codex: 'Codex',
-  gemini: 'Gemini',
+  claude_sdk: 'Claude',
 }
 
 export const AUTH_MODE_LABELS: Record<string, string> = {
-  interactive: 'Interactive',
   api_key: 'API Key',
   oauth: 'OAuth',
-  vertex: 'Vertex AI',
 }
 
 export const PROVIDER_LABELS: Record<string, string> = {
   anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  google: 'Google',
 }
 
 // Default SDK models to show before first prompt (SDK requires active query for real model list)
