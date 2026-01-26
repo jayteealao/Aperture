@@ -4,23 +4,42 @@ import type { Config } from './config.js';
 import type {
   SessionAuth,
   SdkSessionConfig,
+  PiSessionConfig,
   PermissionMode,
   McpServerConfig,
+  AgentType,
 } from './agents/index.js';
 import type { CredentialStore } from './credentials.js';
 import type { ApertureDatabase } from './database.js';
 import { SdkSession, type SdkWsMessage } from './sdk-session.js';
+import { PiSession, type PiWsMessage } from './pi-session.js';
 import { checkReadiness } from './claudeInstaller.js';
 import { registerCredentialRoutes } from './routes/credentials.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.js';
 import { registerDiscoveryRoutes } from './routes/discovery.js';
 
+/**
+ * Type guard to check if a session is a Pi SDK session
+ */
+function isPiSession(session: unknown): session is PiSession {
+  return session !== null && typeof session === 'object' && session instanceof PiSession;
+}
+
+/**
+ * Type guard to check if a session is a Claude SDK session
+ */
+function isSdkSession(session: unknown): session is SdkSession {
+  return session !== null && typeof session === 'object' && session instanceof SdkSession;
+}
+
 interface CreateSessionBody {
+  agent?: AgentType;
   auth?: SessionAuth;
   env?: Record<string, string>;
   workspaceId?: string; // Optional workspace ID for workspace-backed sessions
   repoPath?: string; // Optional repo path for sessions without workspace (no worktree isolation)
-  sdk?: SdkSessionConfig; // SDK-specific configuration
+  sdk?: SdkSessionConfig; // Claude SDK-specific configuration
+  pi?: PiSessionConfig; // Pi SDK-specific configuration
 }
 
 /**
@@ -69,9 +88,9 @@ export async function registerRoutes(
     '/v1/sessions',
     async (request, reply) => {
       try {
-        const { auth, env, workspaceId, repoPath, sdk } = request.body || {};
+        const { agent, auth, env, workspaceId, repoPath, sdk, pi } = request.body || {};
 
-        const session = await sessionManager.createSession({ auth, env, workspaceId, repoPath, sdk });
+        const session = await sessionManager.createSession({ agent, auth, env, workspaceId, repoPath, sdk, pi });
 
         return reply.code(201).send({
           id: session.id,
@@ -216,7 +235,7 @@ export async function registerRoutes(
       const sessionId = request.params.id;
 
       // Check if session exists in memory
-      let session: SdkSession | undefined = sessionManager.getSession(sessionId);
+      let session: SdkSession | PiSession | undefined = sessionManager.getSession(sessionId);
       let restored = false;
 
       if (!session) {
@@ -229,7 +248,7 @@ export async function registerRoutes(
           }
         } catch (err) {
           const error = err as Error;
-          if (error.message.includes('not found') || error.message.includes('has no SDK session ID')) {
+          if (error.message.includes('not found') || error.message.includes('has no SDK session ID') || error.message.includes('has no Pi session path')) {
             return reply.code(404).send({
               error: 'Session not found or not resumable',
               message: error.message,
@@ -637,7 +656,7 @@ export async function registerRoutes(
       session.on('permission_request', permissionRequestHandler);
       session.on('exit', exitHandler);
 
-      // Handle SDK-specific messages
+      // Handle SDK-specific messages (Claude SDK)
       const sdkMessageHandler = (message: SdkWsMessage) => {
         try {
           socket.send(JSON.stringify(message));
@@ -646,7 +665,21 @@ export async function registerRoutes(
         }
       };
 
-      session.on('sdk_message', sdkMessageHandler);
+      // Handle Pi SDK-specific messages
+      const piMessageHandler = (message: PiWsMessage) => {
+        try {
+          socket.send(JSON.stringify(message));
+        } catch (err) {
+          request.log.error(err, 'Failed to send Pi WebSocket message');
+        }
+      };
+
+      // Register handlers based on session type
+      if (isSdkSession(session)) {
+        session.on('sdk_message', sdkMessageHandler);
+      } else if (isPiSession(session)) {
+        session.on('pi_message', piMessageHandler);
+      }
 
       // Handle messages from WebSocket (frontend) to agent
       socket.on('message', async (data: Buffer) => {
@@ -793,12 +826,121 @@ export async function registerRoutes(
               }));
             }
           } else if (obj.type === 'update_config' && obj.config) {
-            session.updateConfig(obj.config as Partial<SdkSessionConfig>);
-            socket.send(JSON.stringify({
-              jsonrpc: '2.0',
-              method: 'session/config_updated',
-              params: { config: session.getConfig() },
-            }));
+            if (isSdkSession(session)) {
+              session.updateConfig(obj.config as Partial<SdkSessionConfig>);
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'session/config_updated',
+                params: { config: session.getConfig() },
+              }));
+            }
+          }
+          // ==================== Pi SDK Specific Handlers ====================
+          else if (obj.type === 'pi_steer' && typeof obj.content === 'string') {
+            // Steer the Pi agent mid-run (interrupt and redirect)
+            if (isPiSession(session)) {
+              await session.steer(obj.content);
+            }
+          } else if (obj.type === 'pi_follow_up' && typeof obj.content === 'string') {
+            // Queue a follow-up message for when the Pi agent finishes
+            if (isPiSession(session)) {
+              await session.followUp(obj.content);
+            }
+          } else if (obj.type === 'pi_compact') {
+            // Compact the conversation context (Pi SDK only)
+            if (isPiSession(session)) {
+              await session.compact(obj.instructions as string | undefined);
+            }
+          } else if (obj.type === 'pi_fork' && typeof obj.entryId === 'string') {
+            // Fork the session at a specific entry (Pi SDK only)
+            if (isPiSession(session)) {
+              await session.fork(obj.entryId);
+            }
+          } else if (obj.type === 'pi_navigate' && typeof obj.entryId === 'string') {
+            // Navigate to a specific entry in the session tree (Pi SDK only)
+            if (isPiSession(session)) {
+              await session.navigateTree(obj.entryId);
+            }
+          } else if (obj.type === 'pi_set_model') {
+            // Set model (Pi SDK only - supports multiple providers)
+            if (isPiSession(session) && obj.provider && obj.modelId) {
+              await session.setModel(obj.provider as string, obj.modelId as string);
+            }
+          } else if (obj.type === 'pi_cycle_model') {
+            // Cycle to next model (Pi SDK only)
+            if (isPiSession(session)) {
+              const result = await session.cycleModel();
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'pi/model_cycled',
+                params: result,
+              }));
+            }
+          } else if (obj.type === 'pi_set_thinking_level') {
+            // Set thinking level (Pi SDK only)
+            if (isPiSession(session) && obj.level) {
+              await session.setThinkingLevel(obj.level as string);
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'pi/thinking_level_set',
+                params: { level: obj.level },
+              }));
+            }
+          } else if (obj.type === 'pi_cycle_thinking') {
+            // Cycle thinking level (Pi SDK only)
+            if (isPiSession(session)) {
+              const newLevel = await session.cycleThinkingLevel();
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'pi/thinking_level_cycled',
+                params: { level: newLevel },
+              }));
+            }
+          } else if (obj.type === 'pi_new_session') {
+            // Start a new session (Pi SDK only - clears context)
+            if (isPiSession(session)) {
+              await session.newSession();
+            }
+          } else if (obj.type === 'pi_get_tree') {
+            // Get session tree (Pi SDK only)
+            if (isPiSession(session)) {
+              const tree = await session.getSessionTree();
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'pi/session_tree',
+                params: { tree },
+              }));
+            }
+          } else if (obj.type === 'pi_get_forkable') {
+            // Get forkable entries (Pi SDK only)
+            if (isPiSession(session)) {
+              const entries = await session.getForkableEntries();
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'pi/forkable_entries',
+                params: { entries },
+              }));
+            }
+          } else if (obj.type === 'pi_get_stats') {
+            // Get session stats (Pi SDK only)
+            if (isPiSession(session)) {
+              const stats = session.getStats();
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'pi/session_stats',
+                params: { stats },
+              }));
+            }
+          } else if (obj.type === 'pi_get_models') {
+            // Get available models (Pi SDK only)
+            if (isPiSession(session)) {
+              const models = await session.getAvailableModels();
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'pi/available_models',
+                params: { models },
+              }));
+            }
           } else {
             throw new Error('Unknown message type');
           }
@@ -824,7 +966,12 @@ export async function registerRoutes(
         session.off('session_update', sessionUpdateHandler);
         session.off('permission_request', permissionRequestHandler);
         session.off('exit', exitHandler);
-        session.off('sdk_message', sdkMessageHandler);
+        if (isSdkSession(session)) {
+          session.off('sdk_message', sdkMessageHandler);
+        }
+        if (isPiSession(session)) {
+          session.off('pi_message', piMessageHandler);
+        }
       });
     }
   );

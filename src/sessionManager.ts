@@ -1,26 +1,30 @@
 import { randomUUID } from 'crypto';
 import type { Config } from './config.js';
 import { SdkSession } from './sdk-session.js';
-import { ClaudeSdkBackend } from './agents/index.js';
-import type { SessionAuth, SessionConfig, SdkSessionConfig } from './agents/index.js';
+import { PiSession } from './pi-session.js';
+import { ClaudeSdkBackend, PiSdkBackend } from './agents/index.js';
+import type { SessionAuth, SessionConfig, SdkSessionConfig, PiSessionConfig, AgentType } from './agents/index.js';
 import type { CredentialStore } from './credentials.js';
-import type { ApertureDatabase } from './database.js';
+import type { ApertureDatabase, SessionRecord } from './database.js';
 
 export interface CreateSessionOptions {
+  agent?: AgentType;
   auth?: SessionAuth;
   env?: Record<string, string>;
   workspaceId?: string; // Optional workspace ID for workspace-backed sessions
   repoPath?: string; // Optional repo path for sessions without workspace (no worktree isolation)
-  sdk?: SdkSessionConfig; // SDK-specific configuration
+  sdk?: SdkSessionConfig; // Claude SDK-specific configuration
+  pi?: PiSessionConfig; // Pi SDK-specific configuration
 }
 
 /**
  * Manages all active sessions
  */
 export class SessionManager {
-  private sessions: Map<string, SdkSession> = new Map();
+  private sessions: Map<string, SdkSession | PiSession> = new Map();
   private config: Config;
-  private backend: ClaudeSdkBackend;
+  private claudeBackend: ClaudeSdkBackend;
+  private piBackend: PiSdkBackend;
   private credentialStore?: CredentialStore;
   private database?: ApertureDatabase;
 
@@ -33,12 +37,13 @@ export class SessionManager {
     this.config = config;
     this.database = database;
     this.credentialStore = credentialStore;
-    this.backend = new ClaudeSdkBackend();
+    this.claudeBackend = new ClaudeSdkBackend();
+    this.piBackend = new PiSdkBackend();
   }
 
   /**
    * Restore sessions from database on startup
-   * SDK sessions with sdk_session_id are marked as idle (resumable)
+   * SDK sessions with sdk_session_id or pi_session_path are marked as idle (resumable)
    */
   async restoreSessions(): Promise<void> {
     if (!this.database) {
@@ -48,17 +53,21 @@ export class SessionManager {
     const activeSessions = this.database.getActiveSessions();
     console.log(`[SessionManager] Found ${activeSessions.length} active sessions in database`);
 
-    let sdkResumableCount = 0;
     let endedCount = 0;
+    let sdkResumableCount = 0;
 
     for (const sessionRecord of activeSessions) {
-      // SDK sessions with sdk_session_id can be resumed
+      // Claude SDK sessions with sdk_session_id can be resumed
       if (sessionRecord.sdk_session_id && sessionRecord.agent === 'claude_sdk') {
-        // Mark as idle (not ended) - can be restored later
+        this.database.markSdkSessionsIdle();
+        sdkResumableCount++;
+      }
+      // Pi SDK sessions with pi_session_path can be resumed
+      else if (sessionRecord.pi_session_path && sessionRecord.agent === 'pi_sdk') {
         this.database.markSdkSessionsIdle();
         sdkResumableCount++;
       } else {
-        // Sessions without sdk_session_id can't be resumed
+        // Sessions without resumption data can't be resumed
         this.database.endSession(sessionRecord.id, Date.now());
         endedCount++;
       }
@@ -71,10 +80,10 @@ export class SessionManager {
   }
 
   /**
-   * Restore/reconnect to an existing SDK session
-   * Creates a new SdkSession instance with resume configuration
+   * Restore/reconnect to an existing session
+   * Routes to appropriate restore method based on agent type
    */
-  async restoreSession(sessionId: string): Promise<SdkSession | null> {
+  async restoreSession(sessionId: string): Promise<SdkSession | PiSession | null> {
     if (!this.database) {
       throw new Error('Database not configured');
     }
@@ -84,19 +93,29 @@ export class SessionManager {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
-    if (!sessionRecord.sdk_session_id) {
-      throw new Error(`Session ${sessionId} has no SDK session ID`);
-    }
-
-    if (sessionRecord.agent !== 'claude_sdk') {
-      throw new Error(`Session ${sessionId} is not a Claude SDK session (agent: ${sessionRecord.agent})`);
-    }
-
     // Check if session already exists in memory
     const existingSession = this.sessions.get(sessionId);
     if (existingSession) {
       console.log(`[SessionManager] Session ${sessionId} already active in memory`);
       return existingSession;
+    }
+
+    // Route to appropriate restore method based on agent type
+    if (sessionRecord.agent === 'claude_sdk') {
+      return this.restoreClaudeSdkSession(sessionId, sessionRecord);
+    } else if (sessionRecord.agent === 'pi_sdk') {
+      return this.restorePiSession(sessionId, sessionRecord);
+    } else {
+      throw new Error(`Unknown agent type for session ${sessionId}: ${sessionRecord.agent}`);
+    }
+  }
+
+  /**
+   * Restore Claude SDK session
+   */
+  private async restoreClaudeSdkSession(sessionId: string, sessionRecord: SessionRecord): Promise<SdkSession> {
+    if (!sessionRecord.sdk_session_id) {
+      throw new Error(`Session ${sessionId} has no SDK session ID`);
     }
 
     // Parse stored SDK config
@@ -135,15 +154,76 @@ export class SessionManager {
       sessionRecord.working_directory || undefined
     );
 
-    // Update database status
-    this.database.saveSession({
-      ...sessionRecord,
-      status: 'active',
-      last_activity_at: Date.now(),
-      ended_at: null,
-    });
+    // Set up event handlers
+    this.setupSdkSessionEventHandlers(session, sessionId);
+
+    // Start the session
+    await session.start();
+
+    this.sessions.set(sessionId, session);
+    console.log(`[SessionManager] Restored Claude SDK session ${sessionId} with SDK session ID ${sessionRecord.sdk_session_id}`);
+
+    return session;
+  }
+
+  /**
+   * Restore Pi SDK session
+   */
+  private async restorePiSession(sessionId: string, sessionRecord: SessionRecord): Promise<PiSession> {
+    if (!sessionRecord.pi_session_path) {
+      throw new Error(`Session ${sessionId} has no Pi session path`);
+    }
+
+    // Parse stored Pi config
+    let piConfig: PiSessionConfig = {};
+    if (sessionRecord.sdk_config) {
+      try {
+        piConfig = JSON.parse(sessionRecord.sdk_config);
+      } catch (e) {
+        console.warn(`[SessionManager] Failed to parse Pi config for session ${sessionId}`);
+      }
+    }
+
+    // Set up resume configuration
+    piConfig.sessionMode = 'open';
+    piConfig.sessionPath = sessionRecord.pi_session_path;
+
+    // Build session config
+    const sessionConfig: SessionConfig = {
+      id: sessionId,
+      agent: 'pi_sdk',
+      auth: {
+        mode: sessionRecord.auth_mode as SessionAuth['mode'],
+        apiKeyRef: 'none',
+      },
+      pi: piConfig,
+    };
+
+    // Create new PiSession with resume config
+    const session = new PiSession(
+      sessionConfig,
+      this.config,
+      this.database,
+      undefined, // API key not stored
+      sessionRecord.working_directory || undefined
+    );
 
     // Set up event handlers
+    this.setupPiSessionEventHandlers(session, sessionId);
+
+    // Start the session
+    await session.start();
+
+    this.sessions.set(sessionId, session);
+    console.log(`[SessionManager] Restored Pi SDK session ${sessionId} with session path ${sessionRecord.pi_session_path}`);
+
+    return session;
+  }
+
+  /**
+   * Set up event handlers for Claude SDK session
+   */
+  private setupSdkSessionEventHandlers(session: SdkSession, sessionId: string): void {
     session.on('exit', () => {
       this.sessions.delete(sessionId);
       if (this.database) {
@@ -159,7 +239,7 @@ export class SessionManager {
       }
     });
 
-    session.on('error', (err) => {
+    session.on('error', (err: Error) => {
       console.error(`Session ${sessionId} error:`, err);
     });
 
@@ -168,20 +248,49 @@ export class SessionManager {
         this.database.updateSessionActivity(sessionId, Date.now());
       }
     });
+  }
 
-    // Start the session
-    await session.start();
+  /**
+   * Set up event handlers for Pi SDK session
+   */
+  private setupPiSessionEventHandlers(session: PiSession, sessionId: string): void {
+    session.on('exit', () => {
+      this.sessions.delete(sessionId);
+      if (this.database) {
+        this.database.endSession(sessionId, Date.now());
+        this.database.markNonResumable(sessionId);
+      }
+    });
 
-    this.sessions.set(sessionId, session);
-    console.log(`[SessionManager] Restored SDK session ${sessionId} with SDK session ID ${sessionRecord.sdk_session_id}`);
+    session.on('idle', () => {
+      console.log(`Pi Session ${sessionId} idle`);
+      if (this.database) {
+        const record = this.database.getSession(sessionId);
+        if (record) {
+          this.database.saveSession({
+            ...record,
+            status: 'idle',
+            last_activity_at: Date.now(),
+          });
+        }
+      }
+    });
 
-    return session;
+    session.on('error', (err: Error) => {
+      console.error(`Pi Session ${sessionId} error:`, err);
+    });
+
+    session.on('activity', () => {
+      if (this.database) {
+        this.database.updateSessionActivity(sessionId, Date.now());
+      }
+    });
   }
 
   /**
    * Get resumable sessions from database
    */
-  getResumableSessions(): { id: string; agent: string; sdkSessionId: string; lastActivity: number; workingDirectory: string | null }[] {
+  getResumableSessions(): { id: string; agent: string; sdkSessionId?: string; piSessionPath?: string; lastActivity: number; workingDirectory: string | null }[] {
     if (!this.database) {
       return [];
     }
@@ -190,7 +299,8 @@ export class SessionManager {
     return records.map(r => ({
       id: r.id,
       agent: r.agent,
-      sdkSessionId: r.sdk_session_id!,
+      sdkSessionId: r.sdk_session_id || undefined,
+      piSessionPath: r.pi_session_path || undefined,
       lastActivity: r.last_activity_at,
       workingDirectory: r.working_directory,
     }));
@@ -199,7 +309,7 @@ export class SessionManager {
   /**
    * Creates a new session
    */
-  async createSession(options: CreateSessionOptions = {}): Promise<SdkSession> {
+  async createSession(options: CreateSessionOptions = {}): Promise<SdkSession | PiSession> {
     // Check max sessions limit
     if (this.sessions.size >= this.config.maxConcurrentSessions) {
       throw new Error(
@@ -208,27 +318,22 @@ export class SessionManager {
     }
 
     const id = randomUUID();
+    const agentType: AgentType = options.agent || 'claude_sdk';
 
     // Build session auth configuration with defaults
     const auth: SessionAuth = {
       mode: options.auth?.mode || 'oauth',
-      providerKey: 'anthropic',
+      providerKey: options.auth?.providerKey || 'anthropic',
       apiKeyRef: options.auth?.apiKeyRef || 'none',
       apiKey: options.auth?.apiKey,
       storedCredentialId: options.auth?.storedCredentialId,
     };
 
-    // Build session config
-    const sessionConfig: SessionConfig = {
-      id,
-      agent: 'claude_sdk',
-      auth,
-      env: options.env,
-      sdk: options.sdk,
-    };
+    // Select backend based on agent type
+    const backend = agentType === 'pi_sdk' ? this.piBackend : this.claudeBackend;
 
     // Validate auth
-    this.backend.validateAuth(auth, this.config.hostedMode, this.config.allowInteractiveAuth);
+    backend.validateAuth(auth, this.config.hostedMode, this.config.allowInteractiveAuth);
 
     // Resolve API key if needed (only for api_key mode)
     let resolvedApiKey: string | undefined;
@@ -335,6 +440,33 @@ export class SessionManager {
       console.log(`[SessionManager] Using direct repo path for session ${id}: ${sessionCwd}`);
     }
 
+    // Create session based on agent type
+    if (agentType === 'pi_sdk') {
+      return this.createPiSession(id, auth, options, resolvedApiKey, sessionCwd);
+    } else {
+      return this.createClaudeSdkSession(id, auth, options, resolvedApiKey, sessionCwd);
+    }
+  }
+
+  /**
+   * Create a Claude SDK session
+   */
+  private async createClaudeSdkSession(
+    id: string,
+    auth: SessionAuth,
+    options: CreateSessionOptions,
+    resolvedApiKey: string | undefined,
+    sessionCwd: string | undefined
+  ): Promise<SdkSession> {
+    // Build session config
+    const sessionConfig: SessionConfig = {
+      id,
+      agent: 'claude_sdk',
+      auth,
+      env: options.env,
+      sdk: options.sdk,
+    };
+
     // Create SDK session
     if (auth.mode === 'api_key' && !resolvedApiKey) {
       throw new Error('Claude SDK api_key mode requires an API key.');
@@ -359,6 +491,7 @@ export class SessionManager {
         sdk_config: options.sdk ? JSON.stringify(options.sdk) : null,
         is_resumable: 1, // SDK sessions start as potentially resumable
         working_directory: sessionCwd || null,
+        pi_session_path: null,
       });
     }
 
@@ -384,11 +517,11 @@ export class SessionManager {
       }
     });
 
-    session.on('error', (err) => {
+    session.on('error', (err: Error) => {
       console.error(`Session ${id} error:`, err);
     });
 
-    session.on('stderr', (line) => {
+    session.on('stderr', (line: string) => {
       console.error(`Session ${id} stderr: ${line}`);
     });
 
@@ -407,9 +540,61 @@ export class SessionManager {
   }
 
   /**
+   * Create a Pi SDK session
+   */
+  private async createPiSession(
+    id: string,
+    auth: SessionAuth,
+    options: CreateSessionOptions,
+    resolvedApiKey: string | undefined,
+    sessionCwd: string | undefined
+  ): Promise<PiSession> {
+    // Build session config
+    const sessionConfig: SessionConfig = {
+      id,
+      agent: 'pi_sdk',
+      auth,
+      env: options.env,
+      pi: options.pi,
+    };
+
+    const session = new PiSession(sessionConfig, this.config, this.database, resolvedApiKey, sessionCwd);
+
+    // Persist to database
+    if (this.database) {
+      this.database.saveSession({
+        id,
+        agent: 'pi_sdk',
+        auth_mode: auth.mode,
+        acp_session_id: null,
+        created_at: Date.now(),
+        last_activity_at: Date.now(),
+        ended_at: null,
+        status: 'active',
+        metadata: JSON.stringify({ env: options.env }),
+        user_id: null,
+        sdk_session_id: null,
+        sdk_config: options.pi ? JSON.stringify(options.pi) : null,
+        is_resumable: 1, // Pi SDK sessions start as potentially resumable
+        working_directory: sessionCwd || null,
+        pi_session_path: null, // Will be updated when Pi SDK creates session file
+      });
+    }
+
+    // Set up event handlers
+    this.setupPiSessionEventHandlers(session, id);
+
+    // Start the session
+    await session.start();
+
+    this.sessions.set(id, session);
+    return session;
+  }
+
+  /**
    * Gets a session by ID
    */
-  getSession(id: string): SdkSession | undefined {
+  getSession(id: string): SdkSession | PiSession | undefined {
     return this.sessions.get(id);
   }
 
@@ -434,7 +619,7 @@ export class SessionManager {
   /**
    * Gets all sessions
    */
-  getAllSessions(): SdkSession[] {
+  getAllSessions(): (SdkSession | PiSession)[] {
     return Array.from(this.sessions.values());
   }
 

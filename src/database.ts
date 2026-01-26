@@ -18,6 +18,8 @@ export interface SessionRecord {
   sdk_config: string | null;
   is_resumable: number;
   working_directory: string | null;
+  // Pi SDK session field
+  pi_session_path: string | null;
 }
 
 export interface MessageRecord {
@@ -138,8 +140,8 @@ export class ApertureDatabase {
   saveSession(session: SessionRecord): void {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO sessions
-      (id, agent, auth_mode, acp_session_id, created_at, last_activity_at, ended_at, status, metadata, user_id, sdk_session_id, sdk_config, is_resumable, working_directory)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, agent, auth_mode, acp_session_id, created_at, last_activity_at, ended_at, status, metadata, user_id, sdk_session_id, sdk_config, is_resumable, working_directory, pi_session_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -156,7 +158,8 @@ export class ApertureDatabase {
       session.sdk_session_id ?? null,
       session.sdk_config ?? null,
       session.is_resumable ?? 0,
-      session.working_directory ?? null
+      session.working_directory ?? null,
+      session.pi_session_path ?? null
     );
   }
 
@@ -254,12 +257,22 @@ export class ApertureDatabase {
   }
 
   /**
+   * Update Pi session path for a session
+   */
+  updatePiSessionPath(id: string, piSessionPath: string): void {
+    const stmt = this.db.prepare(
+      "UPDATE sessions SET pi_session_path = ?, is_resumable = 1 WHERE id = ?"
+    );
+    stmt.run(piSessionPath, id);
+  }
+
+  /**
    * Mark SDK sessions as idle (for server restart recovery)
-   * Unlike ACP sessions, SDK sessions can potentially be resumed
+   * Both Claude SDK and Pi SDK sessions can potentially be resumed
    */
   markSdkSessionsIdle(): void {
     const stmt = this.db.prepare(
-      "UPDATE sessions SET status = 'idle' WHERE status = 'active' AND sdk_session_id IS NOT NULL AND is_resumable = 1"
+      "UPDATE sessions SET status = 'idle' WHERE status = 'active' AND (sdk_session_id IS NOT NULL OR pi_session_path IS NOT NULL) AND is_resumable = 1"
     );
     stmt.run();
   }

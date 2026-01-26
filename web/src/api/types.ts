@@ -1,12 +1,14 @@
 // API Types for Aperture Gateway
 
-export type AgentType = 'claude_sdk'
+import type { PiSessionConfig } from './pi-types'
+
+export type AgentType = 'claude_sdk' | 'pi_sdk'
 
 export type AuthMode = 'api_key' | 'oauth'
 
 export type ApiKeyRef = 'inline' | 'stored' | 'none'
 
-export type ProviderKey = 'anthropic'
+export type ProviderKey = 'anthropic' | 'openai' | 'google' | 'groq' | 'openrouter'
 
 export interface SessionAuth {
   mode: AuthMode
@@ -17,11 +19,13 @@ export interface SessionAuth {
 }
 
 export interface CreateSessionRequest {
+  agent?: AgentType
   auth?: SessionAuth
   env?: Record<string, string>
   workspaceId?: string
   repoPath?: string
   sdk?: SdkSessionConfig
+  pi?: PiSessionConfig
 }
 
 export interface SessionStatus {
@@ -34,8 +38,10 @@ export interface SessionStatus {
   idleMs: number
   acpSessionId: string | null
   sdkSessionId: string | null
+  piSessionPath?: string | null
   isResumable?: boolean
   workingDirectory?: string
+  thinkingLevel?: string
 }
 
 export interface Session {
@@ -76,7 +82,8 @@ export interface ListSessionsResponse {
 export interface ResumableSession {
   id: string
   agent: string
-  sdkSessionId: string
+  sdkSessionId?: string
+  piSessionPath?: string
   lastActivity: number
   workingDirectory: string | null
 }

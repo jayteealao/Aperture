@@ -1,4 +1,5 @@
 import type { SdkSessionConfig } from './sdk-types.js';
+import type { PiSessionConfig } from './pi-types.js';
 
 /**
  * Authentication mode for an agent session
@@ -6,9 +7,9 @@ import type { SdkSessionConfig } from './sdk-types.js';
 export type AuthMode = 'api_key' | 'oauth';
 
 /**
- * Provider type (only Anthropic for Claude SDK)
+ * Provider type - Claude SDK uses anthropic, Pi SDK supports multiple providers
  */
-export type Provider = 'anthropic';
+export type Provider = 'anthropic' | 'openai' | 'google' | 'groq' | 'openrouter';
 
 /**
  * API key reference type
@@ -27,9 +28,9 @@ export interface SessionAuth {
 }
 
 /**
- * Agent type - Claude SDK only
+ * Agent type - SDK-based agents only
  */
-export type AgentType = 'claude_sdk';
+export type AgentType = 'claude_sdk' | 'pi_sdk';
 
 /**
  * Session configuration for creating an agent
@@ -39,7 +40,8 @@ export interface SessionConfig {
   agent: AgentType;
   auth: SessionAuth;
   env?: Record<string, string>;
-  sdk?: SdkSessionConfig;
+  sdk?: SdkSessionConfig; // Claude SDK-specific configuration
+  pi?: PiSessionConfig; // Pi SDK-specific configuration
 }
 
 /**
@@ -52,9 +54,9 @@ export interface AgentReadiness {
 }
 
 /**
- * Agent backend interface for Claude SDK
+ * SDK Agent backend interface (no spawn method)
  */
-export interface AgentBackend {
+export interface SdkAgentBackend {
   /** Agent name */
   readonly name: string;
 
@@ -72,3 +74,8 @@ export interface AgentBackend {
    */
   validateAuth(sessionAuth: SessionAuth, hostedMode: boolean, allowInteractiveAuth?: boolean): void;
 }
+
+/**
+ * Legacy AgentBackend alias - all backends are now SDK-based
+ */
+export type AgentBackend = SdkAgentBackend;

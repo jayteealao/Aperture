@@ -22,6 +22,18 @@ import type {
   SdkWsMessage,
 } from '@/api/types'
 import { isSdkWsMessage } from '@/api/types'
+import type {
+  PiSessionConfig,
+  PiSessionStats,
+  PiModelInfo,
+  PiSessionTree,
+  PiWsMessage,
+  PiThinkingLevel,
+  PiContentBlock,
+  PiStreamingState,
+  PiForkableEntry,
+} from '@/api/pi-types'
+import { isPiWsMessage } from '@/api/pi-types'
 import { api } from '@/api/client'
 import { wsManager } from '@/api/websocket'
 import { DEFAULT_SDK_MODELS } from '@/utils/constants'
@@ -72,6 +84,22 @@ interface SdkStreamingState {
   currentBlockIndex: number
 }
 
+// Pi SDK loading state
+interface PiLoadingState {
+  config?: boolean
+  models?: boolean
+  stats?: boolean
+  tree?: boolean
+  forkable?: boolean
+}
+
+// Pi SDK error state
+interface PiErrorState {
+  models?: string
+  stats?: string
+  tree?: string
+}
+
 interface SessionsState {
   // Data
   sessions: Session[]
@@ -86,7 +114,7 @@ interface SessionsState {
     options: unknown[]
   }>
 
-  // SDK State
+  // SDK State (Claude)
   sdkConfig: Record<string, SdkSessionConfig>
   sdkUsage: Record<string, SessionResult | null>
   sdkAccountInfo: Record<string, AccountInfo | null>
@@ -98,6 +126,17 @@ interface SessionsState {
   sdkErrors: Record<string, SdkErrorState>
   sdkRewindResult: Record<string, RewindFilesResult | null>
   sdkStreamingState: Record<string, SdkStreamingState | null>
+
+  // Pi SDK State
+  piConfig: Record<string, PiSessionConfig>
+  piStats: Record<string, PiSessionStats | null>
+  piModels: Record<string, PiModelInfo[]>
+  piSessionTree: Record<string, PiSessionTree | null>
+  piForkableEntries: Record<string, PiForkableEntry[]>
+  piThinkingLevel: Record<string, PiThinkingLevel>
+  piLoading: Record<string, PiLoadingState>
+  piErrors: Record<string, PiErrorState>
+  piStreamingState: Record<string, PiStreamingState | null>
 
   // Actions - Sessions
   setSessions: (sessions: Session[]) => void
@@ -124,7 +163,7 @@ interface SessionsState {
   addPendingPermission: (sessionId: string, permission: { toolCallId: string; toolCall: unknown; options: unknown[] }) => void
   removePendingPermission: (sessionId: string, toolCallId: string) => void
 
-  // Actions - SDK State
+  // Actions - SDK State (Claude)
   setSdkConfig: (sessionId: string, config: SdkSessionConfig) => void
   setSdkUsage: (sessionId: string, usage: SessionResult | null) => void
   setSdkAccountInfo: (sessionId: string, info: AccountInfo | null) => void
@@ -135,6 +174,32 @@ interface SessionsState {
   setSdkLoading: (sessionId: string, loading: Partial<SdkLoadingState>) => void
   setSdkErrors: (sessionId: string, errors: Partial<SdkErrorState>) => void
   setSdkRewindResult: (sessionId: string, result: RewindFilesResult | null) => void
+
+  // Actions - Pi SDK State
+  setPiConfig: (sessionId: string, config: PiSessionConfig) => void
+  setPiStats: (sessionId: string, stats: PiSessionStats | null) => void
+  setPiModels: (sessionId: string, models: PiModelInfo[]) => void
+  setPiSessionTree: (sessionId: string, tree: PiSessionTree | null) => void
+  setPiForkableEntries: (sessionId: string, entries: PiForkableEntry[]) => void
+  setPiThinkingLevel: (sessionId: string, level: PiThinkingLevel) => void
+  setPiLoading: (sessionId: string, loading: Partial<PiLoadingState>) => void
+  setPiErrors: (sessionId: string, errors: Partial<PiErrorState>) => void
+
+  // Pi WebSocket Actions
+  piSteer: (sessionId: string, content: string) => void
+  piFollowUp: (sessionId: string, content: string) => void
+  piCompact: (sessionId: string, instructions?: string) => void
+  piFork: (sessionId: string, entryId: string) => void
+  piNavigate: (sessionId: string, entryId: string) => void
+  piSetModel: (sessionId: string, provider: string, modelId: string) => void
+  piCycleModel: (sessionId: string) => void
+  piSetThinkingLevel: (sessionId: string, level: PiThinkingLevel) => void
+  piCycleThinking: (sessionId: string) => void
+  piNewSession: (sessionId: string) => void
+  piGetTree: (sessionId: string) => void
+  piGetForkable: (sessionId: string) => void
+  piGetStats: (sessionId: string) => void
+  piGetModels: (sessionId: string) => void
 
   // WebSocket
   connectSession: (sessionId: string) => Promise<void>
@@ -167,7 +232,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   activeSessionId: null,
   pendingPermissions: {},
 
-  // SDK initial state
+  // SDK initial state (Claude)
   sdkConfig: {},
   sdkUsage: {},
   sdkAccountInfo: {},
@@ -179,6 +244,17 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   sdkErrors: {},
   sdkRewindResult: {},
   sdkStreamingState: {},
+
+  // Pi SDK initial state
+  piConfig: {},
+  piStats: {},
+  piModels: {},
+  piSessionTree: {},
+  piForkableEntries: {},
+  piThinkingLevel: {},
+  piLoading: {},
+  piErrors: {},
+  piStreamingState: {},
 
   // Sessions actions
   setSessions: (sessions) => {
@@ -477,6 +553,122 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     }))
   },
 
+  // Pi SDK actions
+  setPiConfig: (sessionId, config) => {
+    set((state) => ({
+      piConfig: { ...state.piConfig, [sessionId]: config },
+    }))
+  },
+
+  setPiStats: (sessionId, stats) => {
+    set((state) => ({
+      piStats: { ...state.piStats, [sessionId]: stats },
+    }))
+  },
+
+  setPiModels: (sessionId, models) => {
+    set((state) => ({
+      piModels: { ...state.piModels, [sessionId]: models },
+    }))
+  },
+
+  setPiSessionTree: (sessionId, tree) => {
+    set((state) => ({
+      piSessionTree: { ...state.piSessionTree, [sessionId]: tree },
+    }))
+  },
+
+  setPiForkableEntries: (sessionId, entries) => {
+    set((state) => ({
+      piForkableEntries: { ...state.piForkableEntries, [sessionId]: entries },
+    }))
+  },
+
+  setPiThinkingLevel: (sessionId, level) => {
+    set((state) => ({
+      piThinkingLevel: { ...state.piThinkingLevel, [sessionId]: level },
+    }))
+  },
+
+  setPiLoading: (sessionId, loading) => {
+    set((state) => ({
+      piLoading: {
+        ...state.piLoading,
+        [sessionId]: { ...state.piLoading[sessionId], ...loading },
+      },
+    }))
+  },
+
+  setPiErrors: (sessionId, errors) => {
+    set((state) => ({
+      piErrors: {
+        ...state.piErrors,
+        [sessionId]: { ...state.piErrors[sessionId], ...errors },
+      },
+    }))
+  },
+
+  // Pi WebSocket actions
+  piSteer: (sessionId, content) => {
+    wsManager.send(sessionId, { type: 'pi_steer', content })
+  },
+
+  piFollowUp: (sessionId, content) => {
+    wsManager.send(sessionId, { type: 'pi_follow_up', content })
+  },
+
+  piCompact: (sessionId, instructions) => {
+    wsManager.send(sessionId, { type: 'pi_compact', instructions })
+  },
+
+  piFork: (sessionId, entryId) => {
+    wsManager.send(sessionId, { type: 'pi_fork', entryId })
+  },
+
+  piNavigate: (sessionId, entryId) => {
+    wsManager.send(sessionId, { type: 'pi_navigate', entryId })
+  },
+
+  piSetModel: (sessionId, provider, modelId) => {
+    wsManager.send(sessionId, { type: 'pi_set_model', provider, modelId })
+  },
+
+  piCycleModel: (sessionId) => {
+    wsManager.send(sessionId, { type: 'pi_cycle_model' })
+  },
+
+  piSetThinkingLevel: (sessionId, level) => {
+    wsManager.send(sessionId, { type: 'pi_set_thinking_level', level })
+  },
+
+  piCycleThinking: (sessionId) => {
+    wsManager.send(sessionId, { type: 'pi_cycle_thinking' })
+  },
+
+  piNewSession: (sessionId) => {
+    wsManager.send(sessionId, { type: 'pi_new_session' })
+  },
+
+  piGetTree: (sessionId) => {
+    get().setPiLoading(sessionId, { tree: true })
+    wsManager.send(sessionId, { type: 'pi_get_tree' })
+  },
+
+  piGetForkable: (sessionId) => {
+    get().setPiLoading(sessionId, { forkable: true })
+    wsManager.send(sessionId, { type: 'pi_get_forkable' })
+  },
+
+  piGetStats: (sessionId) => {
+    get().setPiLoading(sessionId, { stats: true })
+    wsManager.send(sessionId, { type: 'pi_get_stats' })
+  },
+
+  piGetModels: (sessionId) => {
+    get().setPiLoading(sessionId, { models: true })
+    wsManager.send(sessionId, { type: 'pi_get_models' })
+  },
+
   // WebSocket actions
   connectSession: async (sessionId) => {
     // First, try to restore/connect to the session on the backend
@@ -496,11 +688,16 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
     const wsUrl = api.getWebSocketUrl(sessionId)
 
-    // Message handler that routes both SDK and JSON-RPC messages
+    // Message handler that routes SDK, Pi, and JSON-RPC messages
     const messageHandler = (sid: string, data: unknown) => {
-      // Check if this is a first-class SDK message
+      // Check if this is a first-class SDK message (Claude)
       if (isSdkWsMessage(data)) {
         handleSdkWebSocketMessage(sid, data, get, set)
+        return
+      }
+      // Check if this is a first-class Pi message
+      if (isPiWsMessage(data)) {
+        handlePiWebSocketMessage(sid, data, get, set)
         return
       }
       // Otherwise treat as JSON-RPC message
@@ -1034,5 +1231,202 @@ function handleSdkWebSocketMessage(
     default:
       // Unknown SDK message type - log for debugging
       console.log('[SDK WS] Unknown message type:', type, payload)
+  }
+}
+
+/**
+ * Handle first-class Pi WebSocket messages
+ * These messages handle Pi SDK events and responses
+ */
+function handlePiWebSocketMessage(
+  sessionId: string,
+  message: PiWsMessage,
+  get: () => SessionsState,
+  set: (fn: (state: SessionsState) => Partial<SessionsState>) => void
+) {
+  const { type, payload } = message
+  const { activeSessionId } = get()
+  const isActive = sessionId === activeSessionId
+
+  switch (type) {
+    case 'message_update': {
+      const event = payload as {
+        assistantMessageEvent: {
+          type: string
+          delta?: string
+          toolCallId?: string
+          toolName?: string
+          error?: string
+        }
+      }
+      const msgEvent = event.assistantMessageEvent
+
+      // Handle streaming text updates
+      if (msgEvent.type === 'text_delta' && msgEvent.delta) {
+        const currentState = get().piStreamingState[sessionId]
+        if (!currentState) {
+          // Initialize streaming state
+          const msgId = `msg-${Date.now()}`
+          get().setStreaming(sessionId, true, msgId)
+
+          get().addMessage(sessionId, {
+            id: msgId,
+            sessionId,
+            role: 'assistant',
+            content: msgEvent.delta,
+            timestamp: new Date().toISOString(),
+          })
+
+          set((state) => ({
+            piStreamingState: {
+              ...state.piStreamingState,
+              [sessionId]: {
+                messageId: msgId,
+                contentBlocks: [{ type: 'text', text: msgEvent.delta || '' }],
+                currentBlockIndex: 0,
+                isStreaming: true,
+              },
+            },
+          }))
+        } else {
+          // Append to existing message
+          const msgId = currentState.messageId
+          const messages = get().messages[sessionId] || []
+          const msgIndex = messages.findIndex((m) => m.id === msgId)
+          if (msgIndex !== -1) {
+            const msg = messages[msgIndex]
+            const updatedContent = (typeof msg.content === 'string' ? msg.content : '') + msgEvent.delta
+            get().updateMessage(sessionId, msgId, { content: updatedContent })
+            debouncedPersist(sessionId, get().messages[sessionId] || [])
+          }
+        }
+      } else if (msgEvent.type === 'thinking_delta' && msgEvent.delta) {
+        // Handle thinking deltas (similar to text but for thinking blocks)
+        console.log('[Pi WS] thinking_delta:', msgEvent.delta?.slice(0, 50))
+      } else if (msgEvent.type === 'done') {
+        // Message complete
+        get().setStreaming(sessionId, false)
+        flushPersist(sessionId, get().messages[sessionId] || [])
+        set((state) => ({
+          piStreamingState: { ...state.piStreamingState, [sessionId]: null },
+        }))
+        if (!isActive) {
+          get().incrementUnread(sessionId)
+        }
+      } else if (msgEvent.type === 'error') {
+        console.error('[Pi WS] Error:', msgEvent.error)
+        get().setStreaming(sessionId, false)
+      }
+      break
+    }
+
+    case 'agent_start': {
+      get().setStreaming(sessionId, true)
+      break
+    }
+
+    case 'agent_end': {
+      get().setStreaming(sessionId, false)
+      flushPersist(sessionId, get().messages[sessionId] || [])
+      set((state) => ({
+        piStreamingState: { ...state.piStreamingState, [sessionId]: null },
+      }))
+      break
+    }
+
+    case 'tool_execution_start': {
+      const tool = payload as { toolName: string; toolCallId: string }
+      console.log('[Pi WS] Tool execution start:', tool.toolName)
+      break
+    }
+
+    case 'tool_execution_end': {
+      const tool = payload as { toolName: string; toolCallId: string; result?: unknown; error?: string }
+      console.log('[Pi WS] Tool execution end:', tool.toolName, tool.error ? `(error: ${tool.error})` : '')
+      break
+    }
+
+    case 'auto_compaction_start': {
+      const compaction = payload as { preTokens: number }
+      console.log('[Pi WS] Compaction started, pre-tokens:', compaction.preTokens)
+      break
+    }
+
+    case 'auto_compaction_end': {
+      const compaction = payload as { preTokens: number; postTokens: number }
+      console.log('[Pi WS] Compaction complete, saved tokens:', compaction.preTokens - compaction.postTokens)
+      break
+    }
+
+    default:
+      // Handle JSON-RPC responses for Pi-specific commands
+      if (typeof payload === 'object' && payload !== null && 'method' in (payload as Record<string, unknown>)) {
+        const rpcPayload = payload as { method: string; params: unknown }
+        handlePiJsonRpcResponse(sessionId, rpcPayload.method, rpcPayload.params, get, set)
+      } else {
+        console.log('[Pi WS] Unknown message type:', type, payload)
+      }
+  }
+}
+
+/**
+ * Handle Pi JSON-RPC responses
+ */
+function handlePiJsonRpcResponse(
+  sessionId: string,
+  method: string,
+  params: unknown,
+  get: () => SessionsState,
+  set: (fn: (state: SessionsState) => Partial<SessionsState>) => void
+) {
+  switch (method) {
+    case 'pi/model_changed': {
+      const model = params as { provider: string; modelId: string } | null
+      if (model) {
+        console.log('[Pi] Model changed to:', model.provider, model.modelId)
+      }
+      break
+    }
+
+    case 'pi/thinking_level_changed': {
+      const level = params as { level: PiThinkingLevel }
+      get().setPiThinkingLevel(sessionId, level.level)
+      break
+    }
+
+    case 'pi/session_tree': {
+      const tree = (params as { tree: PiSessionTree | null }).tree
+      get().setPiSessionTree(sessionId, tree)
+      get().setPiLoading(sessionId, { tree: false })
+      break
+    }
+
+    case 'pi/forkable_entries': {
+      const entries = (params as { entries: PiForkableEntry[] }).entries
+      get().setPiForkableEntries(sessionId, entries)
+      get().setPiLoading(sessionId, { forkable: false })
+      break
+    }
+
+    case 'pi/session_stats': {
+      const stats = (params as { stats: PiSessionStats | null }).stats
+      get().setPiStats(sessionId, stats)
+      get().setPiLoading(sessionId, { stats: false })
+      break
+    }
+
+    case 'pi/available_models': {
+      const data = params as { models?: PiModelInfo[]; error?: string }
+      if (data.models) {
+        get().setPiModels(sessionId, data.models)
+      } else if (data.error) {
+        get().setPiErrors(sessionId, { models: data.error })
+      }
+      get().setPiLoading(sessionId, { models: false })
+      break
+    }
+
+    default:
+      console.log('[Pi RPC] Unknown method:', method, params)
   }
 }
