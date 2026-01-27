@@ -9,12 +9,17 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:all": "pnpm -r --parallel dev",
     "build": "tsc && node scripts/copy-migrations.js",
+    "build:all": "pnpm build && pnpm --filter aperture-web build",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
+    "lint:all": "pnpm -r lint",
     "test": "vitest run",
+    "test:all": "pnpm -r test",
     "test:watch": "vitest",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "type-check:all": "pnpm -r type-check"
   },
   "keywords": [
     "claude",

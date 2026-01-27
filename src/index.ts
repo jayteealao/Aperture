@@ -81,11 +81,11 @@ async function main() {
     timeWindow: config.rateLimitWindowMs,
   });
 
-  // Serve static files from web folder
+  // Serve static files from frontend build output
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
   await fastify.register(fastifyStatic, {
-    root: join(__dirname, '..', 'web'),
+    root: join(__dirname, '..', 'web', 'dist'),
     prefix: '/',
   });
 
@@ -102,7 +102,7 @@ async function main() {
       return;
     }
     // Skip auth for static files (frontend)
-    if (request.url === '/' || request.url.startsWith('/css/') || request.url.startsWith('/js/')) {
+    if (request.url === '/' || request.url.startsWith('/assets/')) {
       return;
     }
 
