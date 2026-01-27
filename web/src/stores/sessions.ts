@@ -204,7 +204,7 @@ interface SessionsState {
   // WebSocket
   connectSession: (sessionId: string) => Promise<void>
   disconnectSession: (sessionId: string) => void
-  sendMessage: (sessionId: string, content: string) => Promise<void>
+  sendMessage: (sessionId: string, content: string, images?: import('@/api/types').ImageAttachment[]) => Promise<void>
   sendPermissionResponse: (sessionId: string, toolCallId: string, optionId: string | null, answers?: Record<string, string>) => void
   cancelPrompt: (sessionId: string) => void
 
@@ -716,21 +716,35 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     get().updateConnection(sessionId, { status: 'disconnected' })
   },
 
-  sendMessage: async (sessionId, content) => {
+  sendMessage: async (sessionId, content, images) => {
+    // Build message content: include image content blocks if present
+    const messageContent: string | ContentBlock[] = images && images.length > 0
+      ? [
+          ...images.map((img) => ({
+            type: 'image' as const,
+            mimeType: img.mimeType,
+            data: img.data,
+            filename: img.filename,
+          })),
+          { type: 'text' as const, text: content },
+        ]
+      : content
+
     // Add user message to store
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
       sessionId,
       role: 'user',
-      content,
+      content: messageContent,
       timestamp: new Date().toISOString(),
     }
     await get().addMessage(sessionId, userMessage)
 
-    // Send via WebSocket
+    // Send via WebSocket (images sent alongside content)
     const sent = wsManager.send(sessionId, {
       type: 'user_message',
       content,
+      ...(images && images.length > 0 ? { images } : {}),
     })
 
     if (!sent) {

@@ -26,6 +26,7 @@ import type {
   SDKAssistantMessage,
   SDKResultMessage,
   SDKSystemMessage,
+  SDKUserMessage,
   PermissionResult,
   CanUseTool,
   PermissionUpdate as SDKPermissionUpdate,
@@ -501,9 +502,9 @@ export class SdkSession extends EventEmitter {
   }
 
   /**
-   * Sends a prompt to the agent
+   * Sends a prompt to the agent, optionally with image attachments
    */
-  async sendPrompt(content: string): Promise<void> {
+  async sendPrompt(content: string, images?: import('./agents/types.js').ImageAttachment[]): Promise<void> {
     if (this.isShuttingDown) {
       throw new Error('Session is shutting down');
     }
@@ -525,8 +526,54 @@ export class SdkSession extends EventEmitter {
       // Build options from config
       const options = this.buildOptions();
 
+      // Build the prompt: plain string or SDKUserMessage with image content blocks
+      let prompt: string | AsyncIterable<SDKUserMessage>;
+      if (images && images.length > 0) {
+        type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+        // Build a MessageParam with text + image content blocks
+        const contentBlocks: Array<
+          | { type: 'text'; text: string }
+          | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string } }
+        > = [];
+
+        // Add images first so the model sees them before the text
+        for (const img of images) {
+          contentBlocks.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: img.mimeType as ImageMediaType,
+              data: img.data,
+            },
+          });
+        }
+
+        // Add the text content
+        if (content) {
+          contentBlocks.push({ type: 'text', text: content });
+        }
+
+        const userMessage: SDKUserMessage = {
+          type: 'user',
+          message: {
+            role: 'user',
+            content: contentBlocks,
+          },
+          parent_tool_use_id: null,
+          session_id: this.id,
+        };
+
+        // Wrap single message as an async iterable
+        async function* singleMessage() {
+          yield userMessage;
+        }
+        prompt = singleMessage();
+      } else {
+        prompt = content;
+      }
+
       // Start the query
-      this.currentQuery = sdkQuery({ prompt: content, options });
+      this.currentQuery = sdkQuery({ prompt, options });
 
       // Proactively cache session info when query starts
       this.cacheSessionInfo().catch((err) => {

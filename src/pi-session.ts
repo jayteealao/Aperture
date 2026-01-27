@@ -431,20 +431,35 @@ export class PiSession extends EventEmitter {
   }
 
   /**
-   * Send a prompt to the agent
+   * Send a prompt to the agent, optionally with image attachments
    */
-  async sendPrompt(content: string): Promise<void> {
+  async sendPrompt(content: string, images?: import('./agents/types.js').ImageAttachment[]): Promise<void> {
     if (!this.agentSession) {
       throw new Error('Session not started');
     }
 
+    // Build prompt options
+    const options: Record<string, unknown> = {};
+
     // Use streamingBehavior if agent is already streaming
-    const options = this.agentSession.isStreaming
-      ? { streamingBehavior: this.piConfig.streamingBehavior || 'followUp' as const }
-      : undefined;
+    if (this.agentSession.isStreaming) {
+      options.streamingBehavior = this.piConfig.streamingBehavior || 'followUp';
+    }
+
+    // Attach images if provided (Pi SDK format: { type: 'image', data, mimeType })
+    if (images && images.length > 0) {
+      options.images = images.map((img) => ({
+        type: 'image' as const,
+        data: img.data,
+        mimeType: img.mimeType,
+      }));
+    }
 
     try {
-      await this.agentSession.prompt(content, options);
+      await this.agentSession.prompt(
+        content,
+        Object.keys(options).length > 0 ? options : undefined,
+      );
     } catch (error) {
       console.error(`[PiSession] Error sending prompt:`, error);
       this.emitSessionUpdate('error', {

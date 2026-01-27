@@ -16,7 +16,8 @@ import { SaveRepoPrompt } from '@/components/session/SaveRepoPrompt'
 import { ToolCallDisplay } from '@/components/session/ToolCallDisplay'
 import { AskUserQuestionDisplay, isAskUserQuestionInput } from '@/components/session/AskUserQuestionDisplay'
 import { SdkControlPanel, ThinkingBlock, ToolUseBlock, ToolCallGroup, LoadingIndicator } from '@/components/sdk'
-import type { Message, ContentBlock, PermissionOption } from '@/api/types'
+import type { Message, ContentBlock, PermissionOption, ImageAttachment } from '@/api/types'
+import { IMAGE_LIMITS } from '@/api/types'
 import {
   Send,
   StopCircle,
@@ -30,6 +31,8 @@ import {
   Wrench,
   CheckCircle2,
   ArrowDown,
+  Paperclip,
+  X,
 } from 'lucide-react'
 
 export default function Workspace() {
@@ -55,8 +58,10 @@ export default function Workspace() {
 
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
 
   // Save repo prompt state
@@ -148,18 +153,21 @@ export default function Workspace() {
     if (connection?.isStreaming) return
 
     const content = input.trim()
+    const images = attachedImages.length > 0 ? [...attachedImages] : undefined
     setInput('')
+    setAttachedImages([])
     setIsSending(true)
 
     try {
-      await sendMessage(activeSessionId, content)
+      await sendMessage(activeSessionId, content, images)
     } catch (error) {
       toast.error('Failed to send', error instanceof Error ? error.message : 'Unknown error')
       setInput(content) // Restore input on error
+      if (images) setAttachedImages(images) // Restore images on error
     } finally {
       setIsSending(false)
     }
-  }, [input, activeSessionId, connection?.isStreaming, isSending, sendMessage, toast])
+  }, [input, activeSessionId, connection?.isStreaming, isSending, sendMessage, toast, attachedImages])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -176,6 +184,69 @@ export default function Workspace() {
       cancelPrompt(activeSessionId)
     }
   }, [activeSessionId, cancelPrompt])
+
+  // Image attachment helpers
+  const addImageFiles = useCallback((files: FileList | File[]) => {
+    const fileArray = Array.from(files)
+    const allowedTypes = IMAGE_LIMITS.ALLOWED_MIME_TYPES as readonly string[]
+
+    for (const file of fileArray) {
+      if (attachedImages.length >= IMAGE_LIMITS.MAX_COUNT) break
+      if (!allowedTypes.includes(file.type)) continue
+      if (file.size > IMAGE_LIMITS.MAX_BYTES) continue
+
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = reader.result as string
+        // Strip the data URI prefix to get raw base64
+        const base64 = dataUrl.split(',')[1]
+        if (!base64) return
+
+        setAttachedImages((prev) => {
+          if (prev.length >= IMAGE_LIMITS.MAX_COUNT) return prev
+          return [
+            ...prev,
+            {
+              data: base64,
+              mimeType: file.type as ImageAttachment['mimeType'],
+              filename: file.name,
+            },
+          ]
+        })
+      }
+      reader.readAsDataURL(file)
+    }
+  }, [attachedImages.length])
+
+  const removeImage = useCallback((index: number) => {
+    setAttachedImages((prev) => prev.filter((_, i) => i !== index))
+  }, [])
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    const imageFiles: File[] = []
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile()
+        if (file) imageFiles.push(file)
+      }
+    }
+    if (imageFiles.length > 0) {
+      addImageFiles(imageFiles)
+    }
+  }, [addImageFiles])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    const files = e.dataTransfer?.files
+    if (files) addImageFiles(files)
+  }, [addImageFiles])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+  }, [])
 
   // Empty state
   if (!activeSession) {
@@ -299,15 +370,74 @@ export default function Workspace() {
       )}
 
       {/* Composer */}
-      <div className="px-4 py-4 border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
+      <div
+        className="px-4 py-4 border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]"
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+      >
         <div className="max-w-3xl mx-auto">
+          {/* Image attachment previews */}
+          {attachedImages.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {attachedImages.map((img, i) => (
+                <div key={i} className="relative group">
+                  <img
+                    src={`data:${img.mimeType};base64,${img.data}`}
+                    alt={img.filename || `Image ${i + 1}`}
+                    className="h-16 w-16 rounded-lg object-cover border border-[var(--color-border)]"
+                  />
+                  <button
+                    onClick={() => removeImage(i)}
+                    className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Remove image"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+              {attachedImages.length < IMAGE_LIMITS.MAX_COUNT && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-16 w-16 rounded-lg border border-dashed border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:border-[var(--color-text-muted)] transition-colors"
+                  title="Add more images"
+                >
+                  <Plus size={20} />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={IMAGE_LIMITS.ALLOWED_MIME_TYPES.join(',')}
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) addImageFiles(e.target.files)
+              e.target.value = '' // Reset so same file can be re-selected
+            }}
+          />
+
           <div className="flex items-end gap-3">
+            {/* Attach button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] transition-colors"
+              title="Attach images"
+              disabled={connection?.status === 'disconnected' || connection?.status === 'error'}
+            >
+              <Paperclip size={20} />
+            </button>
+
             <div className="flex-1">
               <Textarea
                 placeholder="Type your message... (Shift+Enter for new line)"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 autoGrow
                 maxHeight={200}
                 disabled={connection?.status === 'disconnected' || connection?.status === 'error'}
@@ -383,7 +513,7 @@ function MessageBubble({
 }) {
   const [copied, setCopied] = useState(false)
   const isUser = message.role === 'user'
-  const { textContent, thinkingBlocks, toolUseBlocks, toolResults } = extractContentBlocks(message.content)
+  const { textContent, imageBlocks, thinkingBlocks, toolUseBlocks, toolResults } = extractContentBlocks(message.content)
 
   const handleCopy = () => {
     navigator.clipboard.writeText(textContent)
@@ -419,6 +549,20 @@ function MessageBubble({
             </button>
           )}
         </div>
+
+        {/* Image attachments */}
+        {imageBlocks.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {imageBlocks.map((img, i) => (
+              <img
+                key={i}
+                src={`data:${img.mimeType};base64,${img.data}`}
+                alt={img.filename || `Image ${i + 1}`}
+                className="max-h-48 max-w-[280px] rounded-lg object-contain border border-[var(--color-border)]"
+              />
+            ))}
+          </div>
+        )}
 
         {/* Thinking blocks - collapsed by default */}
         {thinkingBlocks.length > 0 && (
@@ -740,8 +884,16 @@ interface ToolResultBlockData {
   is_error?: boolean
 }
 
+interface ImageBlockData {
+  type: 'image'
+  mimeType: string
+  data: string
+  filename?: string
+}
+
 interface ExtractedContent {
   textContent: string
+  imageBlocks: ImageBlockData[]
   thinkingBlocks: ThinkingBlockData[]
   toolUseBlocks: ToolUseBlockData[]
   toolResults: ToolResultBlockData[]
@@ -749,16 +901,14 @@ interface ExtractedContent {
 
 function extractContentBlocks(content: string | ContentBlock[]): ExtractedContent {
   if (typeof content === 'string') {
-    return { textContent: content, thinkingBlocks: [], toolUseBlocks: [], toolResults: [] }
+    return { textContent: content, imageBlocks: [], thinkingBlocks: [], toolUseBlocks: [], toolResults: [] }
   }
   if (!Array.isArray(content)) {
-    return { textContent: String(content), thinkingBlocks: [], toolUseBlocks: [], toolResults: [] }
+    return { textContent: String(content), imageBlocks: [], thinkingBlocks: [], toolUseBlocks: [], toolResults: [] }
   }
 
-  // Debug: log raw content blocks
-  console.log('[extractContentBlocks] Raw content blocks:', content)
-
   const textParts: string[] = []
+  const imageBlocks: ImageBlockData[] = []
   const thinkingBlocks: ThinkingBlockData[] = []
   const toolUseBlocks: ToolUseBlockData[] = []
   const toolResults: ToolResultBlockData[] = []
@@ -766,8 +916,14 @@ function extractContentBlocks(content: string | ContentBlock[]): ExtractedConten
   for (const block of content) {
     if (block.type === 'text' && block.text) {
       textParts.push(block.text)
+    } else if (block.type === 'image' && block.data && block.mimeType) {
+      imageBlocks.push({
+        type: 'image',
+        mimeType: block.mimeType,
+        data: block.data,
+        filename: block.filename,
+      })
     } else if (block.type === 'thinking') {
-      console.log('[extractContentBlocks] Found thinking block:', block)
       thinkingBlocks.push({
         type: 'thinking',
         thinking: block.thinking || '',
@@ -790,10 +946,9 @@ function extractContentBlocks(content: string | ContentBlock[]): ExtractedConten
     }
   }
 
-  console.log('[extractContentBlocks] Extracted thinking blocks:', thinkingBlocks.length)
-
   return {
     textContent: textParts.join('\n'),
+    imageBlocks,
     thinkingBlocks,
     toolUseBlocks,
     toolResults,

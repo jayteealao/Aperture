@@ -79,3 +79,27 @@ export interface SdkAgentBackend {
  * Legacy AgentBackend alias - all backends are now SDK-based
  */
 export type AgentBackend = SdkAgentBackend;
+
+// =============================================================================
+// Image Attachment Types (shared across all SDKs)
+// =============================================================================
+
+/** Allowed MIME types for image attachments */
+export type ImageMimeType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+
+/** An image attachment sent alongside a user message */
+export interface ImageAttachment {
+  /** Base64-encoded image data (no data URI prefix) */
+  data: string;
+  /** MIME type of the image */
+  mimeType: ImageMimeType;
+  /** Optional filename for display */
+  filename?: string;
+}
+
+/** Validation limits for image attachments */
+export const IMAGE_LIMITS = {
+  MAX_COUNT: 5,
+  MAX_BYTES: 10 * 1024 * 1024, // 10 MB
+  ALLOWED_MIME_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const,
+} as const;

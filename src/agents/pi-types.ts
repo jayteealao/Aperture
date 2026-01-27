@@ -194,7 +194,7 @@ export interface PiToolResult {
 export interface PiUserMessage {
   role: 'user';
   content: string;
-  attachments?: PiAttachment[];
+  attachments?: import('./types.js').ImageAttachment[];
   timestamp: number;
 }
 
@@ -243,15 +243,8 @@ export interface PiToolCallContent {
 export type PiAssistantContent = PiTextContent | PiThinkingContent | PiToolCallContent;
 
 // =============================================================================
-// Attachment Types
+// Attachment Types (use shared ImageAttachment from types.ts)
 // =============================================================================
-
-export interface PiAttachment {
-  type: 'image';
-  mimeType: string;
-  base64: string;
-  filename?: string;
-}
 
 // =============================================================================
 // Usage Info

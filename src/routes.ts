@@ -8,7 +8,9 @@ import type {
   PermissionMode,
   McpServerConfig,
   AgentType,
+  ImageAttachment,
 } from './agents/index.js';
+import { IMAGE_LIMITS } from './agents/types.js';
 import type { CredentialStore } from './credentials.js';
 import type { ApertureDatabase } from './database.js';
 import { SdkSession, type SdkWsMessage } from './sdk-session.js';
@@ -30,6 +32,44 @@ function isPiSession(session: unknown): session is PiSession {
  */
 function isSdkSession(session: unknown): session is SdkSession {
   return session !== null && typeof session === 'object' && session instanceof SdkSession;
+}
+
+/**
+ * Validate and extract image attachments from a WebSocket message.
+ * Returns an empty array if no valid images are found.
+ */
+function validateImageAttachments(raw: unknown): ImageAttachment[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+
+  const allowedTypes = IMAGE_LIMITS.ALLOWED_MIME_TYPES as readonly string[];
+  const images: ImageAttachment[] = [];
+
+  for (const item of raw) {
+    if (images.length >= IMAGE_LIMITS.MAX_COUNT) break;
+
+    if (
+      typeof item !== 'object' || item === null ||
+      typeof (item as Record<string, unknown>).data !== 'string' ||
+      typeof (item as Record<string, unknown>).mimeType !== 'string'
+    ) {
+      continue;
+    }
+
+    const { data, mimeType, filename } = item as Record<string, unknown>;
+    if (!allowedTypes.includes(mimeType as string)) continue;
+
+    // Rough base64 size check: base64 encodes 3 bytes per 4 chars
+    const estimatedBytes = ((data as string).length * 3) / 4;
+    if (estimatedBytes > IMAGE_LIMITS.MAX_BYTES) continue;
+
+    images.push({
+      data: data as string,
+      mimeType: mimeType as ImageAttachment['mimeType'],
+      ...(typeof filename === 'string' ? { filename } : {}),
+    });
+  }
+
+  return images;
 }
 
 interface CreateSessionBody {
@@ -771,7 +811,10 @@ export async function registerRoutes(
 
           // Handle message types
           if (obj.type === 'user_message' && typeof obj.content === 'string') {
-            session.sendPrompt(obj.content).catch((err) => {
+            // Validate and extract optional image attachments
+            const images = validateImageAttachments(obj.images);
+
+            session.sendPrompt(obj.content, images.length > 0 ? images : undefined).catch((err) => {
               request.log.error(err, 'Failed to send prompt');
               socket.send(JSON.stringify({
                 jsonrpc: '2.0',

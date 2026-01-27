@@ -4,6 +4,27 @@ import type { PiSessionConfig } from './pi-types'
 
 export type AgentType = 'claude_sdk' | 'pi_sdk'
 
+// =============================================================================
+// Image Attachment Types (mirrors backend types.ts)
+// =============================================================================
+
+export type ImageMimeType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+
+export interface ImageAttachment {
+  /** Base64-encoded image data (no data URI prefix) */
+  data: string
+  /** MIME type of the image */
+  mimeType: ImageMimeType
+  /** Optional filename for display */
+  filename?: string
+}
+
+export const IMAGE_LIMITS = {
+  MAX_COUNT: 5,
+  MAX_BYTES: 10 * 1024 * 1024, // 10 MB
+  ALLOWED_MIME_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const,
+} as const
+
 export type AuthMode = 'api_key' | 'oauth'
 
 export type ApiKeyRef = 'inline' | 'stored' | 'none'
@@ -114,7 +135,7 @@ export interface MessagesResponse {
 
 // Message types for the chat
 export interface ContentBlock {
-  type: 'text' | 'tool_use' | 'tool_result' | 'thinking'
+  type: 'text' | 'tool_use' | 'tool_result' | 'thinking' | 'image'
   text?: string
   thinking?: string
   signature?: string
@@ -125,6 +146,10 @@ export interface ContentBlock {
   toolCallId?: string
   tool_use_id?: string
   is_error?: boolean
+  // Image fields (for type: 'image')
+  mimeType?: string
+  data?: string
+  filename?: string
 }
 
 export interface Message {
@@ -148,6 +173,7 @@ export interface ToolCall {
 export interface UserMessage {
   type: 'user_message'
   content: string
+  images?: ImageAttachment[]
   toolsAllowed?: boolean
   requireApprovals?: boolean
 }
