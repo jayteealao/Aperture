@@ -710,6 +710,16 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
     const statusHandler = (sid: string, status: ConnectionStatus, error?: string) => {
       get().updateConnection(sid, { status, error: error || null })
+
+      // Auto-fetch session data when WebSocket connects
+      if (status === 'connected') {
+        const session = get().sessions.find((s) => s.id === sid)
+        if (session?.agent === 'pi_sdk') {
+          get().piGetStats(sid)
+          get().piGetModels(sid)
+          get().piGetForkable(sid)
+        }
+      }
     }
 
     wsManager.connect(sessionId, wsUrl, messageHandler, statusHandler)
