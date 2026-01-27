@@ -16,6 +16,7 @@ import { SaveRepoPrompt } from '@/components/session/SaveRepoPrompt'
 import { ToolCallDisplay } from '@/components/session/ToolCallDisplay'
 import { AskUserQuestionDisplay, isAskUserQuestionInput } from '@/components/session/AskUserQuestionDisplay'
 import { SdkControlPanel, ThinkingBlock, ToolUseBlock, ToolCallGroup, LoadingIndicator } from '@/components/sdk'
+import { PiControlPanel } from '@/components/pi/PiControlPanel'
 import type { Message, ContentBlock, PermissionOption, ImageAttachment } from '@/api/types'
 import { IMAGE_LIMITS } from '@/api/types'
 import {
@@ -476,9 +477,15 @@ export default function Workspace() {
       </div>
       </div>
 
-      {/* Control Panel */}
+      {/* Control Panel — only the relevant one renders (the other returns null) */}
       <SdkControlPanel
         sessionId={activeSessionId!}
+        isOpen={sdkPanelOpen}
+        onToggle={toggleSdkPanel}
+      />
+      <PiControlPanel
+        sessionId={activeSessionId!}
+        isStreaming={connection?.isStreaming || false}
         isOpen={sdkPanelOpen}
         onToggle={toggleSdkPanel}
       />

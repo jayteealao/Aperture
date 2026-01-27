@@ -681,9 +681,13 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
         get().updateSessionStatus(sessionId, response.status)
       }
     } catch (err) {
-      // If the session can't be connected/restored, log but continue
-      // The WebSocket connection will handle the error appropriately
       console.warn(`[Sessions] Failed to connect/restore session ${sessionId}:`, err)
+      // If the session doesn't exist on the backend, don't attempt WebSocket
+      get().updateConnection(sessionId, {
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Session not found on server',
+      })
+      return
     }
 
     const wsUrl = api.getWebSocketUrl(sessionId)

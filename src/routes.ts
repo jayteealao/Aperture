@@ -690,6 +690,7 @@ export async function registerRoutes(
       const session = sessionManager.getSession(sessionId);
 
       if (!session) {
+        request.log.warn({ sessionId }, 'WebSocket rejected: session not found');
         socket.close(1008, 'Session not found');
         return;
       }

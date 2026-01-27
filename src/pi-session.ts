@@ -224,184 +224,27 @@ export class PiSession extends EventEmitter {
     };
     this.emit('pi_message', piMessage);
 
-    // Also emit legacy JSON-RPC format for backwards compatibility
+    // Handle local side effects only (no legacy emitSessionUpdate — pi_message is the canonical path)
     switch (event.type) {
-      case 'message_update':
-        this.handleMessageUpdate(event);
-        break;
-
-      case 'tool_execution_start':
-        this.emitSessionUpdate('tool_start', {
-          toolName: event.toolName,
-          toolCallId: event.toolCallId,
-          input: event.input,
-        });
-        break;
-
-      case 'tool_execution_update':
-        this.emitSessionUpdate('tool_progress', {
-          toolName: event.toolName,
-          toolCallId: event.toolCallId,
-          partialResult: event.partialResult,
-        });
-        break;
-
-      case 'tool_execution_end':
-        this.emitSessionUpdate('tool_end', {
-          toolName: event.toolName,
-          toolCallId: event.toolCallId,
-          result: event.result,
-          error: event.error,
-          isError: event.isError,
-        });
-        break;
-
       case 'agent_start':
         this.isCurrentlyStreaming = true;
-        this.emitSessionUpdate('agent_start', {});
         break;
 
       case 'agent_end':
         this.isCurrentlyStreaming = false;
-        this.emitSessionUpdate('agent_end', {
-          result: event.result,
-          error: event.error,
-        });
-        break;
-
-      case 'turn_start':
-        this.emitSessionUpdate('turn_start', {
-          turnIndex: event.turnIndex,
-        });
         break;
 
       case 'turn_end':
-        this.emitSessionUpdate('turn_end', {
-          turnIndex: event.turnIndex,
-          usage: event.usage,
-          stopReason: event.stopReason,
-        });
-        // Update stats
         if (event.usage) {
           this.updateStats(event.usage);
         }
-        break;
-
-      case 'auto_compaction_start':
-        this.emitSessionUpdate('compaction_start', {
-          preTokens: event.preTokens,
-        });
-        break;
-
-      case 'auto_compaction_end':
-        this.emitSessionUpdate('compaction_end', {
-          preTokens: event.preTokens,
-          postTokens: event.postTokens,
-        });
-        break;
-
-      case 'auto_retry_start':
-        this.emitSessionUpdate('retry_start', {
-          attempt: event.attempt,
-          maxAttempts: event.maxAttempts,
-          delayMs: event.delayMs,
-          error: event.error,
-        });
-        break;
-
-      case 'auto_retry_end':
-        this.emitSessionUpdate('retry_end', {
-          attempt: event.attempt,
-          success: event.success,
-        });
-        break;
-
-      case 'extension_error':
-        this.emitSessionUpdate('extension_error', {
-          extensionName: event.extensionName,
-          error: event.error,
-        });
-        break;
-
-      case 'message_start':
-        this.emitSessionUpdate('message_start', {});
-        break;
-
-      case 'message_end':
-        this.emitSessionUpdate('message_end', {});
-        break;
-    }
-  }
-
-  /**
-   * Handle message_update events (streaming deltas)
-   */
-  private handleMessageUpdate(event: { type: 'message_update'; assistantMessageEvent: { type: string; delta?: string; toolCallId?: string; toolName?: string; inputJson?: string; error?: string } }): void {
-    const msgEvent = event.assistantMessageEvent;
-
-    switch (msgEvent.type) {
-      case 'text_start':
-        this.emitSessionUpdate('text_start', {});
-        break;
-
-      case 'text_delta':
-        this.emitSessionUpdate('agent_message_chunk', {
-          content: { type: 'text', text: msgEvent.delta },
-        });
-        break;
-
-      case 'text_end':
-        this.emitSessionUpdate('text_end', {});
-        break;
-
-      case 'thinking_start':
-        this.emitSessionUpdate('thinking_start', {});
-        break;
-
-      case 'thinking_delta':
-        this.emitSessionUpdate('agent_message_chunk', {
-          content: { type: 'thinking', thinking: msgEvent.delta },
-        });
-        break;
-
-      case 'thinking_end':
-        this.emitSessionUpdate('thinking_end', {});
-        break;
-
-      case 'toolcall_start':
-        this.emitSessionUpdate('tool_use_start', {
-          id: msgEvent.toolCallId,
-          name: msgEvent.toolName,
-        });
-        break;
-
-      case 'toolcall_delta':
-        this.emitSessionUpdate('tool_use_delta', {
-          id: msgEvent.toolCallId,
-          inputDelta: msgEvent.delta || msgEvent.inputJson,
-        });
-        break;
-
-      case 'toolcall_end':
-        this.emitSessionUpdate('tool_use_end', {
-          id: msgEvent.toolCallId,
-        });
-        break;
-
-      case 'error':
-        this.emitSessionUpdate('error', {
-          error: msgEvent.error,
-        });
-        break;
-
-      case 'done':
-        this.emitSessionUpdate('done', {});
         break;
     }
   }
 
   /**
    * Emit session update in JSON-RPC format
+   * Used by non-streaming methods (compact, fork, setModel, etc.)
    */
   private emitSessionUpdate(updateType: string, data: Record<string, unknown>): void {
     this.emit('session_update', {
@@ -705,7 +548,7 @@ export class PiSession extends EventEmitter {
     const available = registry.getAvailable();
 
     // 0.50.0: Model<Api> has 'api' (provider), 'id' (modelId), 'displayName', etc.
-    this.cachedModels = available.map((m: {
+    const models: PiModelInfo[] = available.map((m: {
       api: string;
       id: string;
       displayName?: string;
@@ -720,8 +563,9 @@ export class PiSession extends EventEmitter {
       contextWindow: m.contextWindow,
       maxOutputTokens: m.maxOutputTokens,
     }));
+    this.cachedModels = models;
 
-    return this.cachedModels;
+    return models;
   }
 
   /**

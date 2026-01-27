@@ -91,6 +91,15 @@ class WebSocketManager {
       }
 
       ws.onclose = (event) => {
+        // 1008 = Policy Violation (session not found), 1003 = Unsupported Data
+        // These are non-retryable — the server explicitly rejected the connection
+        const nonRetryableCodes = [1003, 1008]
+        if (nonRetryableCodes.includes(event.code) || (event.code >= 4000 && event.code <= 4999)) {
+          conn.statusHandler(sessionId, 'error', event.reason || `Connection rejected (${event.code})`)
+          this.connections.delete(sessionId)
+          return
+        }
+
         if (!event.wasClean || event.code !== 1000) {
           this.scheduleRetry(sessionId, wsUrl)
         } else {

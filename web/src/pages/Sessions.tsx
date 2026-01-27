@@ -13,7 +13,7 @@ import { Dialog, ConfirmDialog } from '@/components/ui/Dialog'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { Spinner } from '@/components/ui/Spinner'
 import { RepoSelector, type RepoSelection } from '@/components/session/RepoSelector'
-import type { AuthMode, Session } from '@/api/types'
+import type { AgentType, AuthMode, Session } from '@/api/types'
 import {
   Plus,
   Search,
@@ -313,6 +313,7 @@ function NewSessionDialog({
   const queryClient = useQueryClient()
   const { addSession } = useSessionsStore()
 
+  const [agentType, setAgentType] = useState<AgentType>('claude_sdk')
   const [authMode, setAuthMode] = useState<AuthMode>('oauth')
   const [apiKey, setApiKey] = useState('')
   const [repoSelection, setRepoSelection] = useState<RepoSelection | null>(null)
@@ -341,11 +342,17 @@ function NewSessionDialog({
   // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
+      setAgentType('claude_sdk')
       setRepoSelection(null)
       setCreationStep(null)
       setApiKey('')
     }
   }, [open])
+
+  const agentOptions = [
+    { value: 'claude_sdk', label: 'Claude' },
+    { value: 'pi_sdk', label: 'Pi' },
+  ]
 
   const authOptions = [
     { value: 'oauth', label: 'OAuth (Pre-authenticated)' },
@@ -397,6 +404,7 @@ function NewSessionDialog({
       // Create the session
       setCreationStep('Creating session...')
       const session = await api.createSession({
+        agent: agentType,
         auth: {
           mode: authMode,
           apiKeyRef: authMode === 'api_key' ? 'inline' : 'none',
@@ -427,6 +435,14 @@ function NewSessionDialog({
   return (
     <Dialog open={open} onClose={onClose} title="Create New Session" size="lg">
       <div className="space-y-4">
+        {/* Agent Type */}
+        <Dropdown
+          label="Agent"
+          options={agentOptions}
+          value={agentType}
+          onChange={(value) => setAgentType(value as AgentType)}
+        />
+
         {/* Repository Selection */}
         <RepoSelector
           label="Repository"
