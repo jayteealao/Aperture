@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
-import { History, RotateCcw, Eye, AlertTriangle, Check, X, FileText } from 'lucide-react'
+import { History, RotateCcw, Eye, AlertTriangle, X, FileText } from 'lucide-react'
 import type { RewindFilesResult } from '@/api/types'
 
 interface SdkCheckpointsProps {

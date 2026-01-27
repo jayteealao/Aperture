@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from 'react'
 import { Input } from '@/components/ui/Input'
-import { Button } from '@/components/ui/Button'
 import { Brain, DollarSign, RefreshCw } from 'lucide-react'
 import type { SdkSessionConfig } from '@/api/types'
 

@@ -189,7 +189,105 @@ export interface CancelMessage {
   type: 'cancel'
 }
 
-export type OutboundMessage = UserMessage | PermissionResponse | CancelMessage
+// --- Pi SDK outbound messages ---
+
+export interface PiSteerMessage {
+  type: 'pi_steer'
+  content: string
+}
+
+export interface PiFollowUpMessage {
+  type: 'pi_follow_up'
+  content: string
+}
+
+export interface PiCompactMessage {
+  type: 'pi_compact'
+  instructions?: string
+}
+
+export interface PiForkMessage {
+  type: 'pi_fork'
+  entryId: string
+}
+
+export interface PiNavigateMessage {
+  type: 'pi_navigate'
+  entryId: string
+}
+
+export interface PiSetModelMessage {
+  type: 'pi_set_model'
+  provider: string
+  modelId: string
+}
+
+export interface PiCycleModelMessage {
+  type: 'pi_cycle_model'
+}
+
+export interface PiSetThinkingLevelMessage {
+  type: 'pi_set_thinking_level'
+  level: string
+}
+
+export interface PiCycleThinkingMessage {
+  type: 'pi_cycle_thinking'
+}
+
+export interface PiNewSessionMessage {
+  type: 'pi_new_session'
+}
+
+export interface PiGetTreeMessage {
+  type: 'pi_get_tree'
+}
+
+export interface PiGetForkableMessage {
+  type: 'pi_get_forkable'
+}
+
+export interface PiGetStatsMessage {
+  type: 'pi_get_stats'
+}
+
+export interface PiGetModelsMessage {
+  type: 'pi_get_models'
+}
+
+export type PiOutboundMessage =
+  | PiSteerMessage
+  | PiFollowUpMessage
+  | PiCompactMessage
+  | PiForkMessage
+  | PiNavigateMessage
+  | PiSetModelMessage
+  | PiCycleModelMessage
+  | PiSetThinkingLevelMessage
+  | PiCycleThinkingMessage
+  | PiNewSessionMessage
+  | PiGetTreeMessage
+  | PiGetForkableMessage
+  | PiGetStatsMessage
+  | PiGetModelsMessage
+
+// Unified outbound message type for all SDKs
+export type OutboundMessage =
+  | UserMessage
+  | PermissionResponse
+  | CancelMessage
+  | InterruptMessage
+  | SetPermissionModeMessage
+  | SetModelMessage
+  | SetThinkingTokensMessage
+  | RewindFilesMessage
+  | GetMcpStatusMessage
+  | SetMcpServersMessage
+  | GetAccountInfoMessage
+  | GetSupportedModelsMessage
+  | GetSupportedCommandsMessage
+  | UpdateConfigMessage
+  | PiOutboundMessage
 
 // Inbound WebSocket messages
 export interface JsonRpcMessage {
@@ -738,18 +836,6 @@ export interface UpdateConfigMessage {
   config: Partial<SdkSessionConfig>
 }
 
-export type SdkOutboundMessage =
-  | InterruptMessage
-  | SetPermissionModeMessage
-  | SetModelMessage
-  | SetThinkingTokensMessage
-  | RewindFilesMessage
-  | GetMcpStatusMessage
-  | SetMcpServersMessage
-  | GetAccountInfoMessage
-  | GetSupportedModelsMessage
-  | GetSupportedCommandsMessage
-  | UpdateConfigMessage
-
-// Extended outbound message type
-export type ExtendedOutboundMessage = OutboundMessage | SdkOutboundMessage
+// SdkOutboundMessage and ExtendedOutboundMessage are now part of OutboundMessage
+export type SdkOutboundMessage = OutboundMessage
+export type ExtendedOutboundMessage = OutboundMessage

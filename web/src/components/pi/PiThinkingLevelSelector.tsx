@@ -3,7 +3,7 @@
  * Allows users to select or cycle through thinking levels
  */
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select'
+import { Select } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import type { PiThinkingLevel } from '@/api/pi-types'
 
@@ -51,26 +51,17 @@ export function PiThinkingLevelSelector({
 
   return (
     <div className="flex items-center gap-2">
-      <label className="text-sm text-muted-foreground">Thinking:</label>
+      <label className="text-sm text-[var(--color-text-muted)]">Thinking:</label>
       <Select
         value={level}
-        onValueChange={(value) => onLevelChange(value as PiThinkingLevel)}
+        onChange={(e) => onLevelChange(e.target.value as PiThinkingLevel)}
         disabled={disabled}
-      >
-        <SelectTrigger className="w-32">
-          <SelectValue placeholder="Select level" />
-        </SelectTrigger>
-        <SelectContent>
-          {THINKING_LEVELS.map((l) => (
-            <SelectItem key={l.value} value={l.value}>
-              <div className="flex flex-col">
-                <span>{l.label}</span>
-                <span className="text-xs text-muted-foreground">{l.description}</span>
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        options={THINKING_LEVELS.map((l) => ({
+          value: l.value,
+          label: `${l.label} — ${l.description}`,
+        }))}
+        className="w-48"
+      />
     </div>
   )
 }

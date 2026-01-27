@@ -190,7 +190,7 @@ function TaskDisplay({ input }: { input: Record<string, unknown> }) {
     <div className="flex items-center gap-2 flex-wrap">
       <Bot size={14} className="text-[var(--color-text-muted)] shrink-0" />
       {subagentType && (
-        <Badge variant="secondary" size="sm" className="text-2xs">
+        <Badge variant="default" size="sm" className="text-2xs">
           {subagentType}
         </Badge>
       )}

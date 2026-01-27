@@ -16,12 +16,16 @@ const providerColors: Record<ProviderKey, string> = {
   anthropic: 'accent',
   openai: 'success',
   google: 'warning',
+  groq: 'danger',
+  openrouter: 'outline',
 }
 
 const providerLabels: Record<ProviderKey, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
   google: 'Google',
+  groq: 'Groq',
+  openrouter: 'OpenRouter',
 }
 
 export default function Credentials() {

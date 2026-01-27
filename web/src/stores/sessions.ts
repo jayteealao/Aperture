@@ -18,6 +18,7 @@ import type {
   McpServerStatus,
   RewindFilesResult,
   PermissionMode,
+  PermissionResponse,
   SdkContentBlock,
   SdkWsMessage,
 } from '@/api/types'
@@ -29,7 +30,6 @@ import type {
   PiSessionTree,
   PiWsMessage,
   PiThinkingLevel,
-  PiContentBlock,
   PiStreamingState,
   PiForkableEntry,
 } from '@/api/pi-types'
@@ -753,7 +753,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   },
 
   sendPermissionResponse: (sessionId, toolCallId, optionId, answers) => {
-    const message = {
+    const message: PermissionResponse = {
       type: 'permission_response',
       toolCallId,
       optionId,
@@ -803,8 +803,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
               pendingRequests: 0,
               lastActivityTime: resumable.lastActivity,
               idleMs: Date.now() - resumable.lastActivity,
-              acpSessionId: resumable.sdkSessionId,
-              sdkSessionId: resumable.sdkSessionId,
+              acpSessionId: resumable.sdkSessionId ?? null,
+              sdkSessionId: resumable.sdkSessionId ?? null,
               isResumable: true,
               workingDirectory: resumable.workingDirectory || undefined,
             },
@@ -1175,7 +1175,7 @@ function handleSdkWebSocketMessage(
     }
 
     case 'assistant_message': {
-      const { messageId, stopReason, usage, content } = payload as {
+      const { messageId, content } = payload as {
         messageId: string
         stopReason?: string
         usage?: { input_tokens: number; output_tokens: number }
@@ -1391,7 +1391,7 @@ function handlePiJsonRpcResponse(
   method: string,
   params: unknown,
   get: () => SessionsState,
-  set: (fn: (state: SessionsState) => Partial<SessionsState>) => void
+  _set: (fn: (state: SessionsState) => Partial<SessionsState>) => void
 ) {
   switch (method) {
     case 'pi/model_changed': {

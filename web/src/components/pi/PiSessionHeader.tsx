@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { PiThinkingLevelSelector } from './PiThinkingLevelSelector'
 import { usePiSession } from '@/hooks/usePiSession'
-import type { PiModelConfig, PiThinkingLevel } from '@/api/pi-types'
 
 interface PiSessionHeaderProps {
   sessionId: string
@@ -18,12 +17,10 @@ export function PiSessionHeader({ sessionId, isStreaming }: PiSessionHeaderProps
   const {
     config,
     thinkingLevel,
-    models,
     isPiSession,
     cycleModel,
     cycleThinking,
     setThinkingLevel,
-    refreshModels,
   } = usePiSession(sessionId)
 
   if (!isPiSession) {
@@ -35,7 +32,7 @@ export function PiSessionHeader({ sessionId, isStreaming }: PiSessionHeaderProps
   return (
     <div className="flex items-center justify-between border-b border-border px-4 py-2 bg-muted/30">
       <div className="flex items-center gap-3">
-        <Badge variant="secondary" className="gap-1.5">
+        <Badge variant="default" className="gap-1.5">
           <PiIcon className="h-3.5 w-3.5" />
           Pi SDK
         </Badge>

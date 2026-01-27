@@ -3,7 +3,7 @@
  * Visualizes the conversation tree structure with branches
  */
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -138,7 +138,7 @@ function TreeNode({ tree, entryId, expandedNodes, onToggle, onNavigate, currentL
 
         {/* Current indicator */}
         {isCurrentLeaf && (
-          <Badge variant="secondary" className="text-xs">
+          <Badge variant="default" className="text-xs">
             Current
           </Badge>
         )}
