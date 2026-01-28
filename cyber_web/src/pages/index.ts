@@ -1,0 +1,6 @@
+export { OnboardingPage } from './Onboarding'
+export { SessionsPage } from './Sessions'
+export { WorkspacePage } from './Workspace'
+export { CredentialsPage } from './Credentials'
+export { SettingsPage } from './Settings'
+export { HelpPage } from './Help'
