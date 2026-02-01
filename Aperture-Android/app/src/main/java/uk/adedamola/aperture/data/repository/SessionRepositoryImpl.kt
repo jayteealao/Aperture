@@ -1,5 +1,6 @@
 package uk.adedamola.aperture.data.repository
 
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromJsonElement
 import uk.adedamola.aperture.core.util.NetworkResult
 import uk.adedamola.aperture.core.util.Result
 import uk.adedamola.aperture.data.local.db.dao.MessageDao
@@ -20,13 +22,20 @@ import uk.adedamola.aperture.data.remote.api.ApertureApi
 import uk.adedamola.aperture.data.remote.api.WebSocketManager
 import uk.adedamola.aperture.domain.model.ConnectionState
 import uk.adedamola.aperture.domain.model.ConnectionStatus
+import uk.adedamola.aperture.domain.model.ContentBlock
 import uk.adedamola.aperture.domain.model.CreateSessionRequest
+import uk.adedamola.aperture.domain.model.ManagedRepo
 import uk.adedamola.aperture.domain.model.Message
+import uk.adedamola.aperture.domain.model.MessageContent
+import uk.adedamola.aperture.domain.model.MessageRole
 import uk.adedamola.aperture.domain.model.ResumableSession
 import uk.adedamola.aperture.domain.model.Session
 import uk.adedamola.aperture.domain.model.SessionStatus
+import uk.adedamola.aperture.domain.model.websocket.JsonRpcMessage
 import uk.adedamola.aperture.domain.model.websocket.OutboundMessage
+import uk.adedamola.aperture.domain.model.websocket.SessionUpdateParams
 import uk.adedamola.aperture.domain.repository.SessionRepository
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -61,6 +70,78 @@ class SessionRepositoryImpl @Inject constructor(
                 _sessions.value = entities.map { it.toDomainModel() }
             }
         }
+
+        // Process incoming WebSocket messages
+        scope.launch {
+            webSocketManager.inboundMessages.collect { (sessionId, rawJson) ->
+                processInboundMessage(sessionId, rawJson)
+            }
+        }
+    }
+
+    private suspend fun processInboundMessage(sessionId: String, rawJson: String) {
+        try {
+            val jsonRpc = json.decodeFromString<JsonRpcMessage>(rawJson)
+            Log.d("SessionRepository", "Received message: method=${jsonRpc.method}, sessionId=$sessionId")
+
+            when (jsonRpc.method) {
+                "session/update" -> {
+                    if (jsonRpc.params != null) {
+                        try {
+                            val params = json.decodeFromJsonElement<SessionUpdateParams>(jsonRpc.params)
+                            val content = params.update.content
+                            val updateType = params.update.sessionUpdate
+
+                            Log.d("SessionRepository", "Session update type: $updateType, hasContent: ${content != null}")
+
+                            if (content != null) {
+                                // Create a message from the content block
+                                val message = Message(
+                                    id = UUID.randomUUID().toString(),
+                                    sessionId = sessionId,
+                                    role = MessageRole.ASSISTANT,
+                                    content = MessageContent.Blocks(listOf(content)),
+                                    timestamp = System.currentTimeMillis().toString()
+                                )
+                                messageDao.insert(MessageEntity.fromDomainModel(message, json))
+                                Log.d("SessionRepository", "Saved message: ${message.id}")
+                            }
+
+                            // Update streaming state based on update type
+                            updateStreamingState(sessionId, updateType)
+                        } catch (e: Exception) {
+                            Log.e("SessionRepository", "Failed to parse session/update params", e)
+                        }
+                    }
+                }
+                "session/exit" -> {
+                    updateStreamingState(sessionId, "ended")
+                }
+                "session/error" -> {
+                    Log.e("SessionRepository", "Session error: ${jsonRpc.params}")
+                    updateStreamingState(sessionId, "error")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("SessionRepository", "Failed to process inbound message", e)
+        }
+    }
+
+    private fun updateStreamingState(sessionId: String, updateType: String) {
+        val currentStates = _connectionStates.value.toMutableMap()
+        val existing = currentStates[sessionId] ?: ConnectionState()
+
+        val isStreaming = when (updateType) {
+            "init", "init_tool", "progress" -> true
+            "result", "ended", "error" -> false
+            else -> existing.isStreaming
+        }
+
+        currentStates[sessionId] = existing.copy(
+            isStreaming = isStreaming,
+            lastActivity = System.currentTimeMillis()
+        )
+        _connectionStates.value = currentStates
     }
 
     private fun updateConnectionStates(statusMap: Map<String, ConnectionStatus>) {
@@ -176,6 +257,14 @@ class SessionRepositoryImpl @Inject constructor(
     override fun observeMessages(sessionId: String): Flow<List<Message>> {
         return messageDao.observeBySessionId(sessionId).map { entities ->
             entities.map { it.toDomainModel(json) }
+        }
+    }
+
+    // Managed repos
+    override suspend fun getManagedRepos(workspaceId: String): NetworkResult<List<ManagedRepo>> {
+        return when (val result = api.listManagedRepos(workspaceId)) {
+            is Result.Success -> Result.Success(result.value.repos)
+            is Result.Failure -> result
         }
     }
 }

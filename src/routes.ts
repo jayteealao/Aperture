@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { SessionManager } from './sessionManager.js';
+import type { SessionManager, RepoMode } from './sessionManager.js';
 import type { Config } from './config.js';
 import type {
   SessionAuth,
@@ -77,9 +77,13 @@ interface CreateSessionBody {
   auth?: SessionAuth;
   env?: Record<string, string>;
   workspaceId?: string; // Optional workspace ID for workspace-backed sessions
-  repoPath?: string; // Optional repo path for sessions without workspace (no worktree isolation)
+  repoPath?: string; // DEPRECATED: Optional repo path for sessions without workspace
   sdk?: SdkSessionConfig; // Claude SDK-specific configuration
   pi?: PiSessionConfig; // Pi SDK-specific configuration
+  // New repo mode fields
+  repoMode?: RepoMode; // How to set up the repo: none, init, clone, existing
+  repoUrl?: string; // Git URL for clone mode
+  existingRepoId?: string; // ID of existing managed repo
 }
 
 /**
@@ -106,6 +110,89 @@ export async function registerRoutes(
     return { status: 'ok' };
   });
 
+  // ===========================================================================
+  // Managed Repos Endpoints
+  // ===========================================================================
+
+  // List managed repos for a workspace
+  fastify.get<{ Querystring: { workspaceId?: string } }>(
+    '/v1/repos',
+    async (request, reply) => {
+      if (!database) {
+        return reply.code(503).send({
+          error: 'Database not enabled',
+        });
+      }
+
+      const workspaceId = request.query.workspaceId || 'default';
+      const repos = database.getManagedRepos(workspaceId);
+
+      return {
+        repos: repos.map((r) => ({
+          id: r.id,
+          name: r.name,
+          path: r.path,
+          originUrl: r.origin_url,
+          workspaceId: r.workspace_id,
+          createdAt: r.created_at,
+          sessionId: r.session_id,
+        })),
+        total: repos.length,
+      };
+    }
+  );
+
+  // Get a specific managed repo
+  fastify.get<{ Params: { id: string } }>(
+    '/v1/repos/:id',
+    async (request, reply) => {
+      if (!database) {
+        return reply.code(503).send({
+          error: 'Database not enabled',
+        });
+      }
+
+      const repo = database.getManagedRepo(request.params.id);
+      if (!repo) {
+        return reply.code(404).send({
+          error: 'Managed repo not found',
+        });
+      }
+
+      return {
+        id: repo.id,
+        name: repo.name,
+        path: repo.path,
+        originUrl: repo.origin_url,
+        workspaceId: repo.workspace_id,
+        createdAt: repo.created_at,
+        sessionId: repo.session_id,
+      };
+    }
+  );
+
+  // Delete a managed repo
+  fastify.delete<{ Params: { id: string } }>(
+    '/v1/repos/:id',
+    async (request, reply) => {
+      if (!database) {
+        return reply.code(503).send({
+          error: 'Database not enabled',
+        });
+      }
+
+      const repo = database.getManagedRepo(request.params.id);
+      if (!repo) {
+        return reply.code(404).send({
+          error: 'Managed repo not found',
+        });
+      }
+
+      database.deleteManagedRepo(request.params.id);
+      return reply.code(204).send();
+    }
+  );
+
   // Readiness check - verifies runtime, child spawn, and claude executable
   fastify.get('/readyz', async (_request, reply) => {
     const readiness = await checkReadiness();
@@ -128,9 +215,20 @@ export async function registerRoutes(
     '/v1/sessions',
     async (request, reply) => {
       try {
-        const { agent, auth, env, workspaceId, repoPath, sdk, pi } = request.body || {};
+        const { agent, auth, env, workspaceId, repoPath, sdk, pi, repoMode, repoUrl, existingRepoId } = request.body || {};
 
-        const session = await sessionManager.createSession({ agent, auth, env, workspaceId, repoPath, sdk, pi });
+        const session = await sessionManager.createSession({
+          agent,
+          auth,
+          env,
+          workspaceId,
+          repoPath,
+          sdk,
+          pi,
+          repoMode,
+          repoUrl,
+          existingRepoId,
+        });
 
         return reply.code(201).send({
           id: session.id,
@@ -171,7 +269,12 @@ export async function registerRoutes(
         });
       }
 
-      return session.getStatus();
+      return {
+        id: session.id,
+        agent: session.agentType,
+        status: session.getStatus(),
+        restored: false,
+      };
     }
   );
 

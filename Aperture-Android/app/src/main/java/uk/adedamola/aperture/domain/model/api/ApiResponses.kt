@@ -1,7 +1,9 @@
 package uk.adedamola.aperture.domain.model.api
 
 import kotlinx.serialization.Serializable
+import uk.adedamola.aperture.domain.model.AgentType
 import uk.adedamola.aperture.domain.model.Credential
+import uk.adedamola.aperture.domain.model.ManagedRepo
 import uk.adedamola.aperture.domain.model.Message
 import uk.adedamola.aperture.domain.model.ResumableSession
 import uk.adedamola.aperture.domain.model.SessionStatus
@@ -36,7 +38,7 @@ data class ListResumableSessionsResponse(
 @Serializable
 data class ConnectSessionResponse(
     val id: String,
-    val agent: String,
+    val agent: AgentType,
     val status: SessionStatus,
     val restored: Boolean
 )
@@ -70,5 +72,11 @@ data class ListWorkspaceAgentsResponse(
 @Serializable
 data class ListWorktreesResponse(
     val worktrees: List<WorktreeInfo>,
+    val total: Int
+)
+
+@Serializable
+data class ListManagedReposResponse(
+    val repos: List<ManagedRepo>,
     val total: Int
 )
