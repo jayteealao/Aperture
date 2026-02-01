@@ -388,8 +388,8 @@ private fun MessageInputArea(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .imePadding()  // IME padding first - takes precedence when keyboard is shown
             .navigationBarsPadding()
-            .imePadding()
             .background(HudDark)
             .border(1.dp, HudGray)
             .padding(12.dp),

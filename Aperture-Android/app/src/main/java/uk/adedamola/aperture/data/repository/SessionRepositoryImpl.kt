@@ -4,12 +4,14 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
 import uk.adedamola.aperture.core.util.NetworkResult
@@ -35,7 +37,9 @@ import uk.adedamola.aperture.domain.model.websocket.JsonRpcMessage
 import uk.adedamola.aperture.domain.model.websocket.OutboundMessage
 import uk.adedamola.aperture.domain.model.websocket.SessionUpdateParams
 import uk.adedamola.aperture.domain.repository.SessionRepository
-import java.util.UUID
+import java.io.Closeable
+import java.security.MessageDigest
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,7 +50,15 @@ class SessionRepositoryImpl @Inject constructor(
     private val messageDao: MessageDao,
     private val webSocketManager: WebSocketManager,
     private val json: Json
-) : SessionRepository {
+) : SessionRepository, Closeable {
+
+    companion object {
+        private const val TAG = "SessionRepositoryImpl"
+
+        // Known streaming update types
+        private val STREAMING_START_TYPES = setOf("init", "init_tool", "progress", "thinking", "tool_output")
+        private val STREAMING_END_TYPES = setOf("result", "ended", "error")
+    }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -82,7 +94,7 @@ class SessionRepositoryImpl @Inject constructor(
     private suspend fun processInboundMessage(sessionId: String, rawJson: String) {
         try {
             val jsonRpc = json.decodeFromString<JsonRpcMessage>(rawJson)
-            Log.d("SessionRepository", "Received message: method=${jsonRpc.method}, sessionId=$sessionId")
+            Log.d(TAG, "Received message: method=${jsonRpc.method}, sessionId=$sessionId")
 
             when (jsonRpc.method) {
                 "session/update" -> {
@@ -92,25 +104,26 @@ class SessionRepositoryImpl @Inject constructor(
                             val content = params.update.content
                             val updateType = params.update.sessionUpdate
 
-                            Log.d("SessionRepository", "Session update type: $updateType, hasContent: ${content != null}")
+                            Log.d(TAG, "Session update type: $updateType, hasContent: ${content != null}")
 
                             if (content != null) {
-                                // Create a message from the content block
+                                // Generate deterministic ID based on session + content to prevent duplicates
+                                val messageId = generateDeterministicMessageId(sessionId, content)
                                 val message = Message(
-                                    id = UUID.randomUUID().toString(),
+                                    id = messageId,
                                     sessionId = sessionId,
                                     role = MessageRole.ASSISTANT,
                                     content = MessageContent.Blocks(listOf(content)),
-                                    timestamp = System.currentTimeMillis().toString()
+                                    timestamp = Instant.now().toString()
                                 )
                                 messageDao.insert(MessageEntity.fromDomainModel(message, json))
-                                Log.d("SessionRepository", "Saved message: ${message.id}")
+                                Log.d(TAG, "Saved message: ${message.id}")
                             }
 
                             // Update streaming state based on update type
                             updateStreamingState(sessionId, updateType)
                         } catch (e: Exception) {
-                            Log.e("SessionRepository", "Failed to parse session/update params", e)
+                            Log.e(TAG, "Failed to parse session/update params", e)
                         }
                     }
                 }
@@ -118,23 +131,40 @@ class SessionRepositoryImpl @Inject constructor(
                     updateStreamingState(sessionId, "ended")
                 }
                 "session/error" -> {
-                    Log.e("SessionRepository", "Session error: ${jsonRpc.params}")
+                    Log.e(TAG, "Session error: ${jsonRpc.params}")
                     updateStreamingState(sessionId, "error")
                 }
             }
         } catch (e: Exception) {
-            Log.e("SessionRepository", "Failed to process inbound message", e)
+            Log.e(TAG, "Failed to process inbound message", e)
         }
+    }
+
+    /**
+     * Generate a deterministic message ID based on session and content.
+     * This prevents duplicate messages when reconnecting or replaying messages.
+     */
+    private fun generateDeterministicMessageId(sessionId: String, content: ContentBlock): String {
+        val contentJson = json.encodeToString(content)
+        val input = "$sessionId:$contentJson"
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hash = digest.digest(input.toByteArray())
+        return hash.take(16).joinToString("") { "%02x".format(it) }
     }
 
     private fun updateStreamingState(sessionId: String, updateType: String) {
         val currentStates = _connectionStates.value.toMutableMap()
         val existing = currentStates[sessionId] ?: ConnectionState()
 
-        val isStreaming = when (updateType) {
-            "init", "init_tool", "progress" -> true
-            "result", "ended", "error" -> false
-            else -> existing.isStreaming
+        val isStreaming = when {
+            updateType in STREAMING_START_TYPES -> true
+            updateType in STREAMING_END_TYPES -> false
+            else -> {
+                // Unknown update type - log it and default to streaming active
+                // This ensures new update types from backend don't break the UI
+                Log.w(TAG, "Unknown streaming update type: $updateType, defaulting to streaming=true")
+                true
+            }
         }
 
         currentStates[sessionId] = existing.copy(
@@ -142,6 +172,14 @@ class SessionRepositoryImpl @Inject constructor(
             lastActivity = System.currentTimeMillis()
         )
         _connectionStates.value = currentStates
+    }
+
+    /**
+     * Clean up coroutine scope when repository is no longer needed.
+     * Note: For singleton repositories, this is typically called on app termination.
+     */
+    override fun close() {
+        scope.cancel()
     }
 
     private fun updateConnectionStates(statusMap: Map<String, ConnectionStatus>) {
