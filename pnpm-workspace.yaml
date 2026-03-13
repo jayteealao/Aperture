@@ -1,7 +1,6 @@
 packages:
-  - 'packages/*'
-  - 'web'
-  - 'cyber_web'
+  - packages/*
+  - web
 
 ignoredBuiltDependencies:
   - esbuild
