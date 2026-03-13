@@ -1,81 +1,73 @@
 ---
 name: review:all
-description: Comprehensive code review using all 30 review checklists. Spawns the senior-review-specialist agent for thorough file-by-file analysis.
+description: Comprehensive code review running all 30 review commands in parallel
 ---
 
 # Comprehensive Code Review
 
-Run a thorough review using ALL 30 review checklists via the senior-review-specialist agent.
+Run all 30 review commands in parallel, then merge findings into a unified report.
 
-## Instructions
+## Execution
 
-Spawn the `senior-review-specialist` agent to perform this review.
+Spawn these review commands as parallel Task agents. Each agent must:
+1. Read the command file at the given path
+2. Follow its WORKFLOW exactly
+3. Return the complete review report
 
-## Checklists to Apply
+### Parallel Commands
 
-Load and apply ALL of these review checklists:
+**Correctness & Logic:**
+1. `commands/review/correctness.md` — Logic flaws, broken invariants, edge-case failures
+2. `commands/review/backend-concurrency.md` — Race conditions, atomicity, locking, idempotency
+3. `commands/review/refactor-safety.md` — Semantic drift, behavior equivalence
 
-### Correctness & Logic
-- `commands/review/correctness.md` - Logic flaws, broken invariants, edge-case failures
-- `commands/review/backend-concurrency.md` - Race conditions, atomicity, locking, idempotency
-- `commands/review/refactor-safety.md` - Semantic drift, behavior equivalence
+**Security & Privacy:**
+4. `commands/review/security.md` — Vulnerabilities, insecure defaults, missing controls
+5. `commands/review/infra-security.md` — IAM, networking, secrets, configuration
+6. `commands/review/privacy.md` — PII handling, data minimization, compliance
+7. `commands/review/supply-chain.md` — Dependency risks, lockfiles, build integrity
+8. `commands/review/data-integrity.md` — Data correctness over time, failures, concurrency
 
-### Security & Privacy
-- `commands/review/security.md` - Vulnerabilities, insecure defaults, missing controls
-- `commands/review/infra-security.md` - IAM, networking, secrets, configuration
-- `commands/review/privacy.md` - PII handling, data minimization, compliance
-- `commands/review/supply-chain.md` - Dependency risks, lockfiles, build integrity
-- `commands/review/data-integrity.md` - Data correctness over time, failures, concurrency
+**Architecture & Design:**
+9. `commands/review/architecture.md` — Boundaries, dependencies, layering
+10. `commands/review/performance.md` — Algorithmic efficiency, N+1 queries, bottlenecks
+11. `commands/review/scalability.md` — Load handling, dataset growth, multi-tenancy
+12. `commands/review/api-contracts.md` — Stability, correctness, consumer usability
+13. `commands/review/maintainability.md` — Readability, change amplification
+14. `commands/review/overengineering.md` — Unnecessary complexity, YAGNI violations
 
-### Architecture & Design
-- `commands/review/architecture.md` - Boundaries, dependencies, layering
-- `commands/review/performance.md` - Algorithmic efficiency, N+1 queries, bottlenecks
-- `commands/review/scalability.md` - Load handling, dataset growth, multi-tenancy
-- `commands/review/api-contracts.md` - Stability, correctness, consumer usability
-- `commands/review/maintainability.md` - Readability, change amplification
-- `commands/review/overengineering.md` - Unnecessary complexity, YAGNI violations
+**Infrastructure & Operations:**
+15. `commands/review/infra.md` — Deployment config, least privilege, operational clarity
+16. `commands/review/ci.md` — Pipeline security, deployment safety
+17. `commands/review/release.md` — Versioning, rollout, migration, rollback
+18. `commands/review/migrations.md` — Database migration safety
+19. `commands/review/reliability.md` — Failure modes, partial outages
+20. `commands/review/logging.md` — Secrets exposure, PII leaks, wide-events
+21. `commands/review/observability.md` — Logs, metrics, tracing, alertability
+22. `commands/review/cost.md` — Cloud infrastructure cost implications
 
-### Infrastructure & Operations
-- `commands/review/infra.md` - Deployment config, least privilege, operational clarity
-- `commands/review/ci.md` - Pipeline security, deployment safety
-- `commands/review/release.md` - Versioning, rollout, migration, rollback
-- `commands/review/migrations.md` - Database migration safety
-- `commands/review/reliability.md` - Failure modes, partial outages
-- `commands/review/logging.md` - Secrets exposure, PII leaks, wide-events
-- `commands/review/observability.md` - Logs, metrics, tracing, alertability
-- `commands/review/cost.md` - Cloud infrastructure cost implications
+**Quality & Testing:**
+23. `commands/review/testing.md` — Test quality, coverage, reliability
+24. `commands/review/style-consistency.md` — Codebase style, language idioms
+25. `commands/review/docs.md` — Documentation completeness, accuracy
 
-### Quality & Testing
-- `commands/review/testing.md` - Test quality, coverage, reliability
-- `commands/review/style-consistency.md` - Codebase style, idioms
-- `commands/review/docs.md` - Documentation completeness and accuracy
+**User Experience:**
+26. `commands/review/accessibility.md` — Keyboard, assistive technology, ARIA
+27. `commands/review/frontend-accessibility.md` — SPA-specific accessibility issues
+28. `commands/review/frontend-performance.md` — Bundle size, rendering, latency
+29. `commands/review/ux-copy.md` — User-facing text clarity, error recovery
+30. `commands/review/dx.md` — Developer experience, onboarding
 
-### User Experience
-- `commands/review/accessibility.md` - Keyboard, assistive technology, ARIA
-- `commands/review/frontend-accessibility.md` - SPA-specific accessibility
-- `commands/review/frontend-performance.md` - Bundle size, rendering, latency
-- `commands/review/ux-copy.md` - User-facing text clarity, error recovery
-- `commands/review/dx.md` - Developer experience, onboarding
+## Task Agent Prompt Template
 
-## Agent Instructions
+For each command, spawn a Task agent with this prompt:
+"Read and execute the review command at `${CLAUDE_PLUGIN_ROOT}/commands/review/{name}.md`. Follow its WORKFLOW exactly. Review the current working tree changes (`git diff`). Return the complete review report as specified in the command's OUTPUT FORMAT."
 
-The agent should:
+## After All Complete: Merge
 
-1. **Get working tree changes**: Run `git diff` to see all changes
-2. **For each changed file**:
-   - Read the full file content
-   - Go through each diff hunk
-   - Apply ALL 30 checklists to the changes
-   - Trace problems to their root cause
-3. **Cross-reference related files**: Follow imports, check callers
-4. **Find ALL issues**: Be thorough, expect to find many issues
-
-## Output Format
-
-Generate a comprehensive review report with:
-
-- **Critical Issues**: Blocking problems (must fix)
-- **Warnings**: Should address before merge
-- **Suggestions**: Improvements to consider
-- **File Summary**: Issues per file with counts by severity
-- **Overall Assessment**: Ship/Don't Ship recommendation with rationale
+Combine all 30 agent reports into a single comprehensive review:
+- Deduplicate findings that appear in multiple reports
+- Sort by severity (BLOCKER > HIGH > MED > LOW > NIT)
+- Group by category (Correctness, Security, Architecture, Infrastructure, Quality, UX)
+- Merge file summaries across all reports
+- Produce unified assessment: Ship / Ship with caveats / Don't Ship

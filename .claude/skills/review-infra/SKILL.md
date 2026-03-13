@@ -1,53 +1,37 @@
 ---
 name: review:infra
-description: Infrastructure-focused review covering IaC, CI/CD, releases, migrations, logging, and observability. Spawns the senior-review-specialist agent for infrastructure analysis.
+description: Infrastructure-focused review running 6 infrastructure review commands in parallel
 ---
 
 # Infrastructure Code Review
 
-Run an infrastructure-focused review using 6 infrastructure checklists via the senior-review-specialist agent.
+Run 6 infrastructure review commands in parallel, then merge findings.
 
-## Instructions
+## Execution
 
-Spawn the `senior-review-specialist` agent to perform this review.
+Spawn these review commands as parallel Task agents. Each agent must:
+1. Read the command file at the given path
+2. Follow its WORKFLOW exactly
+3. Return the complete review report
 
-## Checklists to Apply
+### Parallel Commands
+1. `commands/review/infra.md` — Deployment config, least privilege, operational clarity
+2. `commands/review/ci.md` — Pipeline security, deployment safety
+3. `commands/review/release.md` — Versioning, rollout, migration, rollback
+4. `commands/review/migrations.md` — Database migration safety
+5. `commands/review/logging.md` — Secrets exposure, PII leaks, wide-events
+6. `commands/review/observability.md` — Logs, metrics, tracing, alertability
 
-Load and apply these review checklists:
+## Task Agent Prompt Template
 
-- `commands/review/infra.md` - Deployment config, least privilege, operational clarity
-- `commands/review/ci.md` - Pipeline security, deployment safety
-- `commands/review/release.md` - Versioning, rollout, migration, rollback
-- `commands/review/migrations.md` - Database migration safety
-- `commands/review/logging.md` - Secrets exposure, PII leaks, wide-events
-- `commands/review/observability.md` - Logs, metrics, tracing, alertability
+For each command, spawn a Task agent with this prompt:
+"Read and execute the review command at `${CLAUDE_PLUGIN_ROOT}/commands/review/{name}.md`. Follow its WORKFLOW exactly. Review the current working tree changes (`git diff`). Return the complete review report as specified in the command's OUTPUT FORMAT."
 
-## Agent Instructions
+## After All Complete: Merge
 
-The agent should:
-
-1. **Get working tree changes**: Run `git diff` to see all changes
-2. **Identify infrastructure files**:
-   - Terraform, CloudFormation, Kubernetes manifests
-   - CI/CD pipelines (GitHub Actions, GitLab CI, etc.)
-   - Migration files, deployment scripts
-   - Logging and monitoring configuration
-3. **For each changed file**:
-   - Read the full file content
-   - Go through each diff hunk
-   - Apply all 6 infrastructure checklists
-   - Look for security misconfigurations and operational risks
-4. **Cross-reference related files**: Check environment configs, secrets handling
-5. **Assess blast radius**: What could go wrong in production?
-
-## Output Format
-
-Generate an infrastructure review report with:
-
-- **Critical Issues (BLOCKER)**: Security misconfigurations, deployment risks
-- **High Priority Issues**: Missing guardrails, cost explosions
-- **Medium Priority Issues**: Observability gaps, operational hazards
-- **Infrastructure Map**: Components, dependencies, deployment topology
-- **Operational Readiness**: Logging, alerting, rollback capabilities
-- **File Summary**: Infrastructure issues per file
-- **Overall Assessment**: Production readiness recommendation
+Combine all 6 agent reports into a single infrastructure review:
+- Deduplicate findings that appear in multiple reports
+- Sort by severity (BLOCKER > HIGH > MED > LOW > NIT)
+- Merge file summaries across all reports
+- Include operational readiness assessment
+- Produce unified assessment: Production readiness recommendation

@@ -1,50 +1,35 @@
 ---
 name: review:architecture
-description: Architecture-focused review covering boundaries, performance, scalability, and API contracts. Spawns the senior-review-specialist agent for architectural analysis.
+description: Architecture-focused review running 4 architecture review commands in parallel
 ---
 
 # Architecture Code Review
 
-Run an architecture-focused review using 4 architecture checklists via the senior-review-specialist agent.
+Run 4 architecture review commands in parallel, then merge findings.
 
-## Instructions
+## Execution
 
-Spawn the `senior-review-specialist` agent to perform this review.
+Spawn these review commands as parallel Task agents. Each agent must:
+1. Read the command file at the given path
+2. Follow its WORKFLOW exactly
+3. Return the complete review report
 
-## Checklists to Apply
+### Parallel Commands
+1. `commands/review/architecture.md` — Boundaries, dependencies, layering
+2. `commands/review/performance.md` — Algorithmic efficiency, N+1 queries, bottlenecks
+3. `commands/review/scalability.md` — Load handling, dataset growth, multi-tenancy
+4. `commands/review/api-contracts.md` — Stability, correctness, consumer usability
 
-Load and apply these review checklists:
+## Task Agent Prompt Template
 
-- `commands/review/architecture.md` - Boundaries, dependencies, layering
-- `commands/review/performance.md` - Algorithmic efficiency, N+1 queries, bottlenecks
-- `commands/review/scalability.md` - Load handling, dataset growth, multi-tenancy
-- `commands/review/api-contracts.md` - Stability, correctness, consumer usability
+For each command, spawn a Task agent with this prompt:
+"Read and execute the review command at `${CLAUDE_PLUGIN_ROOT}/commands/review/{name}.md`. Follow its WORKFLOW exactly. Review the current working tree changes (`git diff`). Return the complete review report as specified in the command's OUTPUT FORMAT."
 
-## Agent Instructions
+## After All Complete: Merge
 
-The agent should:
-
-1. **Get working tree changes**: Run `git diff` to see all changes
-2. **Map the architecture**:
-   - Identify architectural layers (presentation, service, domain, infra)
-   - Identify dependency direction
-   - Identify coupling points
-3. **For each changed file**:
-   - Read the full file content
-   - Go through each diff hunk
-   - Apply all 4 architecture checklists
-   - Look for layer violations and circular dependencies
-4. **Cross-reference related files**: Check import graphs, module boundaries
-5. **Assess coupling impact**: How many modules are affected?
-
-## Output Format
-
-Generate an architecture review report with:
-
-- **Critical Issues (BLOCKER)**: Circular dependencies, boundary violations
-- **High Priority Issues**: God objects, coupling problems
-- **Medium Priority Issues**: Missing abstractions, low cohesion
-- **Architectural Map**: Layers, boundaries, dependency direction
-- **Coupling Metrics**: Fan-in, fan-out, affected modules
-- **File Summary**: Architecture issues per file
-- **Overall Assessment**: Architecture health recommendation
+Combine all 4 agent reports into a single architecture review:
+- Deduplicate findings that appear in multiple reports
+- Sort by severity (BLOCKER > HIGH > MED > LOW > NIT)
+- Merge file summaries across all reports
+- Include architectural map from the architecture command
+- Produce unified assessment: Architecture health recommendation

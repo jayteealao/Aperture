@@ -1,52 +1,35 @@
 ---
 name: review:ux
-description: UX-focused review covering accessibility, frontend accessibility, frontend performance, and UX copy. Spawns the senior-review-specialist agent for user experience analysis.
+description: UX-focused review running 4 user experience review commands in parallel
 ---
 
 # UX Code Review
 
-Run a UX-focused review using 4 user experience checklists via the senior-review-specialist agent.
+Run 4 user experience review commands in parallel, then merge findings.
 
-## Instructions
+## Execution
 
-Spawn the `senior-review-specialist` agent to perform this review.
+Spawn these review commands as parallel Task agents. Each agent must:
+1. Read the command file at the given path
+2. Follow its WORKFLOW exactly
+3. Return the complete review report
 
-## Checklists to Apply
+### Parallel Commands
+1. `commands/review/accessibility.md` — Keyboard, assistive technology, ARIA
+2. `commands/review/frontend-accessibility.md` — SPA-specific accessibility issues
+3. `commands/review/frontend-performance.md` — Bundle size, rendering, latency
+4. `commands/review/ux-copy.md` — User-facing text clarity, error recovery
 
-Load and apply these review checklists:
+## Task Agent Prompt Template
 
-- `commands/review/accessibility.md` - Keyboard, assistive technology, ARIA
-- `commands/review/frontend-accessibility.md` - SPA-specific accessibility issues
-- `commands/review/frontend-performance.md` - Bundle size, rendering, latency
-- `commands/review/ux-copy.md` - User-facing text clarity, error recovery
+For each command, spawn a Task agent with this prompt:
+"Read and execute the review command at `${CLAUDE_PLUGIN_ROOT}/commands/review/{name}.md`. Follow its WORKFLOW exactly. Review the current working tree changes (`git diff`). Return the complete review report as specified in the command's OUTPUT FORMAT."
 
-## Agent Instructions
+## After All Complete: Merge
 
-The agent should:
-
-1. **Get working tree changes**: Run `git diff` to see all changes
-2. **Identify frontend files**:
-   - React, Vue, Angular, Svelte components
-   - CSS, styling files
-   - Localization/i18n files
-   - User-facing text in any file
-3. **For each changed file**:
-   - Read the full file content
-   - Go through each diff hunk
-   - Apply all 4 UX checklists
-   - Focus on user impact and accessibility
-4. **Cross-reference related files**: Check component hierarchy, shared styles
-5. **Assess user impact**: How does this affect real users?
-
-## Output Format
-
-Generate a UX review report with:
-
-- **Critical Issues (BLOCKER)**: Accessibility violations (WCAG A/AA)
-- **High Priority Issues**: Usability problems, poor error handling
-- **Medium Priority Issues**: Performance concerns, copy improvements
-- **Accessibility Assessment**: WCAG compliance, screen reader compatibility
-- **Performance Assessment**: Bundle impact, rendering efficiency
-- **Copy Assessment**: Clarity, consistency, actionability
-- **File Summary**: UX issues per file
-- **Overall Assessment**: User experience quality recommendation
+Combine all 4 agent reports into a single UX review:
+- Deduplicate findings that appear in multiple reports
+- Sort by severity (BLOCKER > HIGH > MED > LOW > NIT)
+- Merge file summaries across all reports
+- Include WCAG compliance assessment from accessibility commands
+- Produce unified assessment: UX quality recommendation

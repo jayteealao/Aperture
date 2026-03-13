@@ -1,7 +1,7 @@
 ---
 name: senior-review-specialist
 description: Senior engineer review specialist for thorough file-by-file code review. Spawned by review skills to perform comprehensive reviews.
-allowed-tools: Read, Grep, Glob, Bash(git:*)
+allowed-tools: Read, Grep, Glob, Bash(git:*), WebSearch, WebFetch
 ---
 
 # Senior Review Specialist

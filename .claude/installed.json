@@ -1,17 +1,17 @@
 {
   "version": "1.0.0",
   "installedAt": "2026-01-21T17:19:52.735Z",
-  "updatedAt": "2026-01-25T11:27:22.886Z",
+  "updatedAt": "2026-02-09T12:00:00.690Z",
   "plugins": [
     {
       "name": "session-workflow",
-      "version": "1.9.0",
+      "version": "2.0.0",
       "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\agent-skills",
       "installedAt": "2026-01-21T17:19:52.735Z",
       "components": {
         "agents": 18,
-        "commands": 45,
-        "skills": 12,
+        "commands": 49,
+        "skills": 14,
         "mcpServers": 0,
         "variants": 0
       },
@@ -43,7 +43,9 @@
           "commands": [
             "compat-check.md",
             "debt-register.md",
+            "debug.md",
             "decision-record.md",
+            "generate-tests.md",
             "handoff.md",
             "prod-readiness.md",
             "refactor-followups.md",
@@ -81,6 +83,8 @@
             "scope-triage.md",
             "setup-wide-logging.md",
             "test-matrix.md",
+            "triage.md",
+            "workflows\\compound.md",
             "workflows\\deepen-plan.md",
             "workflows\\plan-review.md",
             "workflows\\plan.md",
@@ -88,7 +92,9 @@
             "write-docs.md"
           ],
           "skills": [
+            "compound-docs",
             "error-analysis",
+            "file-todos",
             "framework-conventions-guide",
             "refactoring-patterns",
             "review-all",

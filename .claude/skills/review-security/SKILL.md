@@ -1,51 +1,36 @@
 ---
 name: review:security
-description: Security-focused review covering vulnerabilities, privacy, infrastructure security, data integrity, and supply chain. Spawns the senior-review-specialist agent for thorough security analysis.
+description: Security-focused review running 5 security review commands in parallel
 ---
 
 # Security Code Review
 
-Run a security-focused review using 5 security checklists via the senior-review-specialist agent.
+Run 5 security review commands in parallel, then merge findings.
 
-## Instructions
+## Execution
 
-Spawn the `senior-review-specialist` agent to perform this review.
+Spawn these review commands as parallel Task agents. Each agent must:
+1. Read the command file at the given path
+2. Follow its WORKFLOW exactly
+3. Return the complete review report
 
-## Checklists to Apply
+### Parallel Commands
+1. `commands/review/security.md` — Vulnerabilities, insecure defaults, missing controls
+2. `commands/review/privacy.md` — PII handling, data minimization, compliance
+3. `commands/review/infra-security.md` — IAM, networking, secrets, configuration
+4. `commands/review/data-integrity.md` — Data correctness over time, failures, concurrency
+5. `commands/review/supply-chain.md` — Dependency risks, lockfiles, build integrity
 
-Load and apply these review checklists:
+## Task Agent Prompt Template
 
-- `commands/review/security.md` - Vulnerabilities, insecure defaults, missing controls
-- `commands/review/privacy.md` - PII handling, data minimization, compliance
-- `commands/review/infra-security.md` - IAM, networking, secrets, configuration
-- `commands/review/data-integrity.md` - Data correctness over time, failures, concurrency
-- `commands/review/supply-chain.md` - Dependency risks, lockfiles, build integrity
+For each command, spawn a Task agent with this prompt:
+"Read and execute the review command at `${CLAUDE_PLUGIN_ROOT}/commands/review/{name}.md`. Follow its WORKFLOW exactly. Review the current working tree changes (`git diff`). Return the complete review report as specified in the command's OUTPUT FORMAT."
 
-## Agent Instructions
+## After All Complete: Merge
 
-The agent should:
-
-1. **Get working tree changes**: Run `git diff` to see all changes
-2. **Map threat surface**:
-   - Identify entry points (HTTP handlers, CLI, webhooks)
-   - Identify trust boundaries (user input, DB, external APIs)
-   - Identify assets at risk (credentials, PII, financial data)
-3. **For each changed file**:
-   - Read the full file content
-   - Go through each diff hunk
-   - Apply all 5 security checklists
-   - Look for OWASP Top 10 vulnerabilities
-4. **Cross-reference related files**: Trace data flow, check auth
-5. **Find ALL security issues**: Security bugs are critical
-
-## Output Format
-
-Generate a security review report with:
-
-- **Critical Issues (BLOCKER)**: Security vulnerabilities that must be fixed
-- **High Risk Issues**: Significant security concerns
-- **Medium Risk Issues**: Security improvements recommended
-- **Threat Surface Analysis**: Entry points, trust boundaries, assets
-- **Security Posture**: Authentication, authorization, input validation assessment
-- **File Summary**: Security issues per file
-- **Overall Assessment**: Secure/Not Secure recommendation with rationale
+Combine all 5 agent reports into a single security review:
+- Deduplicate findings that appear in multiple reports
+- Sort by severity (BLOCKER > HIGH > MED > LOW > NIT)
+- Merge file summaries across all reports
+- Include threat surface analysis from the security command
+- Produce unified assessment: Secure / Not Secure
