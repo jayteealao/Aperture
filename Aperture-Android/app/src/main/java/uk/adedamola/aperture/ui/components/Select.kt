@@ -147,10 +147,10 @@ fun <T> HudSelect(
                 modifier = Modifier
                     .background(HudBlack)
                     .border(1.dp, HudGray)
-                    .heightIn(max = 300.dp)
             ) {
                 Column(
                     modifier = Modifier
+                        .heightIn(max = 300.dp)
                         .verticalScroll(rememberScrollState())
                         .padding(4.dp)
                 ) {

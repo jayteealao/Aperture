@@ -6,23 +6,27 @@ import kotlinx.serialization.json.JsonElement
 
 /**
  * Sealed class representing different types of content blocks in messages.
- * Discriminated by the "type" field in JSON.
+ * Discriminated by the "type" field in JSON via kotlinx.serialization.
+ * Note: Don't declare a `type` property - it conflicts with the JSON class discriminator.
  */
 @Serializable
 sealed class ContentBlock {
-    abstract val type: String
 
     @Serializable
     @SerialName("text")
     data class Text(
-        override val type: String = "text",
+        val text: String
+    ) : ContentBlock()
+
+    @Serializable
+    @SerialName("text_delta")
+    data class TextDelta(
         val text: String
     ) : ContentBlock()
 
     @Serializable
     @SerialName("thinking")
     data class Thinking(
-        override val type: String = "thinking",
         val thinking: String,
         val signature: String? = null
     ) : ContentBlock()
@@ -30,7 +34,6 @@ sealed class ContentBlock {
     @Serializable
     @SerialName("tool_use")
     data class ToolUse(
-        override val type: String = "tool_use",
         val id: String,
         val name: String,
         val input: JsonElement? = null
@@ -39,7 +42,6 @@ sealed class ContentBlock {
     @Serializable
     @SerialName("tool_result")
     data class ToolResult(
-        override val type: String = "tool_result",
         @SerialName("tool_use_id")
         val toolUseId: String,
         val content: String,
@@ -50,7 +52,6 @@ sealed class ContentBlock {
     @Serializable
     @SerialName("image")
     data class Image(
-        override val type: String = "image",
         val mimeType: String,
         val data: String, // Base64 encoded
         val filename: String? = null
@@ -58,30 +59,27 @@ sealed class ContentBlock {
 }
 
 /**
- * Pi SDK specific content blocks
+ * Pi SDK specific content blocks.
+ * Note: Don't declare a `type` property - it conflicts with the JSON class discriminator.
  */
 @Serializable
 sealed class PiContentBlock {
-    abstract val type: String
 
     @Serializable
     @SerialName("text")
     data class Text(
-        override val type: String = "text",
         val text: String
     ) : PiContentBlock()
 
     @Serializable
     @SerialName("thinking")
     data class Thinking(
-        override val type: String = "thinking",
         val thinking: String
     ) : PiContentBlock()
 
     @Serializable
     @SerialName("tool_call")
     data class ToolCall(
-        override val type: String = "tool_call",
         val id: String,
         val name: String,
         val input: String // JSON string

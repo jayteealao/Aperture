@@ -8,10 +8,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import uk.adedamola.aperture.core.util.NetworkError
 import uk.adedamola.aperture.core.util.Result
 import uk.adedamola.aperture.domain.model.AgentType
 import uk.adedamola.aperture.domain.model.AuthMode
 import uk.adedamola.aperture.domain.model.CreateSessionRequest
+import uk.adedamola.aperture.domain.model.ManagedRepo
+import uk.adedamola.aperture.domain.model.RepoMode
 import uk.adedamola.aperture.domain.model.SessionAuth
 import uk.adedamola.aperture.domain.model.SessionStatus
 import uk.adedamola.aperture.domain.repository.CredentialRepository
@@ -26,14 +29,21 @@ data class SessionsUiState(
     val errorMessage: String? = null,
     val showCreateDialog: Boolean = false,
     val isCreating: Boolean = false,
-    val isConnected: Boolean = false
+    val isConnected: Boolean = false,
+    val pendingLocalDelete: String? = null
 )
 
 data class CreateSessionState(
     val agentType: AgentType = AgentType.CLAUDE_SDK,
     val authMode: AuthMode = AuthMode.OAUTH,
     val selectedCredentialId: String? = null,
-    val repoPath: String = ""
+    val repoPath: String = "", // DEPRECATED
+    // New repo mode fields
+    val repoMode: RepoMode = RepoMode.NONE,
+    val repoUrl: String = "",
+    val existingRepoId: String? = null,
+    val managedRepos: List<ManagedRepo> = emptyList(),
+    val isLoadingRepos: Boolean = false
 )
 
 @HiltViewModel
@@ -136,6 +146,41 @@ class SessionsViewModel @Inject constructor(
         _createSessionState.update { it.copy(repoPath = path) }
     }
 
+    fun updateRepoMode(mode: RepoMode) {
+        _createSessionState.update { it.copy(repoMode = mode) }
+        // Load managed repos when switching to existing mode
+        if (mode == RepoMode.EXISTING) {
+            loadManagedRepos()
+        }
+    }
+
+    fun updateRepoUrl(url: String) {
+        _createSessionState.update { it.copy(repoUrl = url) }
+    }
+
+    fun updateExistingRepoId(repoId: String?) {
+        _createSessionState.update { it.copy(existingRepoId = repoId) }
+    }
+
+    private fun loadManagedRepos() {
+        viewModelScope.launch {
+            _createSessionState.update { it.copy(isLoadingRepos = true) }
+            when (val result = sessionRepository.getManagedRepos()) {
+                is Result.Success -> {
+                    _createSessionState.update {
+                        it.copy(
+                            managedRepos = result.value,
+                            isLoadingRepos = false
+                        )
+                    }
+                }
+                is Result.Failure -> {
+                    _createSessionState.update { it.copy(isLoadingRepos = false) }
+                }
+            }
+        }
+    }
+
     fun createSession(onSuccess: (String) -> Unit) {
         val createState = _createSessionState.value
 
@@ -153,7 +198,9 @@ class SessionsViewModel @Inject constructor(
             val request = CreateSessionRequest(
                 agent = createState.agentType,
                 auth = auth,
-                repoPath = createState.repoPath.takeIf { it.isNotBlank() }
+                repoMode = createState.repoMode,
+                repoUrl = createState.repoUrl.takeIf { it.isNotBlank() && createState.repoMode == RepoMode.CLONE },
+                existingRepoId = createState.existingRepoId.takeIf { createState.repoMode == RepoMode.EXISTING }
             )
 
             when (val result = sessionRepository.createSession(request)) {
@@ -186,12 +233,30 @@ class SessionsViewModel @Inject constructor(
                     // Session removed, list will update automatically
                 }
                 is Result.Failure -> {
-                    _uiState.update {
-                        it.copy(errorMessage = "Failed to delete session")
+                    val error = result.error
+                    if (error is NetworkError.HttpError && error.code == 404) {
+                        // Backend says session not found - prompt user to delete locally
+                        _uiState.update { it.copy(pendingLocalDelete = sessionId) }
+                    } else {
+                        _uiState.update {
+                            it.copy(errorMessage = "Failed to delete session")
+                        }
                     }
                 }
             }
         }
+    }
+
+    fun confirmLocalDelete() {
+        val sessionId = _uiState.value.pendingLocalDelete ?: return
+        viewModelScope.launch {
+            sessionRepository.deleteSessionLocally(sessionId)
+            _uiState.update { it.copy(pendingLocalDelete = null) }
+        }
+    }
+
+    fun dismissLocalDeletePrompt() {
+        _uiState.update { it.copy(pendingLocalDelete = null) }
     }
 
     fun clearError() {

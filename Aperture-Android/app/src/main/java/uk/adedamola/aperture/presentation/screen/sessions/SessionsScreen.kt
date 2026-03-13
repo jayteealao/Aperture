@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +37,8 @@ import uk.adedamola.aperture.core.util.DateTimeFormatter
 import uk.adedamola.aperture.core.util.toSessionIdShort
 import uk.adedamola.aperture.domain.model.AgentType
 import uk.adedamola.aperture.domain.model.AuthMode
+import uk.adedamola.aperture.domain.model.ManagedRepo
+import uk.adedamola.aperture.domain.model.RepoMode
 import uk.adedamola.aperture.domain.model.SessionStatus
 import uk.adedamola.aperture.ui.components.HudBadge
 import uk.adedamola.aperture.ui.components.HudBadgeVariant
@@ -49,6 +52,9 @@ import uk.adedamola.aperture.ui.components.HudSkeletonList
 import uk.adedamola.aperture.ui.components.HudSpinner
 import uk.adedamola.aperture.ui.components.HudStatusDot
 import uk.adedamola.aperture.ui.components.SelectOption
+import uk.adedamola.aperture.ui.components.ToastData
+import uk.adedamola.aperture.ui.components.ToastType
+import uk.adedamola.aperture.ui.components.rememberToastHostState
 import uk.adedamola.aperture.ui.components.layout.HudShell
 import uk.adedamola.aperture.ui.components.layout.HudTopbarAction
 import uk.adedamola.aperture.ui.theme.HudAccent
@@ -65,12 +71,29 @@ fun SessionsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val createState by viewModel.createSessionState.collectAsStateWithLifecycle()
+    val toastHostState = rememberToastHostState()
+
+    // Show toast when session needs local deletion confirmation
+    LaunchedEffect(uiState.pendingLocalDelete) {
+        uiState.pendingLocalDelete?.let {
+            toastHostState.showToast(
+                ToastData(
+                    message = "This session no longer exists on the server",
+                    type = ToastType.WARNING,
+                    durationMs = 8000,
+                    action = "Remove from device",
+                    onAction = { viewModel.confirmLocalDelete() }
+                )
+            )
+        }
+    }
 
     HudShell(
         title = "Sessions",
         currentRoute = "sessions",
         onNavigate = onNavigate,
         isConnected = uiState.isConnected,
+        toastHostState = toastHostState,
         topBarActions = {
             HudTopbarAction(
                 icon = Icons.Default.Refresh,
@@ -122,7 +145,9 @@ fun SessionsScreen(
                 onDismiss = { viewModel.hideCreateDialog() },
                 onAgentTypeChange = viewModel::updateAgentType,
                 onAuthModeChange = viewModel::updateAuthMode,
-                onRepoPathChange = viewModel::updateRepoPath,
+                onRepoModeChange = viewModel::updateRepoMode,
+                onRepoUrlChange = viewModel::updateRepoUrl,
+                onExistingRepoChange = viewModel::updateExistingRepoId,
                 onCreate = { viewModel.createSession(onSessionClick) }
             )
         }
@@ -307,7 +332,9 @@ private fun CreateSessionDialog(
     onDismiss: () -> Unit,
     onAgentTypeChange: (AgentType) -> Unit,
     onAuthModeChange: (AuthMode) -> Unit,
-    onRepoPathChange: (String) -> Unit,
+    onRepoModeChange: (RepoMode) -> Unit,
+    onRepoUrlChange: (String) -> Unit,
+    onExistingRepoChange: (String?) -> Unit,
     onCreate: () -> Unit
 ) {
     val agentOptions = listOf(
@@ -318,6 +345,13 @@ private fun CreateSessionDialog(
     val authOptions = listOf(
         SelectOption(AuthMode.OAUTH, "OAuth", "Use OAuth authentication"),
         SelectOption(AuthMode.API_KEY, "API Key", "Use stored credential")
+    )
+
+    val repoModeOptions = listOf(
+        SelectOption(RepoMode.NONE, "No Repo", "Start without a working directory"),
+        SelectOption(RepoMode.INIT, "Init Empty", "Create a new empty git repository"),
+        SelectOption(RepoMode.CLONE, "Clone", "Clone from a GitHub URL"),
+        SelectOption(RepoMode.EXISTING, "Existing", "Use a previously created repo")
     )
 
     HudDialog(
@@ -335,7 +369,7 @@ private fun CreateSessionDialog(
             HudTextButton(
                 onClick = onCreate,
                 text = if (isCreating) "Creating..." else "Create",
-                enabled = !isCreating,
+                enabled = !isCreating && isCreateButtonEnabled(createState),
                 trailingIcon = if (isCreating) {
                     { HudSpinner(size = 16.dp) }
                 } else null
@@ -343,6 +377,64 @@ private fun CreateSessionDialog(
         }
     ) {
         Column {
+            // Repo Mode Selector
+            HudSelect(
+                options = repoModeOptions,
+                selectedValue = createState.repoMode,
+                onValueChange = onRepoModeChange,
+                label = "Repository"
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Repo mode-specific content
+            RepoModeContent(
+                repoMode = createState.repoMode,
+                repoUrl = createState.repoUrl,
+                onRepoUrlChange = onRepoUrlChange,
+                managedRepos = createState.managedRepos,
+                selectedRepoId = createState.existingRepoId,
+                onExistingRepoChange = onExistingRepoChange,
+                isLoadingRepos = createState.isLoadingRepos
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Divider with label
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(1.dp)
+                        .padding(end = 8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(vertical = 0.dp)
+                    ) {
+                        // Simple divider line
+                    }
+                }
+                Text(
+                    text = "AGENT SETTINGS",
+                    color = HudGray,
+                    fontSize = 10.sp,
+                    letterSpacing = 1.sp
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(1.dp)
+                        .padding(start = 8.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             HudSelect(
                 options = agentOptions,
                 selectedValue = createState.agentType,
@@ -358,15 +450,141 @@ private fun CreateSessionDialog(
                 onValueChange = onAuthModeChange,
                 label = "Authentication"
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            HudInput(
-                value = createState.repoPath,
-                onValueChange = onRepoPathChange,
-                label = "Repository Path (Optional)",
-                placeholder = "/path/to/repo"
-            )
         }
     }
+}
+
+@Composable
+private fun RepoModeContent(
+    repoMode: RepoMode,
+    repoUrl: String,
+    onRepoUrlChange: (String) -> Unit,
+    managedRepos: List<ManagedRepo>,
+    selectedRepoId: String?,
+    onExistingRepoChange: (String?) -> Unit,
+    isLoadingRepos: Boolean
+) {
+    when (repoMode) {
+        RepoMode.NONE -> {
+            // Info box for no repo mode
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Text(
+                    text = "Session will start without a working directory",
+                    color = HudText,
+                    fontSize = 12.sp
+                )
+            }
+        }
+        RepoMode.INIT -> {
+            // Info box for init mode
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Column {
+                    Text(
+                        text = "A new git repository will be created",
+                        color = HudText,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Path: ~/.aperture/workspaces/default/session-<id>/",
+                        color = HudGray,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        }
+        RepoMode.CLONE -> {
+            // GitHub URL input
+            HudInput(
+                value = repoUrl,
+                onValueChange = onRepoUrlChange,
+                label = "GitHub URL",
+                placeholder = "https://github.com/user/repo.git"
+            )
+            if (repoUrl.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Will clone to: ~/.aperture/workspaces/default/${extractRepoName(repoUrl)}-<id>/",
+                    color = HudGray,
+                    fontSize = 10.sp
+                )
+            }
+        }
+        RepoMode.EXISTING -> {
+            // Existing repo picker
+            if (isLoadingRepos) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    HudSpinner(size = 24.dp)
+                }
+            } else if (managedRepos.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "No existing repos. Use Init or Clone to create one first.",
+                        color = HudText,
+                        fontSize = 12.sp
+                    )
+                }
+            } else {
+                val repoOptions = managedRepos.map { repo ->
+                    SelectOption(repo.id, repo.name, repo.originUrl ?: repo.path)
+                }
+                HudSelect(
+                    options = repoOptions,
+                    selectedValue = selectedRepoId ?: "",
+                    onValueChange = { id -> onExistingRepoChange(id.takeIf { it.isNotEmpty() }) },
+                    label = "Select Repository"
+                )
+                // Show selected repo path
+                selectedRepoId?.let { id ->
+                    managedRepos.find { it.id == id }?.let { repo ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Path: ${repo.path}",
+                            color = HudGray,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Check if the create button should be enabled based on current state
+ */
+private fun isCreateButtonEnabled(createState: CreateSessionState): Boolean {
+    return when (createState.repoMode) {
+        RepoMode.NONE -> true
+        RepoMode.INIT -> true
+        RepoMode.CLONE -> createState.repoUrl.isNotBlank()
+        RepoMode.EXISTING -> createState.existingRepoId != null
+    }
+}
+
+/**
+ * Extract repo name from URL for display
+ */
+private fun extractRepoName(url: String): String {
+    if (url.isBlank()) return "<repo-name>"
+    val match = Regex("/([^/]+?)(\\.git)?$").find(url)
+        ?: Regex(":([^/]+?)(\\.git)?$").find(url)
+    return match?.groupValues?.get(1) ?: "repo"
 }

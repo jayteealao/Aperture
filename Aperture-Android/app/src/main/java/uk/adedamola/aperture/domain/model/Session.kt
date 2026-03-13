@@ -44,9 +44,13 @@ data class CreateSessionRequest(
     val auth: SessionAuth? = null,
     val env: Map<String, String>? = null,
     val workspaceId: String? = null,
-    val repoPath: String? = null,
+    val repoPath: String? = null, // DEPRECATED: Use repoMode instead
     val sdk: SdkSessionConfig? = null,
-    val pi: PiSessionConfig? = null
+    val pi: PiSessionConfig? = null,
+    // New repo mode fields
+    val repoMode: RepoMode? = null,
+    val repoUrl: String? = null,
+    val existingRepoId: String? = null
 )
 
 @Serializable

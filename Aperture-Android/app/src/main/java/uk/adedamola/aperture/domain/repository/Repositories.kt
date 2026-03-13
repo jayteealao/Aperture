@@ -7,6 +7,7 @@ import uk.adedamola.aperture.domain.model.CreateCredentialRequest
 import uk.adedamola.aperture.domain.model.CreateSessionRequest
 import uk.adedamola.aperture.domain.model.CreateWorkspaceRequest
 import uk.adedamola.aperture.domain.model.Credential
+import uk.adedamola.aperture.domain.model.ManagedRepo
 import uk.adedamola.aperture.domain.model.Message
 import uk.adedamola.aperture.domain.model.ResumableSession
 import uk.adedamola.aperture.domain.model.Session
@@ -24,6 +25,7 @@ interface SessionRepository {
     suspend fun createSession(request: CreateSessionRequest): NetworkResult<Session>
     suspend fun getSession(sessionId: String): NetworkResult<SessionStatus>
     suspend fun deleteSession(sessionId: String): NetworkResult<Unit>
+    suspend fun deleteSessionLocally(sessionId: String)
     suspend fun getResumableSessions(): NetworkResult<List<ResumableSession>>
 
     // WebSocket operations
@@ -34,6 +36,10 @@ interface SessionRepository {
     // Messages
     suspend fun getMessages(sessionId: String, limit: Int = 50, offset: Int = 0): NetworkResult<List<Message>>
     fun observeMessages(sessionId: String): Flow<List<Message>>
+    suspend fun saveUserMessage(sessionId: String, content: String): Message
+
+    // Managed repos
+    suspend fun getManagedRepos(workspaceId: String = "default"): NetworkResult<List<ManagedRepo>>
 }
 
 interface CredentialRepository {

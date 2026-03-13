@@ -146,6 +146,9 @@ class WorkspaceViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = true, messageInput = "") }
 
+            // Save user message to database first so it appears in the UI immediately
+            sessionRepository.saveUserMessage(sessionId, content)
+
             val message = OutboundMessage.UserMessage(content = content)
             val success = sessionRepository.sendMessage(sessionId, message)
 
@@ -165,7 +168,7 @@ class WorkspaceViewModel @Inject constructor(
 
     fun cancelPrompt() {
         viewModelScope.launch {
-            val message = OutboundMessage.Cancel()
+            val message = OutboundMessage.Cancel
             sessionRepository.sendMessage(sessionId, message)
         }
     }

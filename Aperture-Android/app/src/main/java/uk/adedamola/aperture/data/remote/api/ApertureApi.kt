@@ -31,8 +31,10 @@ import uk.adedamola.aperture.domain.model.api.ListSessionsResponse
 import uk.adedamola.aperture.domain.model.api.ListWorkspaceAgentsResponse
 import uk.adedamola.aperture.domain.model.api.ListWorkspacesResponse
 import uk.adedamola.aperture.domain.model.api.ListWorktreesResponse
+import uk.adedamola.aperture.domain.model.api.ListManagedReposResponse
 import uk.adedamola.aperture.domain.model.api.MessagesResponse
 import uk.adedamola.aperture.domain.model.api.ReadyResponse
+import uk.adedamola.aperture.domain.model.ManagedRepo
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -55,7 +57,13 @@ class ApertureApi @Inject constructor(
     ): NetworkResult<T> = try {
         val response = block()
         if (response.status.isSuccess()) {
-            Result.Success(response.body())
+            // Handle Unit return type (for DELETE requests with 204 No Content)
+            if (T::class == Unit::class) {
+                @Suppress("UNCHECKED_CAST")
+                Result.Success(Unit as T)
+            } else {
+                Result.Success(response.body())
+            }
         } else {
             Result.Failure(
                 NetworkError.HttpError(
@@ -105,6 +113,7 @@ class ApertureApi @Inject constructor(
     suspend fun deleteSession(sessionId: String): NetworkResult<Unit> = safeCall {
         client.delete("$baseUrl/v1/sessions/$sessionId") {
             header("Authorization", authHeader())
+            headers.remove(io.ktor.http.HttpHeaders.ContentType)
         }
     }
 
@@ -144,6 +153,7 @@ class ApertureApi @Inject constructor(
     suspend fun deleteCredential(id: String): NetworkResult<Unit> = safeCall {
         client.delete("$baseUrl/v1/credentials/$id") {
             header("Authorization", authHeader())
+            headers.remove(io.ktor.http.HttpHeaders.ContentType)
         }
     }
 
@@ -170,6 +180,7 @@ class ApertureApi @Inject constructor(
     suspend fun deleteWorkspace(id: String): NetworkResult<Unit> = safeCall {
         client.delete("$baseUrl/v1/workspaces/$id") {
             header("Authorization", authHeader())
+            headers.remove(io.ktor.http.HttpHeaders.ContentType)
         }
     }
 
@@ -201,6 +212,29 @@ class ApertureApi @Inject constructor(
         client.post("$baseUrl/v1/discovery/clone") {
             header("Authorization", authHeader())
             setBody(request)
+        }
+    }
+
+    // Managed repos endpoints
+    suspend fun listManagedRepos(
+        workspaceId: String = "default"
+    ): NetworkResult<ListManagedReposResponse> = safeCall {
+        client.get("$baseUrl/v1/repos") {
+            header("Authorization", authHeader())
+            parameter("workspaceId", workspaceId)
+        }
+    }
+
+    suspend fun getManagedRepo(id: String): NetworkResult<ManagedRepo> = safeCall {
+        client.get("$baseUrl/v1/repos/$id") {
+            header("Authorization", authHeader())
+        }
+    }
+
+    suspend fun deleteManagedRepo(id: String): NetworkResult<Unit> = safeCall {
+        client.delete("$baseUrl/v1/repos/$id") {
+            header("Authorization", authHeader())
+            headers.remove(io.ktor.http.HttpHeaders.ContentType)
         }
     }
 

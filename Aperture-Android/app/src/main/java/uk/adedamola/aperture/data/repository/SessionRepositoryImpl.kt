@@ -35,7 +35,11 @@ import uk.adedamola.aperture.domain.model.Session
 import uk.adedamola.aperture.domain.model.SessionStatus
 import uk.adedamola.aperture.domain.model.websocket.JsonRpcMessage
 import uk.adedamola.aperture.domain.model.websocket.OutboundMessage
+import uk.adedamola.aperture.domain.model.websocket.PiAssistantMessageEvent
+import uk.adedamola.aperture.domain.model.websocket.PiMessagePayload
+import uk.adedamola.aperture.domain.model.websocket.SdkMessagePayload
 import uk.adedamola.aperture.domain.model.websocket.SessionUpdateParams
+import uk.adedamola.aperture.domain.model.websocket.WsInboundMessage
 import uk.adedamola.aperture.domain.repository.SessionRepository
 import java.io.Closeable
 import java.security.MessageDigest
@@ -55,9 +59,24 @@ class SessionRepositoryImpl @Inject constructor(
     companion object {
         private const val TAG = "SessionRepositoryImpl"
 
-        // Known streaming update types
-        private val STREAMING_START_TYPES = setOf("init", "init_tool", "progress", "thinking", "tool_output")
-        private val STREAMING_END_TYPES = setOf("result", "ended", "error")
+        // SDK (Claude) streaming update types
+        private val SDK_STREAMING_START_TYPES = setOf(
+            "init", "init_tool", "progress", "thinking", "tool_output",
+            "content_block_start", "agent_message_chunk", "assistant_delta"
+        )
+        private val SDK_STREAMING_END_TYPES = setOf(
+            "result", "ended", "error",
+            "content_block_stop", "agent_message_complete", "prompt_complete", "assistant_message"
+        )
+
+        // Pi SDK streaming update types
+        private val PI_STREAMING_START_TYPES = setOf(
+            "message_update", "turn_start", "tool_execution_start"
+        )
+        private val PI_STREAMING_END_TYPES = setOf(
+            "turn_end", "tool_execution_end", "message_end"
+        )
+
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -93,56 +112,241 @@ class SessionRepositoryImpl @Inject constructor(
 
     private suspend fun processInboundMessage(sessionId: String, rawJson: String) {
         try {
-            val jsonRpc = json.decodeFromString<JsonRpcMessage>(rawJson)
-            Log.d(TAG, "Received message: method=${jsonRpc.method}, sessionId=$sessionId")
-
-            when (jsonRpc.method) {
-                "session/update" -> {
-                    if (jsonRpc.params != null) {
-                        try {
-                            val params = json.decodeFromJsonElement<SessionUpdateParams>(jsonRpc.params)
-                            val content = params.update.content
-                            val updateType = params.update.sessionUpdate
-
-                            Log.d(TAG, "Session update type: $updateType, hasContent: ${content != null}")
-
-                            if (content != null) {
-                                // Generate deterministic ID based on session + content to prevent duplicates
-                                val messageId = generateDeterministicMessageId(sessionId, content)
-                                val message = Message(
-                                    id = messageId,
-                                    sessionId = sessionId,
-                                    role = MessageRole.ASSISTANT,
-                                    content = MessageContent.Blocks(listOf(content)),
-                                    timestamp = Instant.now().toString()
-                                )
-                                messageDao.insert(MessageEntity.fromDomainModel(message, json))
-                                Log.d(TAG, "Saved message: ${message.id}")
-                            }
-
-                            // Update streaming state based on update type
-                            updateStreamingState(sessionId, updateType)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to parse session/update params", e)
-                        }
-                    }
-                }
-                "session/exit" -> {
-                    updateStreamingState(sessionId, "ended")
-                }
-                "session/error" -> {
-                    Log.e(TAG, "Session error: ${jsonRpc.params}")
-                    updateStreamingState(sessionId, "error")
-                }
+            // First, try to parse as kind-discriminated message (sdk/pi)
+            val wrapper = try {
+                json.decodeFromString<WsInboundMessage>(rawJson)
+            } catch (e: Exception) {
+                null
             }
+
+            if (wrapper != null) {
+                when (wrapper) {
+                    is WsInboundMessage.Sdk -> processSdkMessage(sessionId, wrapper)
+                    is WsInboundMessage.Pi -> processPiMessage(sessionId, wrapper)
+                }
+                return
+            }
+
+            // Fallback to legacy JsonRPC format
+            processJsonRpcMessage(sessionId, rawJson)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process inbound message", e)
         }
     }
 
     /**
+     * Process Claude SDK messages (kind: "sdk")
+     */
+    private suspend fun processSdkMessage(sessionId: String, msg: WsInboundMessage.Sdk) {
+        Log.d(TAG, "SDK message: type=${msg.type}, sessionId=$sessionId")
+
+        when (msg.type) {
+            "session_update", "assistant_delta", "assistant_message" -> {
+                try {
+                    val payload = json.decodeFromJsonElement<SdkMessagePayload>(msg.payload)
+                    val content = payload.content
+                    val updateType = payload.sessionUpdate.ifEmpty { msg.type }
+
+                    Log.d(TAG, "SDK update type: $updateType, hasContent: ${content != null}")
+
+                    if (content != null) {
+                        val messageId = generateDeterministicMessageId(sessionId, content)
+                        val message = Message(
+                            id = messageId,
+                            sessionId = sessionId,
+                            role = MessageRole.ASSISTANT,
+                            content = MessageContent.Blocks(listOf(content)),
+                            timestamp = Instant.now().toString()
+                        )
+                        messageDao.insert(MessageEntity.fromDomainModel(message, json))
+                        Log.d(TAG, "Saved SDK message: ${message.id}")
+                    }
+
+                    updateStreamingState(sessionId, updateType, isSdk = true)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to parse SDK message payload", e)
+                }
+            }
+            "session_exit" -> {
+                updateStreamingState(sessionId, "ended", isSdk = true)
+            }
+            "session_error" -> {
+                Log.e(TAG, "SDK session error: ${msg.payload}")
+                updateStreamingState(sessionId, "error", isSdk = true)
+            }
+            else -> {
+                Log.d(TAG, "Unhandled SDK message type: ${msg.type}")
+            }
+        }
+    }
+
+    /**
+     * Process Pi SDK messages (kind: "pi")
+     */
+    private suspend fun processPiMessage(sessionId: String, msg: WsInboundMessage.Pi) {
+        Log.d(TAG, "Pi message: type=${msg.type}, sessionId=$sessionId")
+
+        when (msg.type) {
+            "message_update" -> {
+                try {
+                    val payload = json.decodeFromJsonElement<PiMessagePayload>(msg.payload)
+                    val event = payload.assistantMessageEvent
+
+                    Log.d(TAG, "Pi message_update: eventType=${event?.type}, hasEvent: ${event != null}")
+
+                    if (event != null) {
+                        processPiAssistantEvent(sessionId, event)
+                    }
+
+                    updateStreamingState(sessionId, msg.type, isSdk = false)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to parse Pi message_update payload", e)
+                }
+            }
+            "turn_start" -> {
+                Log.d(TAG, "Pi turn started for session: $sessionId")
+                updateStreamingState(sessionId, "turn_start", isSdk = false)
+            }
+            "turn_end" -> {
+                Log.d(TAG, "Pi turn ended for session: $sessionId")
+                updateStreamingState(sessionId, "turn_end", isSdk = false)
+            }
+            "tool_execution_start" -> {
+                updateStreamingState(sessionId, "tool_execution_start", isSdk = false)
+            }
+            "tool_execution_end" -> {
+                updateStreamingState(sessionId, "tool_execution_end", isSdk = false)
+            }
+            "error" -> {
+                Log.e(TAG, "Pi session error: ${msg.payload}")
+                updateStreamingState(sessionId, "error", isSdk = false)
+            }
+            else -> {
+                Log.d(TAG, "Unhandled Pi message type: ${msg.type}")
+            }
+        }
+    }
+
+    /**
+     * Process Pi assistant message events (text_delta, thinking_delta, toolcall_*)
+     */
+    private suspend fun processPiAssistantEvent(sessionId: String, event: PiAssistantMessageEvent) {
+        when (event.type) {
+            "text_delta" -> {
+                val delta = event.delta ?: return
+                val content = ContentBlock.TextDelta(text = delta)
+                val messageId = generateDeterministicMessageId(sessionId, content)
+                val message = Message(
+                    id = messageId,
+                    sessionId = sessionId,
+                    role = MessageRole.ASSISTANT,
+                    content = MessageContent.Blocks(listOf(content)),
+                    timestamp = Instant.now().toString()
+                )
+                messageDao.insert(MessageEntity.fromDomainModel(message, json))
+                Log.d(TAG, "Saved Pi text delta: ${delta.take(50)}...")
+            }
+            "thinking_delta" -> {
+                val delta = event.delta ?: return
+                val content = ContentBlock.Thinking(thinking = delta)
+                val messageId = generateDeterministicMessageId(sessionId, content)
+                val message = Message(
+                    id = messageId,
+                    sessionId = sessionId,
+                    role = MessageRole.ASSISTANT,
+                    content = MessageContent.Blocks(listOf(content)),
+                    timestamp = Instant.now().toString()
+                )
+                messageDao.insert(MessageEntity.fromDomainModel(message, json))
+                Log.d(TAG, "Saved Pi thinking delta")
+            }
+            "toolcall_start", "toolcall_delta", "toolcall_end" -> {
+                // Tool call handling - convert to ToolUse block
+                val toolCallId = event.toolCallId ?: return
+                val toolName = event.toolName ?: "unknown_tool"
+                val inputJson = event.inputJson
+
+                // Parse input JSON if provided
+                val input = if (inputJson != null) {
+                    try {
+                        json.parseToJsonElement(inputJson)
+                    } catch (e: Exception) {
+                        null
+                    }
+                } else null
+
+                val content = ContentBlock.ToolUse(
+                    id = toolCallId,
+                    name = toolName,
+                    input = input
+                )
+                val messageId = generateDeterministicMessageId(sessionId, content)
+                val message = Message(
+                    id = messageId,
+                    sessionId = sessionId,
+                    role = MessageRole.ASSISTANT,
+                    content = MessageContent.Blocks(listOf(content)),
+                    timestamp = Instant.now().toString()
+                )
+                messageDao.insert(MessageEntity.fromDomainModel(message, json))
+                Log.d(TAG, "Saved Pi tool call: $toolName (${event.type})")
+            }
+            else -> {
+                Log.d(TAG, "Unhandled Pi assistant event type: ${event.type}")
+            }
+        }
+    }
+
+    /**
+     * Process legacy JsonRPC format messages (for backwards compatibility)
+     */
+    private suspend fun processJsonRpcMessage(sessionId: String, rawJson: String) {
+        val jsonRpc = json.decodeFromString<JsonRpcMessage>(rawJson)
+        Log.d(TAG, "Legacy JsonRPC message: method=${jsonRpc.method}, sessionId=$sessionId")
+
+        when (jsonRpc.method) {
+            "session/update" -> {
+                if (jsonRpc.params != null) {
+                    try {
+                        val params = json.decodeFromJsonElement<SessionUpdateParams>(jsonRpc.params)
+                        val content = params.update.content
+                        val updateType = params.update.sessionUpdate
+
+                        Log.d(TAG, "Session update type: $updateType, hasContent: ${content != null}")
+
+                        if (content != null) {
+                            val messageId = generateDeterministicMessageId(sessionId, content)
+                            val message = Message(
+                                id = messageId,
+                                sessionId = sessionId,
+                                role = MessageRole.ASSISTANT,
+                                content = MessageContent.Blocks(listOf(content)),
+                                timestamp = Instant.now().toString()
+                            )
+                            messageDao.insert(MessageEntity.fromDomainModel(message, json))
+                            Log.d(TAG, "Saved message: ${message.id}")
+                        }
+
+                        updateStreamingState(sessionId, updateType, isSdk = true)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse session/update params", e)
+                    }
+                }
+            }
+            "session/exit" -> {
+                updateStreamingState(sessionId, "ended", isSdk = true)
+            }
+            "session/error" -> {
+                Log.e(TAG, "Session error: ${jsonRpc.params}")
+                updateStreamingState(sessionId, "error", isSdk = true)
+            }
+        }
+    }
+
+    /**
      * Generate a deterministic message ID based on session and content.
-     * This prevents duplicate messages when reconnecting or replaying messages.
+     * The same session + content always produces the same ID, which prevents
+     * duplicate messages on WebSocket reconnection replays.
      */
     private fun generateDeterministicMessageId(sessionId: String, content: ContentBlock): String {
         val contentJson = json.encodeToString(content)
@@ -152,17 +356,25 @@ class SessionRepositoryImpl @Inject constructor(
         return hash.take(16).joinToString("") { "%02x".format(it) }
     }
 
-    private fun updateStreamingState(sessionId: String, updateType: String) {
+    private fun updateStreamingState(sessionId: String, updateType: String, isSdk: Boolean = true) {
         val currentStates = _connectionStates.value.toMutableMap()
         val existing = currentStates[sessionId] ?: ConnectionState()
 
+        val (startTypes, endTypes) = if (isSdk) {
+            SDK_STREAMING_START_TYPES to SDK_STREAMING_END_TYPES
+        } else {
+            PI_STREAMING_START_TYPES to PI_STREAMING_END_TYPES
+        }
+
         val isStreaming = when {
-            updateType in STREAMING_START_TYPES -> true
-            updateType in STREAMING_END_TYPES -> false
+            updateType in startTypes -> true
+            updateType in endTypes -> false
+            updateType == "error" -> false  // Errors always end streaming
             else -> {
                 // Unknown update type - log it and default to streaming active
                 // This ensures new update types from backend don't break the UI
-                Log.w(TAG, "Unknown streaming update type: $updateType, defaulting to streaming=true")
+                val kind = if (isSdk) "SDK" else "Pi"
+                Log.w(TAG, "Unknown $kind streaming update type: $updateType, defaulting to streaming=true")
                 true
             }
         }
@@ -176,7 +388,11 @@ class SessionRepositoryImpl @Inject constructor(
 
     /**
      * Clean up coroutine scope when repository is no longer needed.
-     * Note: For singleton repositories, this is typically called on app termination.
+     *
+     * Lifecycle note: This repository is a @Singleton managed by Hilt.
+     * The scope is cancelled automatically when the application process terminates.
+     * For normal app usage, explicit close() calls are not required - the singleton
+     * lives for the duration of the application component and is cleaned up on process death.
      */
     override fun close() {
         scope.cancel()
@@ -233,14 +449,18 @@ class SessionRepositoryImpl @Inject constructor(
     override suspend fun deleteSession(sessionId: String): NetworkResult<Unit> {
         return when (val result = api.deleteSession(sessionId)) {
             is Result.Success -> {
-                sessionDao.deleteById(sessionId)
-                messageDao.deleteBySessionId(sessionId)
-                webSocketManager.disconnect(sessionId)
+                deleteSessionLocally(sessionId)
                 refreshSessions()
                 Result.Success(Unit)
             }
             is Result.Failure -> result
         }
+    }
+
+    override suspend fun deleteSessionLocally(sessionId: String) {
+        sessionDao.deleteById(sessionId)
+        messageDao.deleteBySessionId(sessionId)
+        webSocketManager.disconnect(sessionId)
     }
 
     override suspend fun getResumableSessions(): NetworkResult<List<ResumableSession>> {
@@ -296,6 +516,19 @@ class SessionRepositoryImpl @Inject constructor(
         return messageDao.observeBySessionId(sessionId).map { entities ->
             entities.map { it.toDomainModel(json) }
         }
+    }
+
+    override suspend fun saveUserMessage(sessionId: String, content: String): Message {
+        val messageId = "user-${java.util.UUID.randomUUID()}"
+        val message = Message(
+            id = messageId,
+            sessionId = sessionId,
+            role = MessageRole.USER,
+            content = MessageContent.Text(content),
+            timestamp = Instant.now().toString()
+        )
+        messageDao.insert(MessageEntity.fromDomainModel(message, json))
+        return message
     }
 
     // Managed repos

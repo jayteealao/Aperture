@@ -62,6 +62,7 @@ fun ContentBlockRenderer(
 ) {
     when (block) {
         is ContentBlock.Text -> TextBlock(text = block.text, modifier = modifier)
+        is ContentBlock.TextDelta -> TextBlock(text = block.text, modifier = modifier)
         is ContentBlock.Thinking -> ThinkingBlock(
             thinking = block.thinking,
             modifier = modifier

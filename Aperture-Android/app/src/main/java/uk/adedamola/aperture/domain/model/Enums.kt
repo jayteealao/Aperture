@@ -169,3 +169,11 @@ enum class McpServerStatus {
     @SerialName("needs-auth") NEEDS_AUTH,
     @SerialName("pending") PENDING
 }
+
+@Serializable
+enum class RepoMode {
+    @SerialName("none") NONE,
+    @SerialName("init") INIT,
+    @SerialName("clone") CLONE,
+    @SerialName("existing") EXISTING
+}

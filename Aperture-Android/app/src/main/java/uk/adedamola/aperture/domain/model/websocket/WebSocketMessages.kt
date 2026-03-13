@@ -13,15 +13,14 @@ import uk.adedamola.aperture.domain.model.sdk.SdkSessionConfig
 
 /**
  * Outbound messages (Client -> Server)
+ * Note: The @SerialName annotation provides the "type" discriminator value automatically
  */
 @Serializable
 sealed class OutboundMessage {
-    abstract val type: String
 
     @Serializable
     @SerialName("user_message")
     data class UserMessage(
-        override val type: String = "user_message",
         val content: String,
         val images: List<ImageAttachment>? = null,
         val toolsAllowed: Boolean? = null,
@@ -31,7 +30,6 @@ sealed class OutboundMessage {
     @Serializable
     @SerialName("permission_response")
     data class PermissionResponse(
-        override val type: String = "permission_response",
         val toolCallId: String,
         val optionId: String?,
         val answers: Map<String, String>? = null
@@ -39,195 +37,153 @@ sealed class OutboundMessage {
 
     @Serializable
     @SerialName("cancel")
-    data class Cancel(
-        override val type: String = "cancel"
-    ) : OutboundMessage()
+    object Cancel : OutboundMessage()
 
     @Serializable
     @SerialName("interrupt")
-    data class Interrupt(
-        override val type: String = "interrupt"
-    ) : OutboundMessage()
+    object Interrupt : OutboundMessage()
 
     @Serializable
     @SerialName("set_permission_mode")
     data class SetPermissionMode(
-        override val type: String = "set_permission_mode",
         val mode: PermissionMode
     ) : OutboundMessage()
 
     @Serializable
     @SerialName("set_model")
     data class SetModel(
-        override val type: String = "set_model",
         val model: String?
     ) : OutboundMessage()
 
     @Serializable
     @SerialName("set_thinking_tokens")
     data class SetThinkingTokens(
-        override val type: String = "set_thinking_tokens",
         val tokens: Int?
     ) : OutboundMessage()
 
     @Serializable
     @SerialName("rewind_files")
     data class RewindFiles(
-        override val type: String = "rewind_files",
         val messageId: String,
         val dryRun: Boolean? = null
     ) : OutboundMessage()
 
     @Serializable
     @SerialName("get_mcp_status")
-    data class GetMcpStatus(
-        override val type: String = "get_mcp_status"
-    ) : OutboundMessage()
+    object GetMcpStatus : OutboundMessage()
 
     @Serializable
     @SerialName("set_mcp_servers")
     data class SetMcpServers(
-        override val type: String = "set_mcp_servers",
         val servers: Map<String, McpServerConfig>
     ) : OutboundMessage()
 
     @Serializable
     @SerialName("get_account_info")
-    data class GetAccountInfo(
-        override val type: String = "get_account_info"
-    ) : OutboundMessage()
+    object GetAccountInfo : OutboundMessage()
 
     @Serializable
     @SerialName("get_supported_models")
-    data class GetSupportedModels(
-        override val type: String = "get_supported_models"
-    ) : OutboundMessage()
+    object GetSupportedModels : OutboundMessage()
 
     @Serializable
     @SerialName("get_supported_commands")
-    data class GetSupportedCommands(
-        override val type: String = "get_supported_commands"
-    ) : OutboundMessage()
+    object GetSupportedCommands : OutboundMessage()
 
     @Serializable
     @SerialName("update_config")
     data class UpdateConfig(
-        override val type: String = "update_config",
         val config: SdkSessionConfig
     ) : OutboundMessage()
 }
 
 /**
  * Pi SDK Outbound messages
+ * Note: The @SerialName annotation provides the "type" discriminator value automatically
  */
 @Serializable
 sealed class PiOutboundMessage {
-    abstract val type: String
 
     @Serializable
     @SerialName("user_message")
     data class UserMessage(
-        override val type: String = "user_message",
         val content: String
     ) : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_steer")
     data class Steer(
-        override val type: String = "pi_steer",
         val content: String
     ) : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_follow_up")
     data class FollowUp(
-        override val type: String = "pi_follow_up",
         val content: String
     ) : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_compact")
     data class Compact(
-        override val type: String = "pi_compact",
         val instructions: String? = null
     ) : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_fork")
     data class Fork(
-        override val type: String = "pi_fork",
         val entryId: String
     ) : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_navigate")
     data class Navigate(
-        override val type: String = "pi_navigate",
         val entryId: String
     ) : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_set_model")
     data class SetModel(
-        override val type: String = "pi_set_model",
         val provider: String,
         val modelId: String
     ) : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_cycle_model")
-    data class CycleModel(
-        override val type: String = "pi_cycle_model"
-    ) : PiOutboundMessage()
+    object CycleModel : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_set_thinking_level")
     data class SetThinkingLevel(
-        override val type: String = "pi_set_thinking_level",
         val level: String
     ) : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_cycle_thinking")
-    data class CycleThinking(
-        override val type: String = "pi_cycle_thinking"
-    ) : PiOutboundMessage()
+    object CycleThinking : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_new_session")
-    data class NewSession(
-        override val type: String = "pi_new_session"
-    ) : PiOutboundMessage()
+    object NewSession : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_get_tree")
-    data class GetTree(
-        override val type: String = "pi_get_tree"
-    ) : PiOutboundMessage()
+    object GetTree : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_get_forkable")
-    data class GetForkable(
-        override val type: String = "pi_get_forkable"
-    ) : PiOutboundMessage()
+    object GetForkable : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_get_stats")
-    data class GetStats(
-        override val type: String = "pi_get_stats"
-    ) : PiOutboundMessage()
+    object GetStats : PiOutboundMessage()
 
     @Serializable
     @SerialName("pi_get_models")
-    data class GetModels(
-        override val type: String = "pi_get_models"
-    ) : PiOutboundMessage()
+    object GetModels : PiOutboundMessage()
 
     @Serializable
     @SerialName("cancel")
-    data class Cancel(
-        override val type: String = "cancel"
-    ) : PiOutboundMessage()
+    object Cancel : PiOutboundMessage()
 }
 
 /**
@@ -256,7 +212,7 @@ data class SessionUpdateParams(
 
 @Serializable
 data class SessionUpdateData(
-    val sessionUpdate: String,
+    val sessionUpdate: String = "",  // Default empty string for defensive parsing
     val content: ContentBlock? = null
 )
 
@@ -290,3 +246,37 @@ sealed class WsInboundMessage {
         val payload: JsonElement
     ) : WsInboundMessage()
 }
+
+/**
+ * Pi SDK message payload types.
+ * These represent the nested structure inside Pi messages.
+ */
+@Serializable
+data class PiMessagePayload(
+    val type: String,  // "message_update", "turn_start", "turn_end", etc.
+    val assistantMessageEvent: PiAssistantMessageEvent? = null,
+    val entryId: String? = null,
+    val model: String? = null,
+    val thinkingLevel: String? = null
+)
+
+/**
+ * Pi SDK assistant message event containing streaming deltas.
+ */
+@Serializable
+data class PiAssistantMessageEvent(
+    val type: String,  // "text_delta", "thinking_delta", "toolcall_start", "toolcall_delta", "toolcall_end"
+    val delta: String? = null,
+    val toolCallId: String? = null,
+    val toolName: String? = null,
+    val inputJson: String? = null
+)
+
+/**
+ * SDK message payload for Claude SDK session updates.
+ */
+@Serializable
+data class SdkMessagePayload(
+    val sessionUpdate: String = "",
+    val content: ContentBlock? = null
+)

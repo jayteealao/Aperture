@@ -28,8 +28,10 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import uk.adedamola.aperture.core.util.exponentialBackoff
 import uk.adedamola.aperture.domain.model.ConnectionStatus
+import uk.adedamola.aperture.BuildConfig
 import uk.adedamola.aperture.domain.model.websocket.OutboundMessage
 import uk.adedamola.aperture.domain.model.websocket.PiOutboundMessage
+import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -64,6 +66,7 @@ class WebSocketManager @Inject constructor(
     private var apiToken: String = ""
 
     companion object {
+        private const val TAG = "WebSocketManager"
         private const val MAX_CONNECTIONS = 10
         private const val BASE_RETRY_DELAY_MS = 1000L
         private const val MAX_RETRY_DELAY_MS = 30000L
@@ -261,14 +264,17 @@ class WebSocketManager @Inject constructor(
         }
 
         if (session == null || !session.isActive) {
+            Log.e(TAG, "Cannot send: session null or inactive for $sessionId")
             return false
         }
 
         return try {
-            val jsonString = json.encodeToString(message)
+            val jsonString = json.encodeToString(OutboundMessage.serializer(), message)
+            if (BuildConfig.DEBUG) Log.d(TAG, "Sending message: $jsonString")
             session.send(Frame.Text(jsonString))
             true
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to send message", e)
             false
         }
     }
@@ -279,14 +285,17 @@ class WebSocketManager @Inject constructor(
         }
 
         if (session == null || !session.isActive) {
+            Log.e(TAG, "Cannot send Pi: session null or inactive for $sessionId")
             return false
         }
 
         return try {
-            val jsonString = json.encodeToString(message)
+            val jsonString = json.encodeToString(PiOutboundMessage.serializer(), message)
+            if (BuildConfig.DEBUG) Log.d(TAG, "Sending Pi message: $jsonString")
             session.send(Frame.Text(jsonString))
             true
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to send Pi message", e)
             false
         }
     }
