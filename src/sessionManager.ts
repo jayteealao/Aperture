@@ -1,4 +1,11 @@
 import { randomUUID } from 'crypto';
+import { execFile } from 'child_process';
+import { mkdir, stat } from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import { promisify } from 'util';
+
+import type { FastifyBaseLogger } from 'fastify';
 import type { Config } from './config.js';
 import { SdkSession } from './sdk-session.js';
 import { PiSession } from './pi-session.js';
@@ -7,14 +14,44 @@ import type { SessionAuth, SessionConfig, SdkSessionConfig, PiSessionConfig, Age
 import type { CredentialStore } from './credentials.js';
 import type { ApertureDatabase, SessionRecord } from './database.js';
 
+const execFileAsync = promisify(execFile);
+
+export type RepoMode = 'none' | 'init' | 'clone' | 'existing';
+
 export interface CreateSessionOptions {
   agent?: AgentType;
   auth?: SessionAuth;
   env?: Record<string, string>;
   workspaceId?: string; // Optional workspace ID for workspace-backed sessions
-  repoPath?: string; // Optional repo path for sessions without workspace (no worktree isolation)
+  /** @deprecated Use repoMode instead. Optional repo path for sessions without workspace (no worktree isolation) */
+  repoPath?: string;
   sdk?: SdkSessionConfig; // Claude SDK-specific configuration
   pi?: PiSessionConfig; // Pi SDK-specific configuration
+  // New repo mode fields
+  repoMode?: RepoMode; // How to set up the repo: none, init, clone, existing
+  repoUrl?: string; // Git URL for clone mode
+  existingRepoId?: string; // ID of existing managed repo
+}
+
+/**
+ * Get the path for a managed repo
+ */
+function getManagedRepoPath(workspaceId: string | undefined, repoName: string): string {
+  const home = os.homedir();
+  const workspace = workspaceId || 'default';
+  return path.join(home, '.aperture', 'workspaces', workspace, repoName);
+}
+
+/**
+ * Extract repo name from a Git URL
+ * e.g., https://github.com/user/my-project.git -> my-project
+ * e.g., git@github.com:user/my-project.git -> my-project
+ */
+export function extractRepoNameFromUrl(url: string): string {
+  // Handle SSH-style URLs (git@github.com:user/repo.git)
+  // Handle HTTPS-style URLs (https://github.com/user/repo.git)
+  const match = url.match(/\/([^/]+?)(\.git)?$/) || url.match(/:([^/]+?)(\.git)?$/);
+  return match?.[1] || 'repo';
 }
 
 /**
@@ -23,6 +60,7 @@ export interface CreateSessionOptions {
 export class SessionManager {
   private sessions: Map<string, SdkSession | PiSession> = new Map();
   private config: Config;
+  private logger: FastifyBaseLogger;
   private claudeBackend: ClaudeSdkBackend;
   private piBackend: PiSdkBackend;
   private credentialStore?: CredentialStore;
@@ -30,11 +68,13 @@ export class SessionManager {
 
   constructor(
     config: Config,
+    logger: FastifyBaseLogger,
     database?: ApertureDatabase,
     _claudeCodeExecutable?: string,
     credentialStore?: CredentialStore
   ) {
     this.config = config;
+    this.logger = logger;
     this.database = database;
     this.credentialStore = credentialStore;
     this.claudeBackend = new ClaudeSdkBackend();
@@ -51,7 +91,7 @@ export class SessionManager {
     }
 
     const activeSessions = this.database.getActiveSessions();
-    console.log(`[SessionManager] Found ${activeSessions.length} active sessions in database`);
+    this.logger.info(`Found ${activeSessions.length} active sessions in database`);
 
     let endedCount = 0;
     let sdkResumableCount = 0;
@@ -74,9 +114,9 @@ export class SessionManager {
     }
 
     if (endedCount > 0) {
-      console.log(`[SessionManager] Marked ${endedCount} sessions as ended`);
+      this.logger.info(`Marked ${endedCount} sessions as ended`);
     }
-    console.log(`[SessionManager] Kept ${sdkResumableCount} SDK sessions as idle (resumable)`);
+    this.logger.info(`Kept ${sdkResumableCount} SDK sessions as idle (resumable)`);
   }
 
   /**
@@ -96,7 +136,7 @@ export class SessionManager {
     // Check if session already exists in memory
     const existingSession = this.sessions.get(sessionId);
     if (existingSession) {
-      console.log(`[SessionManager] Session ${sessionId} already active in memory`);
+      this.logger.info(`Session ${sessionId} already active in memory`);
       return existingSession;
     }
 
@@ -124,7 +164,7 @@ export class SessionManager {
       try {
         sdkConfig = JSON.parse(sessionRecord.sdk_config);
       } catch (e) {
-        console.warn(`[SessionManager] Failed to parse SDK config for session ${sessionId}`);
+        this.logger.warn(`Failed to parse SDK config for session ${sessionId}`);
       }
     }
 
@@ -161,7 +201,7 @@ export class SessionManager {
     await session.start();
 
     this.sessions.set(sessionId, session);
-    console.log(`[SessionManager] Restored Claude SDK session ${sessionId} with SDK session ID ${sessionRecord.sdk_session_id}`);
+    this.logger.info(`Restored Claude SDK session ${sessionId} with SDK session ID ${sessionRecord.sdk_session_id}`);
 
     return session;
   }
@@ -180,7 +220,7 @@ export class SessionManager {
       try {
         piConfig = JSON.parse(sessionRecord.sdk_config);
       } catch (e) {
-        console.warn(`[SessionManager] Failed to parse Pi config for session ${sessionId}`);
+        this.logger.warn(`Failed to parse Pi config for session ${sessionId}`);
       }
     }
 
@@ -215,7 +255,7 @@ export class SessionManager {
     await session.start();
 
     this.sessions.set(sessionId, session);
-    console.log(`[SessionManager] Restored Pi SDK session ${sessionId} with session path ${sessionRecord.pi_session_path}`);
+    this.logger.info(`Restored Pi SDK session ${sessionId} with session path ${sessionRecord.pi_session_path}`);
 
     return session;
   }
@@ -233,14 +273,14 @@ export class SessionManager {
     });
 
     session.on('idle', () => {
-      console.log(`Session ${sessionId} idle, terminating`);
+      this.logger.info(`Session ${sessionId} idle, terminating`);
       if (this.database) {
         this.database.endSession(sessionId, Date.now());
       }
     });
 
     session.on('error', (err: Error) => {
-      console.error(`Session ${sessionId} error:`, err);
+      this.logger.error({ err }, `Session ${sessionId} error`);
     });
 
     session.on('activity', () => {
@@ -263,7 +303,7 @@ export class SessionManager {
     });
 
     session.on('idle', () => {
-      console.log(`Pi Session ${sessionId} idle`);
+      this.logger.info(`Pi Session ${sessionId} idle`);
       if (this.database) {
         const record = this.database.getSession(sessionId);
         if (record) {
@@ -277,7 +317,7 @@ export class SessionManager {
     });
 
     session.on('error', (err: Error) => {
-      console.error(`Pi Session ${sessionId} error:`, err);
+      this.logger.error({ err }, `Pi Session ${sessionId} error`);
     });
 
     session.on('activity', () => {
@@ -366,8 +406,9 @@ export class SessionManager {
       }
     }
 
-    // Handle workspace-backed sessions or direct repo path
+    // Handle workspace-backed sessions, repo modes, or direct repo path
     let sessionCwd: string | undefined;
+    const repoMode = options.repoMode || 'none';
 
     if (options.workspaceId && this.database) {
       // Workspace mode: create worktree for isolation
@@ -404,17 +445,119 @@ export class SessionManager {
           updated_at: Date.now(),
         });
 
-        console.log(`[SessionManager] Created worktree for session ${id} at ${sessionCwd}`);
+        this.logger.info(`Created worktree for session ${id} at ${sessionCwd}`);
       } catch (error) {
-        console.error(`[SessionManager] Failed to create worktree:`, error);
+        this.logger.error({ err: error }, `Failed to create worktree`);
         throw new Error(`Failed to create worktree for workspace: ${error}`);
       }
-    } else if (options.repoPath) {
-      // Direct repo path mode: use provided path without worktree isolation
-      const { stat } = await import('fs/promises');
-      const { resolve, join } = await import('path');
+    } else if (repoMode === 'init') {
+      // Init mode: create a new empty git repository
+      const repoName = `session-${id.substring(0, 8)}`;
+      const repoPath = getManagedRepoPath(options.workspaceId, repoName);
 
-      const resolvedPath = resolve(options.repoPath);
+      try {
+        // Create directory
+        await mkdir(repoPath, { recursive: true });
+
+        // Initialize git repo
+        await execFileAsync('git', ['init'], { cwd: repoPath });
+
+        sessionCwd = repoPath;
+
+        // Save managed repo record (session_id is null initially, updated after session creation)
+        if (this.database) {
+          this.database.saveManagedRepo({
+            id: randomUUID(),
+            workspace_id: options.workspaceId || 'default',
+            path: repoPath,
+            name: repoName,
+            origin_url: null,
+            created_at: Date.now(),
+            session_id: null,
+          });
+        }
+
+        this.logger.info(`Initialized new repo for session ${id} at ${sessionCwd}`);
+      } catch (error) {
+        this.logger.error({ err: error }, `Failed to initialize repo`);
+        throw new Error(`Failed to initialize repository: ${error}`);
+      }
+    } else if (repoMode === 'clone') {
+      // Clone mode: clone from URL
+      if (!options.repoUrl) {
+        throw new Error('repoUrl is required when repoMode is "clone"');
+      }
+
+      // Validate URL format to prevent command injection
+      const validUrlPattern = /^(https?:\/\/|git:\/\/|ssh:\/\/|git@)/;
+      if (!validUrlPattern.test(options.repoUrl)) {
+        throw new Error(`Invalid repository URL format: ${options.repoUrl}`);
+      }
+
+      const baseRepoName = extractRepoNameFromUrl(options.repoUrl);
+      const repoName = `${baseRepoName}-${id.substring(0, 8)}`;
+      const repoPath = getManagedRepoPath(options.workspaceId, repoName);
+
+      try {
+        // Create parent directory
+        await mkdir(path.dirname(repoPath), { recursive: true });
+
+        // Clone the repo (execFile avoids shell interpolation)
+        await execFileAsync('git', ['clone', options.repoUrl, repoPath]);
+
+        sessionCwd = repoPath;
+
+        // Save managed repo record (session_id is null initially, updated after session creation)
+        if (this.database) {
+          this.database.saveManagedRepo({
+            id: randomUUID(),
+            workspace_id: options.workspaceId || 'default',
+            path: repoPath,
+            name: repoName,
+            origin_url: options.repoUrl,
+            created_at: Date.now(),
+            session_id: null,
+          });
+        }
+
+        this.logger.info(`Cloned repo for session ${id} at ${sessionCwd}`);
+      } catch (error) {
+        this.logger.error({ err: error }, `Failed to clone repo`);
+        throw new Error(`Failed to clone repository: ${error}`);
+      }
+    } else if (repoMode === 'existing') {
+      // Existing mode: use a previously created managed repo
+      if (!options.existingRepoId || !this.database) {
+        throw new Error('existingRepoId and database are required when repoMode is "existing"');
+      }
+
+      const managedRepo = this.database.getManagedRepo(options.existingRepoId);
+      if (!managedRepo) {
+        throw new Error(`Managed repo not found: ${options.existingRepoId}`);
+      }
+
+      // Verify the path still exists
+      try {
+        const pathStat = await stat(managedRepo.path);
+        if (!pathStat.isDirectory()) {
+          throw new Error(`Managed repo path is not a directory: ${managedRepo.path}`);
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          throw new Error(`Managed repo path does not exist: ${managedRepo.path}`);
+        }
+        throw error;
+      }
+
+      sessionCwd = managedRepo.path;
+
+      // Note: We don't update session_id here because the session doesn't exist in DB yet.
+      // The session_id field is optional and tracks the last session that used this repo.
+
+      this.logger.info(`Using existing managed repo for session ${id}: ${sessionCwd}`);
+    } else if (options.repoPath) {
+      // @deprecated: Direct repo path mode (backwards compatibility)
+      const resolvedPath = path.resolve(options.repoPath);
 
       // Verify path exists and is a directory
       try {
@@ -431,14 +574,15 @@ export class SessionManager {
 
       // Verify it's a git repository
       try {
-        await stat(join(resolvedPath, '.git'));
+        await stat(path.join(resolvedPath, '.git'));
       } catch {
         throw new Error(`Path is not a git repository: ${resolvedPath}`);
       }
 
       sessionCwd = resolvedPath;
-      console.log(`[SessionManager] Using direct repo path for session ${id}: ${sessionCwd}`);
+      this.logger.info(`Using direct repo path for session ${id}: ${sessionCwd}`);
     }
+    // repoMode === 'none' or no repo specified: sessionCwd stays undefined
 
     // Create session based on agent type
     if (agentType === 'pi_sdk') {
@@ -504,7 +648,7 @@ export class SessionManager {
     });
 
     session.on('idle', () => {
-      console.log(`Session ${id} idle, terminating`);
+      this.logger.info(`Session ${id} idle, terminating`);
       if (this.database) {
         const record = this.database.getSession(id);
         if (record) {
@@ -518,11 +662,11 @@ export class SessionManager {
     });
 
     session.on('error', (err: Error) => {
-      console.error(`Session ${id} error:`, err);
+      this.logger.error({ err }, `Session ${id} error`);
     });
 
     session.on('stderr', (line: string) => {
-      console.error(`Session ${id} stderr: ${line}`);
+      this.logger.error(`Session ${id} stderr: ${line}`);
     });
 
     // Set up activity tracking

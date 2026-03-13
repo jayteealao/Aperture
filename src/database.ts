@@ -59,6 +59,16 @@ export interface WorkspaceAgentRecord {
   updated_at: number;
 }
 
+export interface ManagedRepoRecord {
+  id: string;
+  workspace_id: string;
+  path: string;
+  name: string;
+  origin_url: string | null;
+  created_at: number;
+  session_id: string | null;
+}
+
 export class ApertureDatabase {
   private db: Database.Database;
 
@@ -516,5 +526,72 @@ export class ApertureDatabase {
   deleteWorkspaceAgent(id: string): void {
     const stmt = this.db.prepare('DELETE FROM workspace_agents WHERE id = ?');
     stmt.run(id);
+  }
+
+  // ==================== Managed Repos Methods ====================
+
+  /**
+   * Save or update a managed repo
+   */
+  saveManagedRepo(repo: ManagedRepoRecord): void {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO managed_repos
+      (id, workspace_id, path, name, origin_url, created_at, session_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      repo.id,
+      repo.workspace_id,
+      repo.path,
+      repo.name,
+      repo.origin_url,
+      repo.created_at,
+      repo.session_id
+    );
+  }
+
+  /**
+   * Get a managed repo by ID
+   */
+  getManagedRepo(id: string): ManagedRepoRecord | null {
+    const stmt = this.db.prepare('SELECT * FROM managed_repos WHERE id = ?');
+    const result = stmt.get(id) as ManagedRepoRecord | undefined;
+    return result || null;
+  }
+
+  /**
+   * Get managed repos for a workspace
+   */
+  getManagedRepos(workspaceId: string = 'default'): ManagedRepoRecord[] {
+    const stmt = this.db.prepare(
+      'SELECT * FROM managed_repos WHERE workspace_id = ? ORDER BY created_at DESC'
+    );
+    return stmt.all(workspaceId) as ManagedRepoRecord[];
+  }
+
+  /**
+   * Get managed repo by path
+   */
+  getManagedRepoByPath(path: string): ManagedRepoRecord | null {
+    const stmt = this.db.prepare('SELECT * FROM managed_repos WHERE path = ?');
+    const result = stmt.get(path) as ManagedRepoRecord | undefined;
+    return result || null;
+  }
+
+  /**
+   * Delete a managed repo
+   */
+  deleteManagedRepo(id: string): void {
+    const stmt = this.db.prepare('DELETE FROM managed_repos WHERE id = ?');
+    stmt.run(id);
+  }
+
+  /**
+   * Update managed repo session association
+   */
+  updateManagedRepoSession(id: string, sessionId: string | null): void {
+    const stmt = this.db.prepare('UPDATE managed_repos SET session_id = ? WHERE id = ?');
+    stmt.run(sessionId, id);
   }
 }

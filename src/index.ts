@@ -90,7 +90,7 @@ async function main() {
   });
 
   // Create session manager
-  const sessionManager = new SessionManager(config, database, claudePath, credentialStore);
+  const sessionManager = new SessionManager(config, fastify.log, database, claudePath, credentialStore);
 
   // Restore sessions from database
   await sessionManager.restoreSessions();
