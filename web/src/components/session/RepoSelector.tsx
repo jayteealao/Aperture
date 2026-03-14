@@ -94,7 +94,7 @@ export function RepoSelector({ value, onChange, label, error }: RepoSelectorProp
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">
+        <label className="block text-sm font-medium text-(--color-text-secondary) mb-2">
           {label}
         </label>
       )}
@@ -105,26 +105,26 @@ export function RepoSelector({ value, onChange, label, error }: RepoSelectorProp
           onClick={() => setIsOpen(!isOpen)}
           className={cn(
             'w-full h-10 px-3 pr-10 rounded-lg text-sm text-left',
-            'bg-[var(--color-surface)] text-[var(--color-text-primary)]',
-            'border border-[var(--color-border)]',
-            'focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent',
+            'bg-(--color-surface) text-(--color-text-primary)',
+            'border border-(--color-border)',
+            'focus:outline-hidden focus:ring-2 focus:ring-accent focus:border-transparent',
             'transition-all duration-200',
             error && 'border-danger focus:ring-danger'
           )}
         >
           <div className="flex items-center gap-2 truncate">
             {value?.mode === 'workspace' && <GitBranch size={14} className="text-accent shrink-0" />}
-            {(value?.mode === 'browse' || value?.mode === 'direct') && <Folder size={14} className="text-[var(--color-text-muted)] shrink-0" />}
-            {value?.mode === 'clone' && <Download size={14} className="text-[var(--color-text-muted)] shrink-0" />}
-            {value?.mode === 'init' && <FolderPlus size={14} className="text-[var(--color-text-muted)] shrink-0" />}
-            <span className={cn(!value && 'text-[var(--color-text-muted)]')}>
+            {(value?.mode === 'browse' || value?.mode === 'direct') && <Folder size={14} className="text-(--color-text-muted) shrink-0" />}
+            {value?.mode === 'clone' && <Download size={14} className="text-(--color-text-muted) shrink-0" />}
+            {value?.mode === 'init' && <FolderPlus size={14} className="text-(--color-text-muted) shrink-0" />}
+            <span className={cn(!value && 'text-(--color-text-muted)')}>
               {getDisplayValue()}
             </span>
           </div>
           <ChevronDown
             size={18}
             className={cn(
-              'absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] transition-transform',
+              'absolute right-3 top-1/2 -translate-y-1/2 text-(--color-text-muted) transition-transform',
               isOpen && 'rotate-180'
             )}
           />
@@ -132,7 +132,7 @@ export function RepoSelector({ value, onChange, label, error }: RepoSelectorProp
 
         {/* Dropdown */}
         {isOpen && (
-          <div className="absolute z-[100] w-full mt-2 py-2 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)] shadow-xl max-h-80 overflow-y-auto">
+          <div className="absolute z-100 w-full mt-2 py-2 rounded-lg bg-(--color-bg-secondary) border border-(--color-border) shadow-xl max-h-80 overflow-y-auto">
             {mode === 'list' && (
               <RepoListView
                 workspaces={workspaces}
@@ -221,7 +221,7 @@ function RepoListView({
         </div>
       ) : workspaces.length > 0 ? (
         <>
-          <div className="px-3 py-1.5 text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+          <div className="px-3 py-1.5 text-xs font-medium text-(--color-text-muted) uppercase tracking-wide">
             Known Repositories
           </div>
           {workspaces.map((workspace) => (
@@ -230,16 +230,16 @@ function RepoListView({
               type="button"
               onClick={() => onSelect(workspace)}
               className={cn(
-                'w-full px-3 py-2 text-left hover:bg-[var(--color-bg-tertiary)] transition-colors',
+                'w-full px-3 py-2 text-left hover:bg-(--color-bg-tertiary) transition-colors',
                 'flex items-center gap-3'
               )}
             >
               <GitBranch size={16} className="text-accent shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-[var(--color-text-primary)] truncate">
+                <div className="text-sm font-medium text-(--color-text-primary) truncate">
                   {workspace.name}
                 </div>
-                <div className="text-xs text-[var(--color-text-muted)] font-mono truncate">
+                <div className="text-xs text-(--color-text-muted) font-mono truncate">
                   {workspace.repoRoot}
                 </div>
               </div>
@@ -248,7 +248,7 @@ function RepoListView({
               )}
             </button>
           ))}
-          <div className="my-2 border-t border-[var(--color-border)]" />
+          <div className="my-2 border-t border-(--color-border)" />
         </>
       ) : null}
 
@@ -256,26 +256,26 @@ function RepoListView({
       <button
         type="button"
         onClick={onBrowse}
-        className="w-full px-3 py-2 text-left hover:bg-[var(--color-bg-tertiary)] transition-colors flex items-center gap-3"
+        className="w-full px-3 py-2 text-left hover:bg-(--color-bg-tertiary) transition-colors flex items-center gap-3"
       >
-        <FolderSearch size={16} className="text-[var(--color-text-muted)]" />
-        <span className="text-sm text-[var(--color-text-primary)]">Browse local repo...</span>
+        <FolderSearch size={16} className="text-(--color-text-muted)" />
+        <span className="text-sm text-(--color-text-primary)">Browse local repo...</span>
       </button>
       <button
         type="button"
         onClick={onClone}
-        className="w-full px-3 py-2 text-left hover:bg-[var(--color-bg-tertiary)] transition-colors flex items-center gap-3"
+        className="w-full px-3 py-2 text-left hover:bg-(--color-bg-tertiary) transition-colors flex items-center gap-3"
       >
-        <Download size={16} className="text-[var(--color-text-muted)]" />
-        <span className="text-sm text-[var(--color-text-primary)]">Clone from URL...</span>
+        <Download size={16} className="text-(--color-text-muted)" />
+        <span className="text-sm text-(--color-text-primary)">Clone from URL...</span>
       </button>
       <button
         type="button"
         onClick={onInit}
-        className="w-full px-3 py-2 text-left hover:bg-[var(--color-bg-tertiary)] transition-colors flex items-center gap-3"
+        className="w-full px-3 py-2 text-left hover:bg-(--color-bg-tertiary) transition-colors flex items-center gap-3"
       >
-        <FolderPlus size={16} className="text-[var(--color-text-muted)]" />
-        <span className="text-sm text-[var(--color-text-primary)]">Initialize new repo...</span>
+        <FolderPlus size={16} className="text-(--color-text-muted)" />
+        <span className="text-sm text-(--color-text-primary)">Initialize new repo...</span>
       </button>
     </>
   )
@@ -322,7 +322,7 @@ function BrowseRepoView({
         >
           &larr; Back
         </button>
-        <span className="text-sm font-medium text-[var(--color-text-primary)]">
+        <span className="text-sm font-medium text-(--color-text-primary)">
           Browse Local Repository
         </span>
       </div>
@@ -350,23 +350,23 @@ function BrowseRepoView({
       )}
 
       {discoveredRepos.length > 0 && (
-        <div className="max-h-48 overflow-y-auto border border-[var(--color-border)] rounded-lg">
+        <div className="max-h-48 overflow-y-auto border border-(--color-border) rounded-lg">
           {discoveredRepos.map((repo) => (
             <button
               key={repo.path}
               type="button"
               onClick={() => onSelect(repo)}
-              className="w-full px-3 py-2 text-left hover:bg-[var(--color-bg-tertiary)] transition-colors border-b border-[var(--color-border)] last:border-b-0"
+              className="w-full px-3 py-2 text-left hover:bg-(--color-bg-tertiary) transition-colors border-b border-(--color-border) last:border-b-0"
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                <span className="text-sm font-medium text-(--color-text-primary)">
                   {repo.name}
                 </span>
                 {repo.hasOrigin && (
-                  <ExternalLink size={12} className="text-[var(--color-text-muted)]" />
+                  <ExternalLink size={12} className="text-(--color-text-muted)" />
                 )}
               </div>
-              <div className="text-xs text-[var(--color-text-muted)] font-mono truncate">
+              <div className="text-xs text-(--color-text-muted) font-mono truncate">
                 {repo.path}
               </div>
             </button>
@@ -399,7 +399,7 @@ function CloneRepoView({
         >
           &larr; Back
         </button>
-        <span className="text-sm font-medium text-[var(--color-text-primary)]">
+        <span className="text-sm font-medium text-(--color-text-primary)">
           Clone from URL
         </span>
       </div>
@@ -452,7 +452,7 @@ function InitRepoView({
         >
           &larr; Back
         </button>
-        <span className="text-sm font-medium text-[var(--color-text-primary)]">
+        <span className="text-sm font-medium text-(--color-text-primary)">
           Initialize New Repository
         </span>
       </div>

@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react'
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router'
 import { useAppStore } from './stores/app'
 import { Shell } from './components/layout/Shell'
 import { Spinner } from './components/ui/Spinner'
@@ -18,7 +18,7 @@ function LoadingFallback() {
     <div className="flex items-center justify-center min-h-screen bg-gradient-mesh">
       <div className="glass-card p-8 text-center animate-in">
         <Spinner size="lg" />
-        <p className="mt-4 text-sm text-[var(--color-text-secondary)]">Loading...</p>
+        <p className="mt-4 text-sm text-(--color-text-secondary)">Loading...</p>
       </div>
     </div>
   )

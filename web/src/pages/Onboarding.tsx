@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router'
 import { useAppStore } from '@/stores/app'
 import { api } from '@/api/client'
 import { Button } from '@/components/ui/Button'
@@ -97,8 +97,8 @@ export default function Onboarding() {
               <circle cx="12" cy="12" r="4" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-[var(--color-text-primary)]">Aperture</h1>
-          <p className="text-[var(--color-text-secondary)] mt-2">AI Workspace for ACP Agents</p>
+          <h1 className="text-3xl font-bold text-(--color-text-primary)">Aperture</h1>
+          <p className="text-(--color-text-secondary) mt-2">AI Workspace for ACP Agents</p>
         </div>
 
         {/* Connection Card */}
@@ -185,7 +185,7 @@ export default function Onboarding() {
         </div>
 
         {/* Version */}
-        <p className="text-center text-xs text-[var(--color-text-muted)] mt-8">
+        <p className="text-center text-xs text-(--color-text-muted) mt-8">
           Aperture Web v1.0.0
         </p>
       </div>
@@ -203,7 +203,7 @@ function TestResult({
   detail?: string
 }) {
   const icons = {
-    pending: <div className="w-4 h-4 rounded-full border-2 border-[var(--color-text-muted)] animate-pulse" />,
+    pending: <div className="w-4 h-4 rounded-full border-2 border-(--color-text-muted) animate-pulse" />,
     success: <Check size={16} className="text-success" />,
     error: <X size={16} className="text-danger" />,
   }
@@ -211,9 +211,9 @@ function TestResult({
   return (
     <div className="flex items-center gap-2">
       {icons[status]}
-      <span className="text-sm text-[var(--color-text-secondary)]">{label}</span>
+      <span className="text-sm text-(--color-text-secondary)">{label}</span>
       {detail && (
-        <span className="text-xs text-[var(--color-text-muted)] ml-auto font-mono truncate max-w-[150px]">
+        <span className="text-xs text-(--color-text-muted) ml-auto font-mono truncate max-w-[150px]">
           {detail}
         </span>
       )}
@@ -225,7 +225,7 @@ function Feature({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div className="flex flex-col items-center gap-2 p-3 rounded-lg glass">
       <span className="text-accent">{icon}</span>
-      <span className="text-xs text-[var(--color-text-secondary)]">{label}</span>
+      <span className="text-xs text-(--color-text-secondary)">{label}</span>
     </div>
   )
 }

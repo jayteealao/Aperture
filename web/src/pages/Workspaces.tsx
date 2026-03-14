@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { api } from '@/api/client'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
@@ -31,7 +31,7 @@ interface WorkspaceWithData extends WorkspaceRecord {
 export default function Workspaces() {
   const navigate = useNavigate()
   const toast = useToast()
-  const toastRef = useRef(toast)
+  const toastRef = useRef<typeof toast>(toast)
   toastRef.current = toast
   const [workspaces, setWorkspaces] = useState<WorkspaceWithData[]>([])
   const [loading, setLoading] = useState(true)
@@ -134,7 +134,7 @@ export default function Workspaces() {
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
           <Spinner size="lg" />
-          <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
+          <p className="mt-4 text-sm text-(--color-text-secondary)">
             Loading workspaces...
           </p>
         </div>
@@ -145,14 +145,14 @@ export default function Workspaces() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-[var(--color-border)]">
+      <div className="px-6 py-4 border-b border-(--color-border)">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-(--color-text-primary) flex items-center gap-2">
               <GitBranch size={24} className="text-accent" />
               Workspaces
             </h1>
-            <p className="text-sm text-[var(--color-text-secondary)] mt-1">
+            <p className="text-sm text-(--color-text-secondary) mt-1">
               Manage repositories and isolated agent environments
             </p>
           </div>
@@ -182,11 +182,11 @@ export default function Workspaces() {
         {workspaces.length === 0 ? (
           <Card variant="glass" padding="lg" className="max-w-md mx-auto text-center">
             <div className="py-8">
-              <Folder size={48} className="mx-auto text-[var(--color-text-muted)] mb-4" />
-              <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">
+              <Folder size={48} className="mx-auto text-(--color-text-muted) mb-4" />
+              <h3 className="text-lg font-semibold text-(--color-text-primary)">
                 No workspaces yet
               </h3>
-              <p className="text-[var(--color-text-secondary)] mb-4">
+              <p className="text-(--color-text-secondary) mb-4">
                 Create a workspace to enable multi-agent isolated environments
               </p>
               <Button
@@ -247,13 +247,13 @@ function WorkspaceCard({
   return (
     <Card variant="glass" padding="none" className="overflow-hidden hover:shadow-lg transition-shadow">
       {/* Header */}
-      <div className="p-4 border-b border-[var(--color-border)]">
+      <div className="p-4 border-b border-(--color-border)">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-[var(--color-text-primary)] truncate">
+            <h3 className="text-lg font-semibold text-(--color-text-primary) truncate">
               {workspace.name}
             </h3>
-            <p className="text-xs font-mono text-[var(--color-text-muted)] mt-1">
+            <p className="text-xs font-mono text-(--color-text-muted) mt-1">
               {workspace.id}
             </p>
           </div>
@@ -292,36 +292,36 @@ function WorkspaceCard({
       {/* Info */}
       <div className="p-4 space-y-2 text-sm">
         <div className="flex items-start gap-2">
-          <span className="text-[var(--color-text-muted)] min-w-[80px]">Repository:</span>
-          <span className="text-[var(--color-text-secondary)] font-mono text-xs flex-1 break-all">
+          <span className="text-(--color-text-muted) min-w-[80px]">Repository:</span>
+          <span className="text-(--color-text-secondary) font-mono text-xs flex-1 break-all">
             {workspace.repoRoot}
           </span>
         </div>
         {workspace.description && (
           <div className="flex items-start gap-2">
-            <span className="text-[var(--color-text-muted)] min-w-[80px]">Description:</span>
-            <span className="text-[var(--color-text-secondary)] flex-1">
+            <span className="text-(--color-text-muted) min-w-[80px]">Description:</span>
+            <span className="text-(--color-text-secondary) flex-1">
               {workspace.description}
             </span>
           </div>
         )}
         <div className="flex items-start gap-2">
-          <span className="text-[var(--color-text-muted)] min-w-[80px]">Created:</span>
-          <span className="text-[var(--color-text-secondary)] text-xs">
+          <span className="text-(--color-text-muted) min-w-[80px]">Created:</span>
+          <span className="text-(--color-text-secondary) text-xs">
             {new Date(workspace.createdAt).toLocaleString()}
           </span>
         </div>
       </div>
 
       {/* Checkouts Section */}
-      <div className="border-t border-[var(--color-border)]">
+      <div className="border-t border-(--color-border)">
         <button
           onClick={() => setShowCheckouts(!showCheckouts)}
-          className="w-full px-4 py-3 flex items-center justify-between hover:bg-[var(--color-surface)] transition-colors"
+          className="w-full px-4 py-3 flex items-center justify-between hover:bg-(--color-surface) transition-colors"
         >
           <div className="flex items-center gap-2">
-            <GitBranch size={16} className="text-[var(--color-text-muted)]" />
-            <span className="text-sm font-medium text-[var(--color-text-primary)]">
+            <GitBranch size={16} className="text-(--color-text-muted)" />
+            <span className="text-sm font-medium text-(--color-text-primary)">
               Checkouts
             </span>
           </div>
@@ -336,23 +336,23 @@ function WorkspaceCard({
                 {workspace.checkouts.map((checkout) => (
                   <div
                     key={checkout.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-bg-tertiary)]"
+                    className="flex items-center justify-between p-2 rounded-lg bg-(--color-bg-tertiary)"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-success shrink-0" />
-                        <span className="text-sm font-medium text-[var(--color-text-primary)] font-mono truncate">
+                        <span className="text-sm font-medium text-(--color-text-primary) font-mono truncate">
                           {checkout.name}
                         </span>
                         <Badge variant="default" size="sm">
                           {checkout.cloneSource}
                         </Badge>
                       </div>
-                      <p className="text-xs text-[var(--color-text-muted)] font-mono mt-1 truncate">
+                      <p className="text-xs text-(--color-text-muted) font-mono mt-1 truncate">
                         {checkout.path}
                       </p>
                       {checkout.sessionId && (
-                        <p className="text-2xs text-[var(--color-text-muted)] mt-1">
+                        <p className="text-2xs text-(--color-text-muted) mt-1">
                           Session: {checkout.sessionId.slice(0, 12)}...
                         </p>
                       )}
@@ -369,7 +369,7 @@ function WorkspaceCard({
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-[var(--color-text-muted)] text-center py-3">
+              <p className="text-xs text-(--color-text-muted) text-center py-3">
                 No checkouts
               </p>
             )}
@@ -501,15 +501,15 @@ function CreateWorkspaceDialog({
     <Dialog open={open} onClose={onClose} title="Create Workspace" size="lg">
       <div className="space-y-4">
         {/* Mode selector */}
-        <div className="flex gap-2 p-1 bg-[var(--color-bg-tertiary)] rounded-lg">
+        <div className="flex gap-2 p-1 bg-(--color-bg-tertiary) rounded-lg">
           <button
             type="button"
             onClick={() => setMode('manual')}
             className={cn(
               'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
               mode === 'manual'
-                ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
-                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                ? 'bg-(--color-surface) text-(--color-text-primary) shadow-xs'
+                : 'text-(--color-text-secondary) hover:text-(--color-text-primary)'
             )}
           >
             <Folder size={16} />
@@ -521,8 +521,8 @@ function CreateWorkspaceDialog({
             className={cn(
               'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
               mode === 'browse'
-                ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
-                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                ? 'bg-(--color-surface) text-(--color-text-primary) shadow-xs'
+                : 'text-(--color-text-secondary) hover:text-(--color-text-primary)'
             )}
           >
             <FolderSearch size={16} />
@@ -534,8 +534,8 @@ function CreateWorkspaceDialog({
             className={cn(
               'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors',
               mode === 'clone'
-                ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
-                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                ? 'bg-(--color-surface) text-(--color-text-primary) shadow-xs'
+                : 'text-(--color-text-secondary) hover:text-(--color-text-primary)'
             )}
           >
             <Download size={16} />
@@ -547,7 +547,7 @@ function CreateWorkspaceDialog({
           {mode === 'manual' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                <label className="block text-sm font-medium text-(--color-text-primary) mb-2">
                   Workspace Name *
                 </label>
                 <Input
@@ -560,7 +560,7 @@ function CreateWorkspaceDialog({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                <label className="block text-sm font-medium text-(--color-text-primary) mb-2">
                   Repository Root Path *
                 </label>
                 <Input
@@ -569,14 +569,14 @@ function CreateWorkspaceDialog({
                   placeholder="/path/to/repo"
                   required
                 />
-                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                <p className="text-xs text-(--color-text-muted) mt-1">
                   Absolute path to a valid git repository
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  Description <span className="text-[var(--color-text-muted)]">(optional)</span>
+                <label className="block text-sm font-medium text-(--color-text-primary) mb-2">
+                  Description <span className="text-(--color-text-muted)">(optional)</span>
                 </label>
                 <Textarea
                   value={description}
@@ -591,7 +591,7 @@ function CreateWorkspaceDialog({
           {mode === 'browse' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                <label className="block text-sm font-medium text-(--color-text-primary) mb-2">
                   Directory to Scan
                 </label>
                 <div className="flex gap-2">
@@ -610,17 +610,17 @@ function CreateWorkspaceDialog({
                     {isScanning ? <Spinner size="sm" /> : 'Scan'}
                   </Button>
                 </div>
-                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                <p className="text-xs text-(--color-text-muted) mt-1">
                   Scans up to 3 levels deep for git repositories
                 </p>
               </div>
 
               {discoveredRepos.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                  <label className="block text-sm font-medium text-(--color-text-primary) mb-2">
                     Found Repositories ({discoveredRepos.length})
                   </label>
-                  <div className="max-h-48 overflow-y-auto space-y-2 border border-[var(--color-border)] rounded-lg p-2">
+                  <div className="max-h-48 overflow-y-auto space-y-2 border border-(--color-border) rounded-lg p-2">
                     {discoveredRepos.map((repo) => (
                       <div
                         key={repo.path}
@@ -629,18 +629,18 @@ function CreateWorkspaceDialog({
                           'p-2 rounded-lg cursor-pointer transition-colors',
                           selectedRepo?.path === repo.path
                             ? 'bg-accent/20 border border-accent/40'
-                            : 'bg-[var(--color-bg-tertiary)] hover:bg-[var(--color-surface)]'
+                            : 'bg-(--color-bg-tertiary) hover:bg-(--color-surface)'
                         )}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-[var(--color-text-primary)]">
+                          <span className="font-medium text-(--color-text-primary)">
                             {repo.name}
                           </span>
                           {repo.hasOrigin && (
-                            <ExternalLink size={14} className="text-[var(--color-text-muted)]" />
+                            <ExternalLink size={14} className="text-(--color-text-muted)" />
                           )}
                         </div>
-                        <p className="text-xs text-[var(--color-text-muted)] font-mono truncate">
+                        <p className="text-xs text-(--color-text-muted) font-mono truncate">
                           {repo.path}
                         </p>
                       </div>
@@ -651,7 +651,7 @@ function CreateWorkspaceDialog({
 
               {selectedRepo && (
                 <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                  <label className="block text-sm font-medium text-(--color-text-primary) mb-2">
                     Workspace Name
                   </label>
                   <Input
@@ -667,7 +667,7 @@ function CreateWorkspaceDialog({
           {mode === 'clone' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                <label className="block text-sm font-medium text-(--color-text-primary) mb-2">
                   Repository URL *
                 </label>
                 <Input
@@ -677,13 +677,13 @@ function CreateWorkspaceDialog({
                   required
                   autoFocus
                 />
-                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                <p className="text-xs text-(--color-text-muted) mt-1">
                   HTTPS or SSH URL (uses system credential helpers for auth)
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
+                <label className="block text-sm font-medium text-(--color-text-primary) mb-2">
                   Clone To Directory *
                 </label>
                 <Input
@@ -692,14 +692,14 @@ function CreateWorkspaceDialog({
                   placeholder="C:/Users/you/dev"
                   required
                 />
-                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                <p className="text-xs text-(--color-text-muted) mt-1">
                   Repository will be cloned as a subdirectory here
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">
-                  Workspace Name <span className="text-[var(--color-text-muted)]">(optional)</span>
+                <label className="block text-sm font-medium text-(--color-text-primary) mb-2">
+                  Workspace Name <span className="text-(--color-text-muted)">(optional)</span>
                 </label>
                 <Input
                   value={name}
@@ -712,7 +712,7 @@ function CreateWorkspaceDialog({
 
           <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
             <AlertCircle size={16} className="text-accent shrink-0 mt-0.5" />
-            <div className="text-xs text-[var(--color-text-secondary)]">
+            <div className="text-xs text-(--color-text-secondary)">
               <p className="font-medium mb-1">About Workspaces</p>
               <p>
                 Workspaces enable parallel agent sessions using local clones. Each session gets
@@ -722,7 +722,7 @@ function CreateWorkspaceDialog({
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-[var(--color-border)]">
+          <div className="flex justify-end gap-2 pt-4 border-t border-(--color-border)">
             <Button variant="ghost" onClick={onClose} disabled={creating}>
               Cancel
             </Button>

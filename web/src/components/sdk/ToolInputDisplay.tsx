@@ -1,6 +1,6 @@
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { File, Search, Globe, Terminal, Edit3, Bot } from 'lucide-react'
+import { File, Search, Globe, Terminal, PenLine, Bot } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 
 interface ToolInputDisplayProps {
@@ -41,7 +41,7 @@ function BashDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div>
       {description && (
-        <div className="flex items-center gap-2 mb-2 text-xs text-[var(--color-text-muted)]">
+        <div className="flex items-center gap-2 mb-2 text-xs text-(--color-text-muted)">
           <Terminal size={12} />
           <span>{description}</span>
         </div>
@@ -62,8 +62,8 @@ function BashDisplay({ input }: { input: Record<string, unknown> }) {
 function FileDisplay({ path }: { path: string }) {
   return (
     <div className="flex items-center gap-2">
-      <File size={14} className="text-[var(--color-text-muted)] shrink-0" />
-      <code className="text-[10px] font-mono text-[var(--color-text-secondary)] truncate">
+      <File size={14} className="text-(--color-text-muted) shrink-0" />
+      <code className="text-[10px] font-mono text-(--color-text-secondary) truncate">
         {path}
       </code>
     </div>
@@ -78,8 +78,8 @@ function WriteDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <File size={14} className="text-[var(--color-text-muted)] shrink-0" />
-        <code className="text-[10px] font-mono text-[var(--color-text-secondary)] truncate">
+        <File size={14} className="text-(--color-text-muted) shrink-0" />
+        <code className="text-[10px] font-mono text-(--color-text-secondary) truncate">
           {filePath}
         </code>
       </div>
@@ -106,29 +106,29 @@ function EditDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <Edit3 size={14} className="text-[var(--color-text-muted)] shrink-0" />
-        <code className="text-[10px] font-mono text-[var(--color-text-secondary)] truncate">
+        <PenLine size={14} className="text-(--color-text-muted) shrink-0" />
+        <code className="text-[10px] font-mono text-(--color-text-secondary) truncate">
           {filePath}
         </code>
       </div>
       {(oldString || newString) && (
-        <div className="rounded-lg overflow-hidden border border-[var(--color-border)]">
+        <div className="rounded-lg overflow-hidden border border-(--color-border)">
           {oldString && (
-            <div className="bg-danger/10 border-b border-[var(--color-border)]">
-              <div className="px-2 py-1 text-2xs font-medium text-danger border-b border-[var(--color-border)]">
+            <div className="bg-danger/10 border-b border-(--color-border)">
+              <div className="px-2 py-1 text-2xs font-medium text-danger border-b border-(--color-border)">
                 − Remove
               </div>
-              <pre className="p-2 text-[10px] overflow-x-auto text-[var(--color-text-secondary)]">
+              <pre className="p-2 text-[10px] overflow-x-auto text-(--color-text-secondary)">
                 {truncate(oldString, 150)}
               </pre>
             </div>
           )}
           {newString && (
             <div className="bg-success/10">
-              <div className="px-2 py-1 text-2xs font-medium text-success border-b border-[var(--color-border)]">
+              <div className="px-2 py-1 text-2xs font-medium text-success border-b border-(--color-border)">
                 + Add
               </div>
-              <pre className="p-2 text-[10px] overflow-x-auto text-[var(--color-text-secondary)]">
+              <pre className="p-2 text-[10px] overflow-x-auto text-(--color-text-secondary)">
                 {truncate(newString, 150)}
               </pre>
             </div>
@@ -145,11 +145,11 @@ function SearchDisplay({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="flex items-center gap-2">
-      <Search size={14} className="text-[var(--color-text-muted)] shrink-0" />
+      <Search size={14} className="text-(--color-text-muted) shrink-0" />
       <div className="text-[10px] overflow-hidden">
         <code className="font-mono text-accent">{pattern}</code>
         {path && (
-          <span className="text-[var(--color-text-muted)]"> in {path}</span>
+          <span className="text-(--color-text-muted)"> in {path}</span>
         )}
       </div>
     </div>
@@ -161,7 +161,7 @@ function WebFetchDisplay({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="flex items-center gap-2">
-      <Globe size={14} className="text-[var(--color-text-muted)] shrink-0" />
+      <Globe size={14} className="text-(--color-text-muted) shrink-0" />
       <code className="text-[10px] font-mono text-accent truncate">
         {url}
       </code>
@@ -174,8 +174,8 @@ function WebSearchDisplay({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="flex items-center gap-2">
-      <Search size={14} className="text-[var(--color-text-muted)] shrink-0" />
-      <span className="text-[10px] text-[var(--color-text-secondary)]">
+      <Search size={14} className="text-(--color-text-muted) shrink-0" />
+      <span className="text-[10px] text-(--color-text-secondary)">
         Searching: <span className="text-accent font-medium">{query}</span>
       </span>
     </div>
@@ -188,14 +188,14 @@ function TaskDisplay({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <Bot size={14} className="text-[var(--color-text-muted)] shrink-0" />
+      <Bot size={14} className="text-(--color-text-muted) shrink-0" />
       {subagentType && (
         <Badge variant="default" size="sm" className="text-2xs">
           {subagentType}
         </Badge>
       )}
       {description && (
-        <span className="text-[10px] text-[var(--color-text-secondary)]">{description}</span>
+        <span className="text-[10px] text-(--color-text-secondary)">{description}</span>
       )}
     </div>
   )

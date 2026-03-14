@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -255,11 +255,11 @@ export default function Workspace() {
       <div className="h-full flex items-center justify-center p-6">
         <Card variant="glass" padding="lg" className="max-w-md text-center">
           <div className="py-8">
-            <Terminal size={48} className="mx-auto text-[var(--color-text-muted)] mb-4" />
-            <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">
+            <Terminal size={48} className="mx-auto text-(--color-text-muted) mb-4" />
+            <h3 className="text-lg font-semibold text-(--color-text-primary)">
               No active session
             </h3>
-            <p className="text-[var(--color-text-secondary)] mb-4">
+            <p className="text-(--color-text-secondary) mb-4">
               Select a session from the sidebar or create a new one to start chatting
             </p>
             <Button
@@ -292,14 +292,14 @@ export default function Workspace() {
         )}
 
         {/* Session header */}
-        <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-(--color-border) flex items-center justify-between">
           <div className="flex items-center gap-3">
             <ConnectionStatus status={connection?.status || 'disconnected'} />
             <div>
-              <h3 className="font-mono text-sm text-[var(--color-text-primary)]">
+              <h3 className="font-mono text-sm text-(--color-text-primary)">
                 {activeSession.id.slice(0, 12)}...
               </h3>
-              <p className="text-xs text-[var(--color-text-muted)]">{activeSession.agent}</p>
+              <p className="text-xs text-(--color-text-muted)">{activeSession.agent}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -320,7 +320,7 @@ export default function Workspace() {
         <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
           {sessionMessages.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-[var(--color-text-muted)]">
+              <p className="text-(--color-text-muted)">
                 Send a message to start the conversation
               </p>
             </div>
@@ -350,7 +350,7 @@ export default function Workspace() {
         {!isAtBottom && (
           <button
             onClick={scrollToBottom}
-            className="sticky bottom-4 left-1/2 -translate-x-1/2 p-3 bg-accent text-[#0a0a0f] rounded-full shadow-lg hover:bg-accent/90 transition-colors z-10"
+            className="sticky bottom-4 left-1/2 -translate-x-1/2 p-3 bg-accent text-nebula-bg-primary rounded-full shadow-lg hover:bg-accent/90 transition-colors z-10"
             title="Scroll to bottom"
           >
             <ArrowDown className="w-5 h-5" />
@@ -360,7 +360,7 @@ export default function Workspace() {
 
       {/* Permission requests */}
       {activePermissions.length > 0 && (
-        <div className="px-4 py-3 border-t border-[var(--color-border)] bg-warning/5">
+        <div className="px-4 py-3 border-t border-(--color-border) bg-warning/5">
           <PermissionRequest
             sessionId={activeSessionId!}
             permission={activePermissions[0]}
@@ -372,7 +372,7 @@ export default function Workspace() {
 
       {/* Composer */}
       <div
-        className="px-4 py-4 border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]"
+        className="px-4 py-4 border-t border-(--color-border) bg-(--color-bg-secondary)"
         onDrop={handleDrop}
         onDragOver={handleDragOver}
       >
@@ -385,11 +385,11 @@ export default function Workspace() {
                   <img
                     src={`data:${img.mimeType};base64,${img.data}`}
                     alt={img.filename || `Image ${i + 1}`}
-                    className="h-16 w-16 rounded-lg object-cover border border-[var(--color-border)]"
+                    className="h-16 w-16 rounded-lg object-cover border border-(--color-border)"
                   />
                   <button
                     onClick={() => removeImage(i)}
-                    className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-(--color-bg-primary) border border-(--color-border) opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Remove image"
                   >
                     <X size={12} />
@@ -399,7 +399,7 @@ export default function Workspace() {
               {attachedImages.length < IMAGE_LIMITS.MAX_COUNT && (
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="h-16 w-16 rounded-lg border border-dashed border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:border-[var(--color-text-muted)] transition-colors"
+                  className="h-16 w-16 rounded-lg border border-dashed border-(--color-border) flex items-center justify-center text-(--color-text-muted) hover:text-(--color-text-secondary) hover:border-(--color-text-muted) transition-colors"
                   title="Add more images"
                 >
                   <Plus size={20} />
@@ -425,7 +425,7 @@ export default function Workspace() {
             {/* Attach button */}
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="p-2.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] transition-colors"
+              className="p-2.5 rounded-lg text-(--color-text-muted) hover:text-(--color-text-secondary) hover:bg-(--color-surface) transition-colors"
               title="Attach images"
               disabled={connection?.status === 'disconnected' || connection?.status === 'error'}
             >
@@ -461,7 +461,7 @@ export default function Workspace() {
               </Button>
             )}
           </div>
-          <div className="mt-2 flex items-center justify-between text-xs text-[var(--color-text-muted)]">
+          <div className="mt-2 flex items-center justify-between text-xs text-(--color-text-muted)">
             <span>
               {connection?.status === 'connected' ? (
                 'Connected via WebSocket'
@@ -498,9 +498,9 @@ function ConnectionStatus({ status }: { status: string }) {
     connected: 'bg-success',
     connecting: 'bg-warning animate-pulse',
     reconnecting: 'bg-warning animate-pulse',
-    disconnected: 'bg-[var(--color-text-muted)]',
+    disconnected: 'bg-(--color-text-muted)',
     error: 'bg-danger',
-    ended: 'bg-[var(--color-text-muted)]',
+    ended: 'bg-(--color-text-muted)',
   }
 
   return (
@@ -537,7 +537,7 @@ function MessageBubble({
         className={cn(
           'max-w-[85%] rounded-2xl px-4 py-3 animate-in',
           isUser
-            ? 'bg-accent text-[#0a0a0f] rounded-br-md'
+            ? 'bg-accent text-nebula-bg-primary rounded-br-md'
             : 'glass rounded-bl-md'
         )}
       >
@@ -548,7 +548,7 @@ function MessageBubble({
           {!isUser && (
             <button
               onClick={handleCopy}
-              className="opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity p-1 rounded hover:bg-[var(--color-surface)]"
+              className="opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity p-1 rounded-sm hover:bg-(--color-surface)"
               title="Copy message"
               aria-label={copied ? 'Message copied' : 'Copy message'}
             >
@@ -565,7 +565,7 @@ function MessageBubble({
                 key={i}
                 src={`data:${img.mimeType};base64,${img.data}`}
                 alt={img.filename || `Image ${i + 1}`}
-                className="max-h-48 max-w-[280px] rounded-lg object-contain border border-[var(--color-border)]"
+                className="max-h-48 max-w-[280px] rounded-lg object-contain border border-(--color-border)"
               />
             ))}
           </div>
@@ -646,7 +646,7 @@ function MessageBubble({
 
 function MarkdownContent({ content }: { content: string }) {
   return (
-    <div className="whitespace-pre-wrap break-words">
+    <div className="whitespace-pre-wrap wrap-break-word">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -656,7 +656,7 @@ function MarkdownContent({ content }: { content: string }) {
 
           if (isInline) {
             return (
-              <code className="px-1.5 py-0.5 rounded bg-[var(--color-surface)] text-sm font-mono" {...props}>
+              <code className="px-1.5 py-0.5 rounded-sm bg-(--color-surface) text-sm font-mono" {...props}>
                 {children}
               </code>
             )
@@ -667,7 +667,7 @@ function MarkdownContent({ content }: { content: string }) {
               style={oneDark}
               language={match?.[1] || 'text'}
               PreTag="div"
-              className="!my-2 !rounded-lg !text-xs"
+              className="my-2! rounded-lg! text-xs!"
               customStyle={{
                 margin: 0,
                 borderRadius: '0.5rem',
@@ -712,16 +712,16 @@ function ToolBlock({ block }: { block: { type: 'tool_use' | 'tool_result'; name?
     <div className={cn(
       'rounded-lg border text-xs overflow-hidden',
       isToolUse
-        ? 'border-[var(--color-border)] bg-[var(--color-surface)]'
+        ? 'border-(--color-border) bg-(--color-surface)'
         : 'border-success/30 bg-success/5'
     )}>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--color-surface-hover)] transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-(--color-surface-hover) transition-colors"
       >
         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         {isToolUse ? (
-          <Wrench size={14} className="text-[var(--color-text-muted)]" />
+          <Wrench size={14} className="text-(--color-text-muted)" />
         ) : (
           <CheckCircle2 size={14} className="text-success" />
         )}
@@ -730,7 +730,7 @@ function ToolBlock({ block }: { block: { type: 'tool_use' | 'tool_result'; name?
         </span>
       </button>
       {isExpanded && (
-        <div className="px-3 py-2 border-t border-[var(--color-border)] bg-[var(--color-bg-tertiary)]">
+        <div className="px-3 py-2 border-t border-(--color-border) bg-(--color-bg-tertiary)">
           {isToolUse && block.input !== undefined && (
             <pre className="overflow-x-auto text-[10px] leading-relaxed">
               {typeof block.input === 'string' ? block.input : JSON.stringify(block.input, null, 2)}
@@ -796,11 +796,11 @@ function PermissionRequest({
           isAskUserQuestion ? "text-accent" : "text-warning"
         )} />
         <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-[var(--color-text-primary)]">
+          <h4 className="font-medium text-(--color-text-primary)">
             {isAskUserQuestion ? 'Question from Agent' : 'Permission Required'}
           </h4>
           {!isAskUserQuestion && (
-            <p className="text-sm text-[var(--color-text-secondary)] mt-1">
+            <p className="text-sm text-(--color-text-secondary) mt-1">
               {toolCall?.title || 'The agent wants to perform an action'}
             </p>
           )}

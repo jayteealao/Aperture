@@ -3,7 +3,7 @@
  * Allows users to select or cycle through thinking levels
  */
 
-import { Select } from '@/components/ui/Select'
+import { FormSelect } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import type { PiThinkingLevel } from '@/api/pi-types'
 
@@ -51,8 +51,8 @@ export function PiThinkingLevelSelector({
 
   return (
     <div className="flex items-center gap-2">
-      <label className="text-sm text-[var(--color-text-muted)]">Thinking:</label>
-      <Select
+      <label className="text-sm text-(--color-text-muted)">Thinking:</label>
+      <FormSelect
         value={level}
         onChange={(e) => onLevelChange(e.target.value as PiThinkingLevel)}
         disabled={disabled}

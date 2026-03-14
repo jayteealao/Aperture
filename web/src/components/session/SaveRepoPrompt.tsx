@@ -18,7 +18,7 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
   const queryClient = useQueryClient()
 
   // Extract default name from path
-  const defaultName = repoPath.split(/[\/\\]/).pop() || 'repository'
+  const defaultName = repoPath.split(/[/\\]/).pop() || 'repository'
   const [name, setName] = useState(defaultName)
   const [description, setDescription] = useState('')
 
@@ -52,19 +52,19 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
     <Dialog open={open} onClose={onClose} title="Save Repository?" size="md">
       <div className="space-y-4">
         {/* Info */}
-        <div className="flex items-start gap-3 p-3 rounded-lg bg-[var(--color-bg-tertiary)]">
-          <Folder size={20} className="text-[var(--color-text-muted)] shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 p-3 rounded-lg bg-(--color-bg-tertiary)">
+          <Folder size={20} className="text-(--color-text-muted) shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm text-[var(--color-text-primary)]">
+            <p className="text-sm text-(--color-text-primary)">
               Your session is running in:
             </p>
-            <p className="text-xs font-mono text-[var(--color-text-muted)] mt-1 break-all">
+            <p className="text-xs font-mono text-(--color-text-muted) mt-1 break-all">
               {repoPath}
             </p>
           </div>
         </div>
 
-        <p className="text-sm text-[var(--color-text-secondary)]">
+        <p className="text-sm text-(--color-text-secondary)">
           Would you like to save this repository for future sessions? Saved repositories appear
           in the dropdown when creating new sessions.
         </p>
@@ -86,7 +86,7 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
+        <div className="flex justify-end gap-3 pt-4 border-t border-(--color-border)">
           <Button variant="ghost" onClick={handleSkip} disabled={saveMutation.isPending}>
             Skip
           </Button>

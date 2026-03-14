@@ -1,6 +1,6 @@
 // SDK Session Header - Model selector, permission mode, interrupt button
 
-import { Select } from '@/components/ui/Select'
+import { FormSelect } from '@/components/ui/Select'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { StopCircle } from 'lucide-react'
@@ -47,17 +47,17 @@ export function SdkSessionHeader({
       {/* Model Selector */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <label className="text-xs font-medium text-[var(--color-text-secondary)]">
+          <label className="text-xs font-medium text-(--color-text-secondary)">
             Model
           </label>
           {loading.models && <Spinner size="sm" />}
         </div>
         {modelsNeedPrompt ? (
-          <div className="text-xs text-[var(--color-text-muted)] py-2">
+          <div className="text-xs text-(--color-text-muted) py-2">
             Send a prompt to load models
           </div>
         ) : (
-          <Select
+          <FormSelect
             options={modelOptions}
             value={config?.model || ''}
             onChange={(e) => onModelChange(e.target.value || undefined)}
@@ -70,10 +70,10 @@ export function SdkSessionHeader({
 
       {/* Permission Mode */}
       <div>
-        <label className="text-xs font-medium text-[var(--color-text-secondary)] mb-1.5 block">
+        <label className="text-xs font-medium text-(--color-text-secondary) mb-1.5 block">
           Permission Mode
         </label>
-        <Select
+        <FormSelect
           options={PERMISSION_MODES}
           value={config?.permissionMode || 'default'}
           onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}

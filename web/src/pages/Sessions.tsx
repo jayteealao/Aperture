@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useSessionsStore } from '@/stores/sessions'
@@ -111,8 +111,8 @@ export default function Sessions() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">Sessions</h2>
-            <p className="text-[var(--color-text-secondary)]">
+            <h2 className="text-2xl font-bold text-(--color-text-primary)">Sessions</h2>
+            <p className="text-(--color-text-secondary)">
               Manage your agent sessions
             </p>
           </div>
@@ -153,11 +153,11 @@ export default function Sessions() {
         ) : filteredSessions.length === 0 ? (
           <Card variant="glass" padding="lg" className="text-center">
             <div className="py-8">
-              <Cpu size={48} className="mx-auto text-[var(--color-text-muted)] mb-4" />
-              <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">
+              <Cpu size={48} className="mx-auto text-(--color-text-muted) mb-4" />
+              <h3 className="text-lg font-semibold text-(--color-text-primary)">
                 No sessions yet
               </h3>
-              <p className="text-[var(--color-text-secondary)] mb-4">
+              <p className="text-(--color-text-secondary) mb-4">
                 Create your first session to start chatting with an AI agent
               </p>
               <Button
@@ -257,7 +257,7 @@ function SessionCard({
         }
       />
       <CardContent>
-        <div className="flex items-center gap-4 text-sm text-[var(--color-text-secondary)]">
+        <div className="flex items-center gap-4 text-sm text-(--color-text-secondary)">
           <div className="flex items-center gap-1">
             <Clock size={14} />
             <span>{formatIdleTime(session.status?.idleMs || 0)}</span>
@@ -455,7 +455,7 @@ function NewSessionDialog({
         {!repoSelection && (
           <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
             <AlertCircle size={16} className="text-accent shrink-0 mt-0.5" />
-            <div className="text-xs text-[var(--color-text-secondary)]">
+            <div className="text-xs text-(--color-text-secondary)">
               <p>
                 Sessions require a git repository. Select from your saved repos, browse for a local repo,
                 clone from a URL, or initialize a new one.
@@ -484,9 +484,9 @@ function NewSessionDialog({
 
         {/* Creation progress */}
         {creationStep && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--color-bg-tertiary)]">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-(--color-bg-tertiary)">
             <Spinner size="sm" />
-            <span className="text-sm text-[var(--color-text-secondary)]">{creationStep}</span>
+            <span className="text-sm text-(--color-text-secondary)">{creationStep}</span>
           </div>
         )}
 

@@ -174,18 +174,21 @@ function TreeNode({ tree, entryId, expandedNodes, onToggle, onNavigate, currentL
 
 function getEntryLabel(entry: PiSessionEntry): string {
   switch (entry.type) {
-    case 'message':
+    case 'message': {
       const msgData = entry.data as { role?: string; content?: string }
       if (msgData.role === 'user') {
         return `User: ${(msgData.content || '').slice(0, 30)}...`
       }
       return `Assistant message`
-    case 'thinking_level_change':
+    }
+    case 'thinking_level_change': {
       const thinkingData = entry.data as { level?: string }
       return `Thinking: ${thinkingData.level}`
-    case 'model_change':
+    }
+    case 'model_change': {
       const modelData = entry.data as { provider?: string; modelId?: string }
       return `Model: ${modelData.provider}/${modelData.modelId}`
+    }
     case 'compaction':
       return 'Context compacted'
     case 'branch_summary':

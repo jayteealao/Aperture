@@ -16,9 +16,9 @@ export function Card({
   ...props
 }: CardProps) {
   const variants = {
-    default: 'bg-[var(--color-bg-secondary)] border border-[var(--color-border)]',
+    default: 'bg-(--color-bg-secondary) border border-(--color-border)',
     glass: 'glass',
-    outline: 'border border-[var(--color-border)] bg-transparent',
+    outline: 'border border-(--color-border) bg-transparent',
   }
 
   const paddings = {
@@ -34,7 +34,7 @@ export function Card({
         'rounded-xl transition-all duration-200',
         variants[variant],
         paddings[padding],
-        hover && 'hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-hover)] cursor-pointer',
+        hover && 'hover:border-(--color-border-strong) hover:bg-(--color-surface-hover) cursor-pointer',
         className
       )}
       {...props}
@@ -54,9 +54,9 @@ export function CardHeader({ title, subtitle, action, className, ...props }: Car
   return (
     <div className={cn('flex items-start justify-between gap-4', className)} {...props}>
       <div>
-        <h3 className="font-semibold text-[var(--color-text-primary)]">{title}</h3>
+        <h3 className="font-semibold text-(--color-text-primary)">{title}</h3>
         {subtitle && (
-          <p className="text-sm text-[var(--color-text-secondary)] mt-1">{subtitle}</p>
+          <p className="text-sm text-(--color-text-secondary) mt-1">{subtitle}</p>
         )}
       </div>
       {action && <div className="shrink-0">{action}</div>}
@@ -76,7 +76,7 @@ export function CardFooter({ className, children, ...props }: HTMLAttributes<HTM
   return (
     <div
       className={cn(
-        'mt-4 pt-4 border-t border-[var(--color-border)] flex items-center gap-3',
+        'mt-4 pt-4 border-t border-(--color-border) flex items-center gap-3',
         className
       )}
       {...props}

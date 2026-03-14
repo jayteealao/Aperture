@@ -36,9 +36,9 @@ export function SdkCheckpoints({
   if (checkpoints.length === 0) {
     return (
       <div className="text-center py-3">
-        <History size={24} className="mx-auto text-[var(--color-text-muted)] mb-2" />
-        <p className="text-xs text-[var(--color-text-muted)]">No checkpoints available</p>
-        <p className="text-2xs text-[var(--color-text-muted)] mt-1">
+        <History size={24} className="mx-auto text-(--color-text-muted) mb-2" />
+        <p className="text-xs text-(--color-text-muted)">No checkpoints available</p>
+        <p className="text-2xs text-(--color-text-muted) mt-1">
           Enable file checkpointing to rewind changes
         </p>
       </div>
@@ -84,14 +84,14 @@ export function SdkCheckpoints({
                       {rewindResult.filesChanged.slice(0, 3).map((file) => (
                         <div
                           key={file}
-                          className="text-2xs text-[var(--color-text-muted)] flex items-center gap-1"
+                          className="text-2xs text-(--color-text-muted) flex items-center gap-1"
                         >
                           <FileText size={10} />
                           <span className="truncate">{file}</span>
                         </div>
                       ))}
                       {rewindResult.filesChanged.length > 3 && (
-                        <div className="text-2xs text-[var(--color-text-muted)]">
+                        <div className="text-2xs text-(--color-text-muted)">
                           ...and {rewindResult.filesChanged.length - 3} more
                         </div>
                       )}
@@ -134,13 +134,13 @@ export function SdkCheckpoints({
         {checkpoints.map((checkpoint, index) => (
           <div
             key={checkpoint}
-            className="flex items-center justify-between p-2 bg-[var(--color-surface)] rounded-lg group"
+            className="flex items-center justify-between p-2 bg-(--color-surface) rounded-lg group"
           >
             <div className="flex items-center gap-2 min-w-0">
               <Badge variant="outline" size="sm">
                 #{checkpoints.length - index}
               </Badge>
-              <span className="text-xs text-[var(--color-text-muted)] truncate font-mono">
+              <span className="text-xs text-(--color-text-muted) truncate font-mono">
                 {checkpoint.slice(0, 12)}...
               </span>
             </div>

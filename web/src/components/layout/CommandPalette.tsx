@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { cn } from '@/utils/cn'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
@@ -209,17 +209,17 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       <div className="fixed inset-x-4 top-[20%] z-50 mx-auto max-w-lg animate-slide-down">
         <div className="glass-strong rounded-2xl shadow-2xl overflow-hidden">
           {/* Search input */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)]">
-            <Search size={20} className="text-[var(--color-text-muted)]" />
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-(--color-border)">
+            <Search size={20} className="text-(--color-text-muted)" />
             <input
               type="text"
               placeholder="Type a command or search..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 bg-transparent text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none"
+              className="flex-1 bg-transparent text-(--color-text-primary) placeholder:text-(--color-text-muted) outline-hidden"
               autoFocus
             />
-            <kbd className="px-2 py-0.5 text-xs font-mono bg-[var(--color-surface)] rounded text-[var(--color-text-muted)]">
+            <kbd className="px-2 py-0.5 text-xs font-mono bg-(--color-surface) rounded-sm text-(--color-text-muted)">
               esc
             </kbd>
           </div>
@@ -227,7 +227,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           {/* Results */}
           <div className="max-h-80 overflow-y-auto p-2">
             {filteredCommands.length === 0 ? (
-              <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
+              <p className="py-8 text-center text-sm text-(--color-text-muted)">
                 No commands found
               </p>
             ) : (
@@ -240,14 +240,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                     'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
                     selectedIndex === index
                       ? 'bg-accent/10 text-accent'
-                      : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]'
+                      : 'text-(--color-text-secondary) hover:bg-(--color-surface)'
                   )}
                 >
                   <span className="shrink-0">{cmd.icon}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium truncate">{cmd.title}</p>
                     {cmd.subtitle && (
-                      <p className="text-xs text-[var(--color-text-muted)] truncate">
+                      <p className="text-xs text-(--color-text-muted) truncate">
                         {cmd.subtitle}
                       </p>
                     )}
@@ -258,17 +258,17 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           </div>
 
           {/* Footer hint */}
-          <div className="px-4 py-2 border-t border-[var(--color-border)] flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
+          <div className="px-4 py-2 border-t border-(--color-border) flex items-center gap-4 text-xs text-(--color-text-muted)">
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-[var(--color-surface)] rounded">↑↓</kbd>
+              <kbd className="px-1.5 py-0.5 bg-(--color-surface) rounded-sm">↑↓</kbd>
               navigate
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-[var(--color-surface)] rounded">↵</kbd>
+              <kbd className="px-1.5 py-0.5 bg-(--color-surface) rounded-sm">↵</kbd>
               select
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-[var(--color-surface)] rounded">esc</kbd>
+              <kbd className="px-1.5 py-0.5 bg-(--color-surface) rounded-sm">esc</kbd>
               close
             </span>
           </div>

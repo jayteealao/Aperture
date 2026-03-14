@@ -91,7 +91,7 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
   // Collapsed state
   if (!isOpen) {
     return (
-      <div className="h-full flex flex-col border-l border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
+      <div className="h-full flex flex-col border-l border-(--color-border) bg-(--color-bg-secondary)">
         <Button
           variant="ghost"
           size="sm"
@@ -125,10 +125,10 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
   }
 
   return (
-    <div className="h-full w-[280px] flex flex-col border-l border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
+    <div className="h-full w-[280px] flex flex-col border-l border-(--color-border) bg-(--color-bg-secondary)">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)]">
-        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Pi Controls</h2>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-(--color-border)">
+        <h2 className="text-sm font-semibold text-(--color-text-primary)">Pi Controls</h2>
         <Button
           variant="ghost"
           size="sm"
@@ -203,7 +203,7 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-2 border-t border-[var(--color-border)] text-2xs text-[var(--color-text-muted)]">
+      <div className="px-3 py-2 border-t border-(--color-border) text-2xs text-(--color-text-muted)">
         Pi SDK Session
       </div>
     </div>
@@ -226,21 +226,21 @@ function AccordionSection({
   children: React.ReactNode
 }) {
   return (
-    <div className="border-b border-[var(--color-border)]">
+    <div className="border-b border-(--color-border)">
       <button
         onClick={onToggle}
         className={cn(
           'w-full flex items-center gap-2 px-3 py-2 text-left',
-          'hover:bg-[var(--color-surface-hover)] transition-colors'
+          'hover:bg-(--color-surface-hover) transition-colors'
         )}
       >
         {isExpanded ? (
-          <ChevronDown size={14} className="text-[var(--color-text-muted)]" />
+          <ChevronDown size={14} className="text-(--color-text-muted)" />
         ) : (
-          <ChevronRight size={14} className="text-[var(--color-text-muted)]" />
+          <ChevronRight size={14} className="text-(--color-text-muted)" />
         )}
-        <span className="text-[var(--color-text-muted)]">{icon}</span>
-        <span className="text-sm font-medium text-[var(--color-text-secondary)]">{title}</span>
+        <span className="text-(--color-text-muted)">{icon}</span>
+        <span className="text-sm font-medium text-(--color-text-secondary)">{title}</span>
       </button>
       {isExpanded && <div className="px-3 pb-3">{children}</div>}
     </div>
@@ -316,7 +316,7 @@ function StreamingSection({
 }) {
   if (!isStreaming) {
     return (
-      <p className="text-xs text-[var(--color-text-muted)]">
+      <p className="text-xs text-(--color-text-muted)">
         Streaming controls available while the model is generating.
       </p>
     )
@@ -370,28 +370,28 @@ function UsageSection({
           {loading ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw size={14} />}
         </Button>
       </div>
-      {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
       {stats ? (
         <div className="space-y-1 text-xs">
           <div className="flex justify-between">
-            <span className="text-[var(--color-text-muted)]">Input Tokens</span>
-            <span className="text-[var(--color-text-secondary)]">{stats.inputTokens.toLocaleString()}</span>
+            <span className="text-(--color-text-muted)">Input Tokens</span>
+            <span className="text-(--color-text-secondary)">{stats.inputTokens.toLocaleString()}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-[var(--color-text-muted)]">Output Tokens</span>
-            <span className="text-[var(--color-text-secondary)]">{stats.outputTokens.toLocaleString()}</span>
+            <span className="text-(--color-text-muted)">Output Tokens</span>
+            <span className="text-(--color-text-secondary)">{stats.outputTokens.toLocaleString()}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-[var(--color-text-muted)]">Total Cost</span>
-            <span className="text-[var(--color-text-secondary)]">${stats.totalCost.toFixed(4)}</span>
+            <span className="text-(--color-text-muted)">Total Cost</span>
+            <span className="text-(--color-text-secondary)">${stats.totalCost.toFixed(4)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-[var(--color-text-muted)]">Turns</span>
-            <span className="text-[var(--color-text-secondary)]">{stats.turnCount}</span>
+            <span className="text-(--color-text-muted)">Turns</span>
+            <span className="text-(--color-text-secondary)">{stats.turnCount}</span>
           </div>
         </div>
       ) : (
-        <p className="text-xs text-[var(--color-text-muted)]">No stats yet. Send a message to begin.</p>
+        <p className="text-xs text-(--color-text-muted)">No stats yet. Send a message to begin.</p>
       )}
     </div>
   )
@@ -415,7 +415,7 @@ function ModelsSection({
           {loading ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw size={14} />}
         </Button>
       </div>
-      {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
       {models.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {models.map((model) => (
@@ -426,7 +426,7 @@ function ModelsSection({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-[var(--color-text-muted)]">No models loaded yet.</p>
+        <p className="text-xs text-(--color-text-muted)">No models loaded yet.</p>
       )}
     </div>
   )
@@ -457,7 +457,7 @@ function ForkableSection({
           {entries.map((entry) => (
             <div key={entry.id} className="flex items-center gap-1.5 text-xs">
               <span
-                className="flex-1 truncate text-[var(--color-text-muted)]"
+                className="flex-1 truncate text-(--color-text-muted)"
                 title={entry.content}
               >
                 {entry.content.slice(0, 50)}...
@@ -469,7 +469,7 @@ function ForkableSection({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-[var(--color-text-muted)]">No forkable messages yet.</p>
+        <p className="text-xs text-(--color-text-muted)">No forkable messages yet.</p>
       )}
     </div>
   )

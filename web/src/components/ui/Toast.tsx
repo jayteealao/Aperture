@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState, createContext, useContext, useCallback, useMemo, type ReactNode } from 'react'
 import { cn } from '@/utils/cn'
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
@@ -68,7 +67,7 @@ function ToastContainer() {
   if (!context) return null
 
   return (
-    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+    <div className="fixed top-4 right-4 z-100 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
       {context.toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onClose={() => context.removeToast(toast.id)} />
       ))}
@@ -116,14 +115,14 @@ function ToastItem({ toast, onClose }: ToastItemProps) {
       <div className="flex items-start gap-3">
         <div className="shrink-0 mt-0.5">{icons[type]}</div>
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-[var(--color-text-primary)]">{title}</p>
+          <p className="font-medium text-(--color-text-primary)">{title}</p>
           {message && (
-            <p className="text-sm text-[var(--color-text-secondary)] mt-1">{message}</p>
+            <p className="text-sm text-(--color-text-secondary) mt-1">{message}</p>
           )}
         </div>
         <button
           onClick={onClose}
-          className="shrink-0 p-1 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+          className="shrink-0 p-1 rounded-sm hover:bg-(--color-surface) text-(--color-text-muted) hover:text-(--color-text-primary)"
           aria-label="Dismiss"
         >
           <X size={16} />

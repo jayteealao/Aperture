@@ -69,7 +69,7 @@ export function Dropdown({
   return (
     <div className={cn('w-full', className)}>
       {label && (
-        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">
+        <label className="block text-sm font-medium text-(--color-text-secondary) mb-2">
           {label}
         </label>
       )}
@@ -80,23 +80,23 @@ export function Dropdown({
           onClick={() => setIsOpen(!isOpen)}
           className={cn(
             'w-full h-10 px-3 pr-10 rounded-lg font-mono text-sm text-left',
-            'bg-[var(--color-surface)] text-[var(--color-text-primary)]',
-            'border border-[var(--color-border)]',
-            'focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent',
+            'bg-(--color-surface) text-(--color-text-primary)',
+            'border border-(--color-border)',
+            'focus:outline-hidden focus:ring-2 focus:ring-accent focus:border-transparent',
             'transition-all duration-200',
             error && 'border-danger focus:ring-danger'
           )}
         >
           <div className="flex items-center gap-2 truncate">
             {selectedOption?.icon}
-            <span className={cn(!selectedOption && 'text-[var(--color-text-muted)]')}>
+            <span className={cn(!selectedOption && 'text-(--color-text-muted)')}>
               {selectedOption?.label ?? placeholder}
             </span>
           </div>
           <ChevronDown
             size={18}
             className={cn(
-              'absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] transition-transform',
+              'absolute right-3 top-1/2 -translate-y-1/2 text-(--color-text-muted) transition-transform',
               isOpen && 'rotate-180'
             )}
           />
@@ -104,7 +104,7 @@ export function Dropdown({
 
         {/* Dropdown panel */}
         {isOpen && (
-          <div className="absolute z-[100] w-full mt-2 py-1 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)] shadow-xl max-h-60 overflow-y-auto">
+          <div className="absolute z-100 w-full mt-2 py-1 rounded-lg bg-(--color-bg-secondary) border border-(--color-border) shadow-xl max-h-60 overflow-y-auto">
             {options.map((option) => (
               <button
                 key={option.value}
@@ -114,15 +114,15 @@ export function Dropdown({
                 className={cn(
                   'w-full px-3 py-2 text-left transition-colors',
                   'flex items-center gap-2',
-                  'hover:bg-[var(--color-bg-tertiary)]',
+                  'hover:bg-(--color-bg-tertiary)',
                   option.disabled && 'opacity-50 cursor-not-allowed',
-                  option.value === value && 'bg-[var(--color-bg-tertiary)]'
+                  option.value === value && 'bg-(--color-bg-tertiary)'
                 )}
               >
                 {option.icon && (
                   <span className="shrink-0">{option.icon}</span>
                 )}
-                <span className="flex-1 text-sm font-mono text-[var(--color-text-primary)]">
+                <span className="flex-1 text-sm font-mono text-(--color-text-primary)">
                   {option.label}
                 </span>
                 {option.value === value && (
@@ -135,7 +135,7 @@ export function Dropdown({
       </div>
       {error && <p className="mt-1 text-sm text-danger">{error}</p>}
       {hint && !error && (
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">{hint}</p>
+        <p className="mt-1 text-sm text-(--color-text-muted)">{hint}</p>
       )}
     </div>
   )

@@ -39,8 +39,8 @@ export function SdkCommandsList({
   if (needsPrompt) {
     return (
       <div className="text-center py-3">
-        <Terminal size={24} className="mx-auto text-[var(--color-text-muted)] mb-2" />
-        <p className="text-xs text-[var(--color-text-muted)]">Send a prompt to load commands</p>
+        <Terminal size={24} className="mx-auto text-(--color-text-muted) mb-2" />
+        <p className="text-xs text-(--color-text-muted)">Send a prompt to load commands</p>
       </div>
     )
   }
@@ -48,8 +48,8 @@ export function SdkCommandsList({
   if (commands.length === 0) {
     return (
       <div className="text-center py-3">
-        <Terminal size={24} className="mx-auto text-[var(--color-text-muted)] mb-2" />
-        <p className="text-xs text-[var(--color-text-muted)]">No commands available</p>
+        <Terminal size={24} className="mx-auto text-(--color-text-muted) mb-2" />
+        <p className="text-xs text-(--color-text-muted)">No commands available</p>
         <Button variant="ghost" size="sm" onClick={onRefresh} className="mt-2">
           Refresh
         </Button>
@@ -91,13 +91,13 @@ export function SdkCommandsList({
           <button
             key={cmd.name}
             onClick={() => handleCopy(cmd.name)}
-            className="w-full text-left p-2 bg-[var(--color-surface)] rounded-lg hover:bg-[var(--color-surface-hover)] transition-colors group"
+            className="w-full text-left p-2 bg-(--color-surface) rounded-lg hover:bg-(--color-surface-hover) transition-colors group"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="text-accent font-mono text-xs">/{cmd.name}</span>
                 {cmd.argumentHint && (
-                  <span className="text-2xs text-[var(--color-text-muted)] truncate">
+                  <span className="text-2xs text-(--color-text-muted) truncate">
                     {cmd.argumentHint}
                   </span>
                 )}
@@ -106,11 +106,11 @@ export function SdkCommandsList({
                 {copiedCommand === cmd.name ? (
                   <Check size={12} className="text-success" />
                 ) : (
-                  <Copy size={12} className="text-[var(--color-text-muted)]" />
+                  <Copy size={12} className="text-(--color-text-muted)" />
                 )}
               </div>
             </div>
-            <p className="text-2xs text-[var(--color-text-muted)] mt-0.5 line-clamp-2">
+            <p className="text-2xs text-(--color-text-muted) mt-0.5 line-clamp-2">
               {cmd.description}
             </p>
           </button>
@@ -118,12 +118,12 @@ export function SdkCommandsList({
       </div>
 
       {filteredCommands.length === 0 && search && (
-        <div className="text-xs text-[var(--color-text-muted)] text-center py-2">
+        <div className="text-xs text-(--color-text-muted) text-center py-2">
           No commands match "{search}"
         </div>
       )}
 
-      <div className="text-2xs text-[var(--color-text-muted)] text-center">
+      <div className="text-2xs text-(--color-text-muted) text-center">
         {commands.length} command{commands.length !== 1 ? 's' : ''} available
       </div>
     </div>

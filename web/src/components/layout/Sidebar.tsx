@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router'
 import { cn } from '@/utils/cn'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
@@ -49,14 +49,14 @@ export function Sidebar({ className }: SidebarProps) {
       <aside
         className={cn(
           'fixed lg:static inset-y-0 left-0 z-50 w-64 flex flex-col',
-          'bg-[var(--color-bg-secondary)] border-r border-[var(--color-border)]',
+          'bg-(--color-bg-secondary) border-r border-(--color-border)',
           'transform transition-transform duration-200 ease-out lg:translate-x-0',
           !sidebarOpen && '-translate-x-full',
           className
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[var(--color-border)]">
+        <div className="flex items-center justify-between p-4 border-b border-(--color-border)">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
               <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2">
@@ -64,11 +64,11 @@ export function Sidebar({ className }: SidebarProps) {
                 <circle cx="12" cy="12" r="4" />
               </svg>
             </div>
-            <span className="font-semibold text-[var(--color-text-primary)]">Aperture</span>
+            <span className="font-semibold text-(--color-text-primary)">Aperture</span>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-1.5 rounded-lg hover:bg-[var(--color-surface)] lg:hidden"
+            className="p-1.5 rounded-lg hover:bg-(--color-surface) lg:hidden"
             aria-label="Close sidebar"
           >
             <X size={18} />
@@ -100,7 +100,7 @@ export function Sidebar({ className }: SidebarProps) {
                     'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                     isActive
                       ? 'bg-accent/10 text-accent'
-                      : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)]'
+                      : 'text-(--color-text-secondary) hover:bg-(--color-surface) hover:text-(--color-text-primary)'
                   )
                 }
                 onClick={() => setSidebarOpen(false)}
@@ -114,7 +114,7 @@ export function Sidebar({ className }: SidebarProps) {
           {/* Sessions section */}
           <div className="mt-6">
             <div className="flex items-center justify-between px-3 mb-2">
-              <span className="text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
+              <span className="text-xs font-medium uppercase tracking-wider text-(--color-text-muted)">
                 Sessions
               </span>
               <button
@@ -122,7 +122,7 @@ export function Sidebar({ className }: SidebarProps) {
                   navigate('/sessions/new')
                   setSidebarOpen(false)
                 }}
-                className="p-1 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+                className="p-1 rounded-sm hover:bg-(--color-surface) text-(--color-text-muted) hover:text-(--color-text-primary)"
                 aria-label="Create new session"
               >
                 <Plus size={14} />
@@ -146,7 +146,7 @@ export function Sidebar({ className }: SidebarProps) {
                       'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors',
                       isActive
                         ? 'bg-accent/10 text-accent'
-                        : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)]'
+                        : 'text-(--color-text-secondary) hover:bg-(--color-surface) hover:text-(--color-text-primary)'
                     )}
                   >
                     <StatusDot status={conn?.status || 'disconnected'} />
@@ -160,7 +160,7 @@ export function Sidebar({ className }: SidebarProps) {
                 )
               })}
               {sessions.length === 0 && (
-                <p className="px-3 py-2 text-xs text-[var(--color-text-muted)]">
+                <p className="px-3 py-2 text-xs text-(--color-text-muted)">
                   No active sessions
                 </p>
               )}
@@ -170,7 +170,7 @@ export function Sidebar({ className }: SidebarProps) {
                     navigate('/sessions')
                     setSidebarOpen(false)
                   }}
-                  className="w-full px-3 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+                  className="w-full px-3 py-1 text-xs text-(--color-text-muted) hover:text-(--color-text-secondary)"
                 >
                   View all ({sessions.length})
                 </button>
@@ -180,7 +180,7 @@ export function Sidebar({ className }: SidebarProps) {
         </nav>
 
         {/* Footer */}
-        <div className="p-3 border-t border-[var(--color-border)]">
+        <div className="p-3 border-t border-(--color-border)">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -212,9 +212,9 @@ function StatusDot({ status }: { status: string }) {
     connected: 'bg-success',
     connecting: 'bg-warning animate-pulse',
     reconnecting: 'bg-warning animate-pulse',
-    disconnected: 'bg-[var(--color-text-muted)]',
+    disconnected: 'bg-(--color-text-muted)',
     error: 'bg-danger',
-    ended: 'bg-[var(--color-text-muted)]',
+    ended: 'bg-(--color-text-muted)',
   }
 
   return <span className={cn('w-2 h-2 rounded-full shrink-0', colors[status] || colors.disconnected)} />

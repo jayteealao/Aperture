@@ -38,8 +38,8 @@ export function SdkMcpStatus({ mcpStatus, loading, error, onRefresh }: SdkMcpSta
   if (needsPrompt) {
     return (
       <div className="text-center py-3">
-        <Server size={24} className="mx-auto text-[var(--color-text-muted)] mb-2" />
-        <p className="text-xs text-[var(--color-text-muted)]">Send a prompt to load MCP status</p>
+        <Server size={24} className="mx-auto text-(--color-text-muted) mb-2" />
+        <p className="text-xs text-(--color-text-muted)">Send a prompt to load MCP status</p>
       </div>
     )
   }
@@ -47,8 +47,8 @@ export function SdkMcpStatus({ mcpStatus, loading, error, onRefresh }: SdkMcpSta
   if (mcpStatus.length === 0) {
     return (
       <div className="text-center py-3">
-        <Server size={24} className="mx-auto text-[var(--color-text-muted)] mb-2" />
-        <p className="text-xs text-[var(--color-text-muted)]">No MCP servers configured</p>
+        <Server size={24} className="mx-auto text-(--color-text-muted) mb-2" />
+        <p className="text-xs text-(--color-text-muted)">No MCP servers configured</p>
       </div>
     )
   }
@@ -57,7 +57,7 @@ export function SdkMcpStatus({ mcpStatus, loading, error, onRefresh }: SdkMcpSta
     <div className="space-y-2">
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-[var(--color-text-secondary)]">
+        <span className="text-xs font-medium text-(--color-text-secondary)">
           {mcpStatus.length} server{mcpStatus.length !== 1 ? 's' : ''}
         </span>
         <Button variant="ghost" size="sm" onClick={onRefresh} className="h-6 px-2">
@@ -72,11 +72,11 @@ export function SdkMcpStatus({ mcpStatus, loading, error, onRefresh }: SdkMcpSta
           return (
             <div
               key={server.name}
-              className="flex items-center justify-between p-2 bg-[var(--color-surface)] rounded-lg"
+              className="flex items-center justify-between p-2 bg-(--color-surface) rounded-lg"
             >
               <div className="flex items-center gap-2 min-w-0">
-                <Server size={14} className="text-[var(--color-text-muted)] shrink-0" />
-                <span className="text-xs text-[var(--color-text-primary)] truncate">
+                <Server size={14} className="text-(--color-text-muted) shrink-0" />
+                <span className="text-xs text-(--color-text-primary) truncate">
                   {server.name}
                 </span>
               </div>
@@ -95,7 +95,7 @@ export function SdkMcpStatus({ mcpStatus, loading, error, onRefresh }: SdkMcpSta
         .map((server) => (
           <div
             key={`${server.name}-error`}
-            className="text-2xs text-danger bg-danger/10 rounded p-2"
+            className="text-2xs text-danger bg-danger/10 rounded-sm p-2"
           >
             <span className="font-medium">{server.name}:</span> {server.error}
           </div>

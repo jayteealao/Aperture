@@ -102,7 +102,7 @@ export function SdkControlPanel({ sessionId, isOpen, onToggle }: SdkControlPanel
   // Collapsed state - just show toggle button
   if (!isOpen) {
     return (
-      <div className="h-full flex flex-col border-l border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
+      <div className="h-full flex flex-col border-l border-(--color-border) bg-(--color-bg-secondary)">
         <Button
           variant="ghost"
           size="sm"
@@ -117,10 +117,10 @@ export function SdkControlPanel({ sessionId, isOpen, onToggle }: SdkControlPanel
   }
 
   return (
-    <div className="h-full w-[280px] flex flex-col border-l border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
+    <div className="h-full w-[280px] flex flex-col border-l border-(--color-border) bg-(--color-bg-secondary)">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)]">
-        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">SDK Controls</h2>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-(--color-border)">
+        <h2 className="text-sm font-semibold text-(--color-text-primary)">SDK Controls</h2>
         <Button
           variant="ghost"
           size="sm"
@@ -199,7 +199,7 @@ export function SdkControlPanel({ sessionId, isOpen, onToggle }: SdkControlPanel
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-2 border-t border-[var(--color-border)] text-2xs text-[var(--color-text-muted)]">
+      <div className="px-3 py-2 border-t border-(--color-border) text-2xs text-(--color-text-muted)">
         Claude SDK Session
       </div>
     </div>
@@ -220,21 +220,21 @@ function AccordionSection({
   children: React.ReactNode
 }) {
   return (
-    <div className="border-b border-[var(--color-border)]">
+    <div className="border-b border-(--color-border)">
       <button
         onClick={onToggle}
         className={cn(
           'w-full flex items-center gap-2 px-3 py-2 text-left',
-          'hover:bg-[var(--color-surface-hover)] transition-colors'
+          'hover:bg-(--color-surface-hover) transition-colors'
         )}
       >
         {isExpanded ? (
-          <ChevronDown size={14} className="text-[var(--color-text-muted)]" />
+          <ChevronDown size={14} className="text-(--color-text-muted)" />
         ) : (
-          <ChevronRight size={14} className="text-[var(--color-text-muted)]" />
+          <ChevronRight size={14} className="text-(--color-text-muted)" />
         )}
-        <span className="text-[var(--color-text-muted)]">{icon}</span>
-        <span className="text-sm font-medium text-[var(--color-text-secondary)]">{title}</span>
+        <span className="text-(--color-text-muted)">{icon}</span>
+        <span className="text-sm font-medium text-(--color-text-secondary)">{title}</span>
       </button>
       {isExpanded && <div className="px-3 pb-3">{children}</div>}
     </div>

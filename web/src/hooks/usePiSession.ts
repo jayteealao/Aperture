@@ -14,6 +14,11 @@ import type {
   PiForkableEntry,
 } from '@/api/pi-types'
 
+const EMPTY_MODELS: PiModelInfo[] = []
+const EMPTY_FORKABLE_ENTRIES: PiForkableEntry[] = []
+const EMPTY_LOADING_STATE: UsePiSessionReturn['isLoading'] = {}
+const EMPTY_ERROR_STATE: UsePiSessionReturn['errors'] = {}
+
 export interface UsePiSessionReturn {
   // State
   config: PiSessionConfig | undefined
@@ -129,12 +134,14 @@ export function usePiSession(sessionId: string | null): UsePiSessionReturn {
   // Get state for this session
   const config = sessionId ? piConfig[sessionId] : undefined
   const stats = sessionId ? piStats[sessionId] ?? null : null
-  const models = sessionId ? piModels[sessionId] ?? [] : []
+  const models = sessionId ? piModels[sessionId] ?? EMPTY_MODELS : EMPTY_MODELS
   const sessionTree = sessionId ? piSessionTree[sessionId] ?? null : null
-  const forkableEntries = sessionId ? piForkableEntries[sessionId] ?? [] : []
+  const forkableEntries = sessionId
+    ? piForkableEntries[sessionId] ?? EMPTY_FORKABLE_ENTRIES
+    : EMPTY_FORKABLE_ENTRIES
   const thinkingLevel = sessionId ? piThinkingLevel[sessionId] ?? 'off' : 'off'
-  const isLoading = sessionId ? piLoading[sessionId] ?? {} : {}
-  const errors = sessionId ? piErrors[sessionId] ?? {} : {}
+  const isLoading = sessionId ? piLoading[sessionId] ?? EMPTY_LOADING_STATE : EMPTY_LOADING_STATE
+  const errors = sessionId ? piErrors[sessionId] ?? EMPTY_ERROR_STATE : EMPTY_ERROR_STATE
 
   // Streaming control actions
   const steer = useCallback(

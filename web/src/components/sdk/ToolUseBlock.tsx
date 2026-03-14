@@ -34,11 +34,11 @@ export function ToolUseBlock({ name, input, result, isExecuting }: ToolUseBlockP
         ? "border-danger/30 bg-danger/5"
         : hasResult
           ? "border-success/30 bg-success/5"
-          : "border-[var(--color-border)] bg-[var(--color-surface)]"
+          : "border-(--color-border) bg-(--color-surface)"
     )}>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--color-surface-hover)] transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-(--color-surface-hover) transition-colors"
       >
         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         {isExecuting ? (
@@ -48,7 +48,7 @@ export function ToolUseBlock({ name, input, result, isExecuting }: ToolUseBlockP
         ) : hasResult ? (
           <CheckCircle2 size={14} className="text-success" />
         ) : (
-          <Wrench size={14} className="text-[var(--color-text-muted)]" />
+          <Wrench size={14} className="text-(--color-text-muted)" />
         )}
         <span className="font-medium font-mono">{name}</span>
         {isExecuting && (
@@ -56,9 +56,9 @@ export function ToolUseBlock({ name, input, result, isExecuting }: ToolUseBlockP
         )}
       </button>
       {isExpanded && (
-        <div className="border-t border-[var(--color-border)]">
+        <div className="border-t border-(--color-border)">
           {/* Input section */}
-          <div className="px-3 py-2 bg-[var(--color-bg-tertiary)]">
+          <div className="px-3 py-2 bg-(--color-bg-tertiary)">
             <ToolInputDisplay name={name} input={input} />
           </div>
 

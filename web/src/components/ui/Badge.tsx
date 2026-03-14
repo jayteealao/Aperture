@@ -1,40 +1,53 @@
 import type { HTMLAttributes } from 'react'
+import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/utils/cn'
 
+const badgeVariants = cva(
+  'inline-flex items-center justify-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium whitespace-nowrap transition-colors [&_svg]:size-3.5',
+  {
+    variants: {
+      variant: {
+        default: 'border-transparent bg-primary/10 text-primary',
+        secondary: 'border-transparent bg-secondary text-secondary-foreground',
+        destructive: 'border-transparent bg-destructive/10 text-destructive',
+        outline: 'border-border bg-transparent text-muted-foreground',
+        accent: 'border-transparent bg-accent/10 text-accent',
+        success: 'border-transparent bg-success/10 text-success',
+        warning: 'border-transparent bg-warning/10 text-warning',
+        danger: 'border-transparent bg-danger/10 text-danger',
+      },
+      size: {
+        default: 'px-2.5 py-0.5 text-xs',
+        sm: 'px-2 py-0.5 text-[11px]',
+        md: 'px-2.5 py-1 text-xs',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
+  }
+)
+
+type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>['variant']>
+type BadgeSize = NonNullable<VariantProps<typeof badgeVariants>['size']>
+
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
-  variant?: 'default' | 'accent' | 'success' | 'warning' | 'danger' | 'outline'
-  size?: 'sm' | 'md'
+  variant?: BadgeVariant
+  size?: BadgeSize
 }
 
 export function Badge({
   className,
   variant = 'default',
-  size = 'md',
+  size = 'default',
   children,
   ...props
 }: BadgeProps) {
-  const variants = {
-    default: 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]',
-    accent: 'bg-accent/10 text-accent border border-accent/20',
-    success: 'bg-success/10 text-success border border-success/20',
-    warning: 'bg-warning/10 text-warning border border-warning/20',
-    danger: 'bg-danger/10 text-danger border border-danger/20',
-    outline: 'bg-transparent text-[var(--color-text-secondary)] border border-[var(--color-border-strong)]',
-  }
-
-  const sizes = {
-    sm: 'px-2 py-0.5 text-2xs',
-    md: 'px-2.5 py-1 text-xs',
-  }
-
   return (
     <span
-      className={cn(
-        'inline-flex items-center gap-1 font-medium rounded-full uppercase tracking-wide',
-        variants[variant],
-        sizes[size],
-        className
-      )}
+      data-slot="badge"
+      className={cn(badgeVariants({ variant, size }), className)}
       {...props}
     >
       {children}

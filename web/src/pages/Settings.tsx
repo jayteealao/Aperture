@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
 import { useToast } from '@/components/ui/Toast'
@@ -50,7 +50,7 @@ export default function Settings() {
   return (
     <div className="h-full overflow-y-auto p-6">
       <div className="max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-6">Settings</h2>
+        <h2 className="text-2xl font-bold text-(--color-text-primary) mb-6">Settings</h2>
 
         {/* Appearance */}
         <Card variant="glass" padding="lg" className="mb-6">
@@ -63,8 +63,8 @@ export default function Settings() {
               <div className="flex items-center gap-3">
                 {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
                 <div>
-                  <p className="font-medium text-[var(--color-text-primary)]">Theme</p>
-                  <p className="text-sm text-[var(--color-text-secondary)]">
+                  <p className="font-medium text-(--color-text-primary)">Theme</p>
+                  <p className="text-sm text-(--color-text-secondary)">
                     {theme === 'dark' ? 'Nebula Glass (Dark)' : 'Pearl Glass (Light)'}
                   </p>
                 </div>
@@ -90,7 +90,7 @@ export default function Settings() {
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-start gap-3">
-                <Server size={20} className="mt-2.5 text-[var(--color-text-muted)]" />
+                <Server size={20} className="mt-2.5 text-(--color-text-muted)" />
                 <div className="flex-1">
                   <Input
                     label="Gateway URL"
@@ -111,13 +111,13 @@ export default function Settings() {
                 </div>
               )}
 
-              <div className="pt-4 border-t border-[var(--color-border)]">
+              <div className="pt-4 border-t border-(--color-border)">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <RefreshCw size={20} className="text-[var(--color-text-muted)]" />
+                    <RefreshCw size={20} className="text-(--color-text-muted)" />
                     <div>
-                      <p className="font-medium text-[var(--color-text-primary)]">Reconnect</p>
-                      <p className="text-sm text-[var(--color-text-secondary)]">
+                      <p className="font-medium text-(--color-text-primary)">Reconnect</p>
+                      <p className="text-sm text-(--color-text-secondary)">
                         Test connection and refresh session list
                       </p>
                     </div>
@@ -161,12 +161,12 @@ export default function Settings() {
           />
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-surface)]">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-(--color-surface)">
                 <div className="flex items-center gap-3">
-                  <Database size={20} className="text-[var(--color-text-muted)]" />
+                  <Database size={20} className="text-(--color-text-muted)" />
                   <div>
-                    <p className="font-medium text-[var(--color-text-primary)]">Local Sessions</p>
-                    <p className="text-sm text-[var(--color-text-secondary)]">
+                    <p className="font-medium text-(--color-text-primary)">Local Sessions</p>
+                    <p className="text-sm text-(--color-text-secondary)">
                       {sessions.length} session{sessions.length !== 1 ? 's' : ''} stored locally
                     </p>
                   </div>
@@ -177,8 +177,8 @@ export default function Settings() {
                 <div className="flex items-center gap-3">
                   <Trash2 size={20} className="text-danger" />
                   <div>
-                    <p className="font-medium text-[var(--color-text-primary)]">Clear All Data</p>
-                    <p className="text-sm text-[var(--color-text-secondary)]">
+                    <p className="font-medium text-(--color-text-primary)">Clear All Data</p>
+                    <p className="text-sm text-(--color-text-secondary)">
                       Remove all local sessions, messages, and credentials
                     </p>
                   </div>
@@ -198,7 +198,7 @@ export default function Settings() {
             subtitle="AI Workspace for ACP Agents"
           />
           <CardContent>
-            <div className="space-y-2 text-sm text-[var(--color-text-secondary)]">
+            <div className="space-y-2 text-sm text-(--color-text-secondary)">
               <p>Version: 1.0.0</p>
               <p>
                 Aperture provides a beautiful, high-performance interface for interacting with
@@ -235,12 +235,12 @@ export default function Settings() {
 function ShortcutRow({ keys, description }: { keys: string[]; description: string }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-[var(--color-text-secondary)]">{description}</span>
+      <span className="text-sm text-(--color-text-secondary)">{description}</span>
       <div className="flex items-center gap-1">
         {keys.map((key, i) => (
           <span key={i}>
-            {i > 0 && <span className="mx-1 text-[var(--color-text-muted)]">+</span>}
-            <kbd className="px-2 py-1 text-xs font-mono bg-[var(--color-surface)] border border-[var(--color-border)] rounded">
+            {i > 0 && <span className="mx-1 text-(--color-text-muted)">+</span>}
+            <kbd className="px-2 py-1 text-xs font-mono bg-(--color-surface) border border-(--color-border) rounded-sm">
               {key}
             </kbd>
           </span>

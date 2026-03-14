@@ -1,6 +1,6 @@
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { File, Search, Globe, Terminal, Edit3 } from 'lucide-react'
+import { File, Search, Globe, Terminal, PenLine } from 'lucide-react'
 
 interface ToolCallDisplayProps {
   name?: string
@@ -34,7 +34,7 @@ function BashDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="mt-2">
       {description && (
-        <div className="flex items-center gap-2 mb-1 text-xs text-[var(--color-text-muted)]">
+        <div className="flex items-center gap-2 mb-1 text-xs text-(--color-text-muted)">
           <Terminal size={12} />
           <span>{description}</span>
         </div>
@@ -54,9 +54,9 @@ function BashDisplay({ input }: { input: Record<string, unknown> }) {
 
 function FileDisplay({ path }: { path: string }) {
   return (
-    <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-bg-tertiary)]">
-      <File size={14} className="text-[var(--color-text-muted)] shrink-0" />
-      <code className="text-xs font-mono text-[var(--color-text-secondary)] truncate">
+    <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-(--color-bg-tertiary)">
+      <File size={14} className="text-(--color-text-muted) shrink-0" />
+      <code className="text-xs font-mono text-(--color-text-secondary) truncate">
         {path}
       </code>
     </div>
@@ -70,9 +70,9 @@ function WriteDisplay({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="mt-2 space-y-2">
-      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-bg-tertiary)]">
-        <File size={14} className="text-[var(--color-text-muted)] shrink-0" />
-        <code className="text-xs font-mono text-[var(--color-text-secondary)] truncate">
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-(--color-bg-tertiary)">
+        <File size={14} className="text-(--color-text-muted) shrink-0" />
+        <code className="text-xs font-mono text-(--color-text-secondary) truncate">
           {filePath}
         </code>
       </div>
@@ -98,30 +98,30 @@ function EditDisplay({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="mt-2 space-y-2">
-      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-bg-tertiary)]">
-        <Edit3 size={14} className="text-[var(--color-text-muted)] shrink-0" />
-        <code className="text-xs font-mono text-[var(--color-text-secondary)] truncate">
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-(--color-bg-tertiary)">
+        <PenLine size={14} className="text-(--color-text-muted) shrink-0" />
+        <code className="text-xs font-mono text-(--color-text-secondary) truncate">
           {filePath}
         </code>
       </div>
       {(oldString || newString) && (
-        <div className="rounded-lg overflow-hidden border border-[var(--color-border)]">
+        <div className="rounded-lg overflow-hidden border border-(--color-border)">
           {oldString && (
-            <div className="bg-danger/10 border-b border-[var(--color-border)]">
-              <div className="px-2 py-1 text-2xs font-medium text-danger border-b border-[var(--color-border)]">
+            <div className="bg-danger/10 border-b border-(--color-border)">
+              <div className="px-2 py-1 text-2xs font-medium text-danger border-b border-(--color-border)">
                 − Remove
               </div>
-              <pre className="p-2 text-[10px] overflow-x-auto text-[var(--color-text-secondary)]">
+              <pre className="p-2 text-[10px] overflow-x-auto text-(--color-text-secondary)">
                 {truncate(oldString, 150)}
               </pre>
             </div>
           )}
           {newString && (
             <div className="bg-success/10">
-              <div className="px-2 py-1 text-2xs font-medium text-success border-b border-[var(--color-border)]">
+              <div className="px-2 py-1 text-2xs font-medium text-success border-b border-(--color-border)">
                 + Add
               </div>
-              <pre className="p-2 text-[10px] overflow-x-auto text-[var(--color-text-secondary)]">
+              <pre className="p-2 text-[10px] overflow-x-auto text-(--color-text-secondary)">
                 {truncate(newString, 150)}
               </pre>
             </div>
@@ -137,12 +137,12 @@ function SearchDisplay({ input }: { input: Record<string, unknown> }) {
   const path = input.path as string | undefined
 
   return (
-    <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-bg-tertiary)]">
-      <Search size={14} className="text-[var(--color-text-muted)] shrink-0" />
+    <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-(--color-bg-tertiary)">
+      <Search size={14} className="text-(--color-text-muted) shrink-0" />
       <div className="text-xs overflow-hidden">
         <code className="font-mono text-accent">{pattern}</code>
         {path && (
-          <span className="text-[var(--color-text-muted)]"> in {path}</span>
+          <span className="text-(--color-text-muted)"> in {path}</span>
         )}
       </div>
     </div>
@@ -153,8 +153,8 @@ function WebFetchDisplay({ input }: { input: Record<string, unknown> }) {
   const url = input.url as string
 
   return (
-    <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-bg-tertiary)]">
-      <Globe size={14} className="text-[var(--color-text-muted)] shrink-0" />
+    <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-(--color-bg-tertiary)">
+      <Globe size={14} className="text-(--color-text-muted) shrink-0" />
       <code className="text-xs font-mono text-accent truncate">
         {url}
       </code>

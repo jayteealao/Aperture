@@ -25,7 +25,7 @@ export function SdkAccountInfo({ accountInfo, loading, error }: SdkAccountInfoPr
 
   if (needsPrompt) {
     return (
-      <div className="text-xs text-[var(--color-text-muted)] text-center py-3">
+      <div className="text-xs text-(--color-text-muted) text-center py-3">
         Send a prompt to load account info
       </div>
     )
@@ -33,7 +33,7 @@ export function SdkAccountInfo({ accountInfo, loading, error }: SdkAccountInfoPr
 
   if (!accountInfo) {
     return (
-      <div className="text-xs text-[var(--color-text-muted)] text-center py-3">
+      <div className="text-xs text-(--color-text-muted) text-center py-3">
         No account info available
       </div>
     )
@@ -79,11 +79,11 @@ function InfoRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+      <div className="flex items-center gap-2 text-xs text-(--color-text-muted)">
         {icon}
         <span>{label}</span>
       </div>
-      <div className="text-xs text-[var(--color-text-primary)] truncate max-w-[140px]">
+      <div className="text-xs text-(--color-text-primary) truncate max-w-[140px]">
         {value}
       </div>
     </div>

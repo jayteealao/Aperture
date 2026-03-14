@@ -66,7 +66,7 @@ export function SdkConfigControls({
     <div className="space-y-3">
       {/* Thinking Tokens */}
       <div>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-(--color-text-secondary) mb-1.5">
           <Brain size={12} />
           Thinking Tokens
         </label>
@@ -86,7 +86,7 @@ export function SdkConfigControls({
 
       {/* Max Budget */}
       <div>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-(--color-text-secondary) mb-1.5">
           <DollarSign size={12} />
           Max Budget (USD)
         </label>
@@ -104,7 +104,7 @@ export function SdkConfigControls({
 
       {/* Max Turns */}
       <div>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-(--color-text-secondary) mb-1.5">
           <RefreshCw size={12} />
           Max Turns
         </label>

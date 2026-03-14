@@ -26,12 +26,12 @@ export function ThinkingBlock({ thinking, isStreaming }: ThinkingBlockProps) {
         {isStreaming && (
           <span className="inline-block w-2 h-2 bg-purple-400 rounded-full animate-pulse ml-1" />
         )}
-        <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">
+        <span className="text-[10px] text-(--color-text-muted) ml-auto">
           ~{estimatedTokens.toLocaleString()} tokens
         </span>
       </button>
       {isExpanded && (
-        <div className="px-3 py-2 border-t border-purple-500/20 bg-[var(--color-bg-tertiary)]">
+        <div className="px-3 py-2 border-t border-purple-500/20 bg-(--color-bg-tertiary)">
           <pre className={cn(
             "overflow-x-auto text-[10px] leading-relaxed whitespace-pre-wrap text-purple-200/80",
             isStreaming && "animate-pulse"

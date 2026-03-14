@@ -8,7 +8,7 @@ export function Skeleton({ className }: SkeletonProps) {
   return (
     <div
       className={cn(
-        'animate-pulse bg-[var(--color-surface)] rounded',
+        'animate-pulse bg-(--color-surface) rounded-sm',
         className
       )}
     />
@@ -35,7 +35,7 @@ export function SkeletonCard({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        'rounded-xl border border-[var(--color-border)] p-4',
+        'rounded-xl border border-(--color-border) p-4',
         className
       )}
     >
