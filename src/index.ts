@@ -101,8 +101,8 @@ async function main() {
     if (request.url === '/healthz' || request.url === '/readyz') {
       return;
     }
-    // Skip auth for static files (frontend)
-    if (request.url === '/' || request.url.startsWith('/assets/')) {
+    // Skip auth for static files (frontend) — all API routes live under /v1/
+    if (!request.url.startsWith('/v1/')) {
       return;
     }
 

@@ -105,7 +105,7 @@ export class SdkSession extends EventEmitter {
   private sdkConfig: SdkSessionConfig;
   private database?: ApertureDatabase;
   private resolvedApiKey?: string;
-  private worktreePath?: string;
+  private workingDir?: string;
   private abortController: AbortController | null = null;
   private currentQuery: Query | null = null;
   private pendingPermissions: Map<string, PendingPermission> = new Map();
@@ -141,16 +141,16 @@ export class SdkSession extends EventEmitter {
     this.sdkConfig = sessionConfig.sdk || {};
     this.resolvedApiKey = resolvedApiKey;
     if (cwd) {
-      this.worktreePath = cwd;
+      this.workingDir = cwd;
     }
   }
 
   /**
-   * Set the worktree path for this session
+   * Set the working directory for this session
    * Must be called before start() if needed
    */
-  setWorktreePath(path: string): void {
-    this.worktreePath = path;
+  setWorkingDirectory(path: string): void {
+    this.workingDir = path;
   }
 
   /**
@@ -217,7 +217,7 @@ export class SdkSession extends EventEmitter {
     }
 
     const options: Options = {
-      cwd: this.worktreePath || process.cwd(),
+      cwd: this.workingDir || process.cwd(),
       abortController: this.abortController!,
       canUseTool: this.createCanUseTool(),
       env,
@@ -1361,7 +1361,7 @@ export class SdkSession extends EventEmitter {
       isResumable: !this.isShuttingDown && !!this.sdkSessionId,
       config: this.sdkConfig,
       lastResult: this.lastResult,
-      workingDirectory: this.worktreePath,
+      workingDirectory: this.workingDir,
     };
   }
 
@@ -1369,6 +1369,6 @@ export class SdkSession extends EventEmitter {
    * Get the working directory for this session
    */
   getWorkingDirectory(): string | undefined {
-    return this.worktreePath;
+    return this.workingDir;
   }
 }

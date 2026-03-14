@@ -43,7 +43,7 @@ export class PiSession extends EventEmitter {
   private database?: ApertureDatabase;
   // Note: In Pi SDK 0.50.0, API keys are configured via ~/.pi/agent/auth.json
   // or environment variables in models.json headers, not via runtime override
-  private worktreePath?: string;
+  private workingDir?: string;
 
   private agentSession: AgentSession | null = null;
   private unsubscribe: (() => void) | null = null;
@@ -71,7 +71,7 @@ export class PiSession extends EventEmitter {
     this.config = config;
     this.database = database;
     this.piConfig = sessionConfig.pi || {};
-    this.worktreePath = cwd;
+    this.workingDir = cwd;
     this.currentThinkingLevel = this.piConfig.thinkingLevel || 'off';
   }
 
@@ -92,7 +92,7 @@ export class PiSession extends EventEmitter {
       readOnlyTools,
     } = await import('@mariozechner/pi-coding-agent');
 
-    const cwd = this.worktreePath || process.cwd();
+    const cwd = this.workingDir || process.cwd();
 
     // Set up auth storage (0.50.0: takes path string directly, defaults to ~/.pi/agent)
     const authStoragePath = this.piConfig.agentDir
@@ -582,7 +582,7 @@ export class PiSession extends EventEmitter {
       idleMs: Date.now() - this.lastActivityTime,
       piSessionPath: this.piSessionPath,
       isResumable: !this.isShuttingDown && !!this.piSessionPath,
-      workingDirectory: this.worktreePath,
+      workingDirectory: this.workingDir,
       thinkingLevel: this.currentThinkingLevel,
       currentModel: this.currentModel || undefined,
       isStreaming: this.agentSession?.isStreaming || false,
@@ -665,9 +665,9 @@ export class PiSession extends EventEmitter {
   }
 
   /**
-   * Set working directory path (for worktree support)
+   * Set working directory path
    */
-  setWorktreePath(path: string): void {
-    this.worktreePath = path;
+  setWorkingDirectory(path: string): void {
+    this.workingDir = path;
   }
 }
