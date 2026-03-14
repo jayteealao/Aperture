@@ -2,6 +2,11 @@
 
 import { Button } from "@/components/ui/Button";
 import {
+  createHighlighter,
+  type BundledLanguage,
+  type Highlighter,
+} from "@/lib/shiki.bundle";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -10,6 +15,7 @@ import {
 } from "@/components/ui/Select";
 import { cn } from "@/utils/cn";
 import { CheckIcon, CopyIcon } from "lucide-react";
+import type { ThemedToken } from "@shikijs/types";
 import type { ComponentProps, CSSProperties, HTMLAttributes } from "react";
 import {
   createContext,
@@ -21,13 +27,6 @@ import {
   useRef,
   useState,
 } from "react";
-import type {
-  BundledLanguage,
-  BundledTheme,
-  HighlighterGeneric,
-  ThemedToken,
-} from "shiki";
-import { createHighlighter } from "shiki";
 
 // Shiki uses bitflags for font styles: 1=italic, 2=bold, 4=underline
 // oxlint-disable-next-line eslint(no-bitwise)
@@ -130,10 +129,7 @@ const CodeBlockContext = createContext<CodeBlockContextType>({
 });
 
 // Highlighter cache (singleton per language)
-const highlighterCache = new Map<
-  string,
-  Promise<HighlighterGeneric<BundledLanguage, BundledTheme>>
->();
+const highlighterCache = new Map<string, Promise<Highlighter>>();
 
 // Token cache
 const tokensCache = new Map<string, TokenizedCode>();
@@ -149,7 +145,7 @@ const getTokensCacheKey = (code: string, language: BundledLanguage) => {
 
 const getHighlighter = (
   language: BundledLanguage
-): Promise<HighlighterGeneric<BundledLanguage, BundledTheme>> => {
+): Promise<Highlighter> => {
   const cached = highlighterCache.get(language);
   if (cached) {
     return cached;

@@ -2,8 +2,6 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { cn } from '@/utils/cn'
 import { useSessionsStore } from '@/stores/sessions'
 import { useAppStore } from '@/stores/app'
@@ -17,8 +15,10 @@ import { ToolCallDisplay } from '@/components/session/ToolCallDisplay'
 import { AskUserQuestionDisplay, isAskUserQuestionInput } from '@/components/session/AskUserQuestionDisplay'
 import { SdkControlPanel, ThinkingBlock, ToolUseBlock, ToolCallGroup, LoadingIndicator } from '@/components/sdk'
 import { PiControlPanel } from '@/components/pi/PiControlPanel'
+import { CodeHighlight } from '@/components/ui/CodeHighlight'
 import type { Message, ContentBlock, PermissionOption, ImageAttachment } from '@/api/types'
 import { IMAGE_LIMITS } from '@/api/types'
+import { normalizeLanguage } from '@/utils/language'
 import {
   Send,
   StopCircle,
@@ -653,6 +653,7 @@ function MarkdownContent({ content }: { content: string }) {
         code({ className, children, ...props }) {
           const match = /language-(\w+)/.exec(className || '')
           const isInline = !match && !className
+          const language = normalizeLanguage(match?.[1])
 
           if (isInline) {
             return (
@@ -663,18 +664,11 @@ function MarkdownContent({ content }: { content: string }) {
           }
 
           return (
-            <SyntaxHighlighter
-              style={oneDark}
-              language={match?.[1] || 'text'}
-              PreTag="div"
-              className="my-2! rounded-lg! text-xs!"
-              customStyle={{
-                margin: 0,
-                borderRadius: '0.5rem',
-              }}
-            >
-              {String(children).replace(/\n$/, '')}
-            </SyntaxHighlighter>
+            <CodeHighlight
+              className="my-2"
+              code={String(children).replace(/\n$/, '')}
+              language={language}
+            />
           )
         },
         pre({ children }) {

@@ -1,5 +1,5 @@
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { CodeHighlight } from '@/components/ui/CodeHighlight'
+import { getLanguageFromPath } from '@/utils/language'
 import { File, Search, Globe, Terminal, PenLine, Bot } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 
@@ -47,13 +47,11 @@ function BashDisplay({ input }: { input: Record<string, unknown> }) {
         </div>
       )}
       <div className="rounded-lg overflow-hidden">
-        <SyntaxHighlighter
-          style={oneDark}
+        <CodeHighlight
+          className="rounded-lg"
           language="bash"
-          customStyle={{ margin: 0, padding: '0.75rem', fontSize: '0.7rem' }}
-        >
-          {command || ''}
-        </SyntaxHighlighter>
+          code={command || ''}
+        />
       </div>
     </div>
   )
@@ -85,13 +83,12 @@ function WriteDisplay({ input }: { input: Record<string, unknown> }) {
       </div>
       {preview && (
         <div className="rounded-lg overflow-hidden">
-          <SyntaxHighlighter
-            style={oneDark}
+          <CodeHighlight
+            className="rounded-lg max-h-[120px]"
+            code={preview}
             language={getLanguageFromPath(filePath)}
-            customStyle={{ margin: 0, padding: '0.75rem', fontSize: '0.65rem', maxHeight: '120px' }}
-          >
-            {preview}
-          </SyntaxHighlighter>
+            style={{ maxHeight: '120px' }}
+          />
         </div>
       )}
     </div>
@@ -204,38 +201,14 @@ function TaskDisplay({ input }: { input: Record<string, unknown> }) {
 function DefaultDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="rounded-lg overflow-hidden">
-      <SyntaxHighlighter
-        style={oneDark}
+      <CodeHighlight
+        className="rounded-lg max-h-[150px]"
+        code={JSON.stringify(input, null, 2)}
         language="json"
-        customStyle={{ margin: 0, padding: '0.75rem', fontSize: '0.65rem', maxHeight: '150px' }}
-      >
-        {JSON.stringify(input, null, 2)}
-      </SyntaxHighlighter>
+        style={{ maxHeight: '150px' }}
+      />
     </div>
   )
-}
-
-function getLanguageFromPath(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase()
-  const langMap: Record<string, string> = {
-    ts: 'typescript',
-    tsx: 'tsx',
-    js: 'javascript',
-    jsx: 'jsx',
-    json: 'json',
-    py: 'python',
-    rs: 'rust',
-    go: 'go',
-    md: 'markdown',
-    css: 'css',
-    scss: 'scss',
-    html: 'html',
-    yml: 'yaml',
-    yaml: 'yaml',
-    sh: 'bash',
-    bash: 'bash',
-  }
-  return langMap[ext || ''] || 'text'
 }
 
 function truncate(str: string, maxLen: number): string {

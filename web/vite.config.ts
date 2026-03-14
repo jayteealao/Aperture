@@ -40,9 +40,10 @@ export default defineConfig({
             { name: 'state', test: /\/node_modules\/zustand/, priority: 7 },
             {
               name: 'markdown',
-              test: /\/node_modules\/(react-markdown|remark-gfm|react-syntax-highlighter)\//,
+              test: /\/node_modules\/(react-markdown|remark-gfm)\//,
               priority: 6,
             },
+            { name: 'shiki', test: /\/src\/lib\/shiki\.bundle\.ts$/, priority: 5 },
           ],
         },
       },
