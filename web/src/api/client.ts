@@ -17,8 +17,7 @@ import type {
   CreateWorkspaceRequest,
   WorkspaceRecord,
   ListWorkspacesResponse,
-  ListWorkspaceAgentsResponse,
-  ListWorktreesResponse,
+  ListWorkspaceCheckoutsResponse,
   DiscoveryResult,
   CloneWorkspaceRequest,
   CloneWorkspaceResponse,
@@ -60,7 +59,7 @@ class ApertureClient {
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
+      ...(options.body && { 'Content-Type': 'application/json' }),
       ...(this.token && { Authorization: `Bearer ${this.token}` }),
       ...(options.headers || {}),
     }
@@ -197,18 +196,14 @@ class ApertureClient {
     })
   }
 
-  async listWorkspaceAgents(workspaceId: string): Promise<ListWorkspaceAgentsResponse> {
-    return this.request<ListWorkspaceAgentsResponse>(`/v1/workspaces/${workspaceId}/agents`)
+  async listWorkspaceCheckouts(workspaceId: string): Promise<ListWorkspaceCheckoutsResponse> {
+    return this.request<ListWorkspaceCheckoutsResponse>(`/v1/workspaces/${workspaceId}/checkouts`)
   }
 
-  async deleteWorkspaceAgent(workspaceId: string, agentId: string): Promise<void> {
-    return this.request<void>(`/v1/workspaces/${workspaceId}/agents/${agentId}`, {
+  async deleteWorkspaceCheckout(workspaceId: string, repoId: string): Promise<void> {
+    return this.request<void>(`/v1/workspaces/${workspaceId}/checkouts/${repoId}`, {
       method: 'DELETE',
     })
-  }
-
-  async listWorkspaceWorktrees(workspaceId: string): Promise<ListWorktreesResponse> {
-    return this.request<ListWorktreesResponse>(`/v1/workspaces/${workspaceId}/worktrees`)
   }
 
   // Discovery

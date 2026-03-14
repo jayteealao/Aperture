@@ -7,9 +7,8 @@ import uk.adedamola.aperture.domain.model.ManagedRepo
 import uk.adedamola.aperture.domain.model.Message
 import uk.adedamola.aperture.domain.model.ResumableSession
 import uk.adedamola.aperture.domain.model.SessionStatus
-import uk.adedamola.aperture.domain.model.WorkspaceAgentRecord
+import uk.adedamola.aperture.domain.model.CheckoutRecord
 import uk.adedamola.aperture.domain.model.WorkspaceRecord
-import uk.adedamola.aperture.domain.model.WorktreeInfo
 
 @Serializable
 data class HealthResponse(
@@ -64,15 +63,8 @@ data class ListWorkspacesResponse(
 )
 
 @Serializable
-data class ListWorkspaceAgentsResponse(
-    val agents: List<WorkspaceAgentRecord>,
-    val total: Int
-)
-
-@Serializable
-data class ListWorktreesResponse(
-    val worktrees: List<WorktreeInfo>,
-    val total: Int
+data class ListWorkspaceCheckoutsResponse(
+    val checkouts: List<CheckoutRecord>
 )
 
 @Serializable

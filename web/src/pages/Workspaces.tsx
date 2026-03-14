@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Dialog } from '@/components/ui/Dialog'
 import { Badge } from '@/components/ui/Badge'
 import { Spinner } from '@/components/ui/Spinner'
-import type { WorkspaceRecord, WorkspaceAgentRecord, WorktreeInfo, DiscoveredRepo } from '@/api/types'
+import type { WorkspaceRecord, CheckoutRecord, DiscoveredRepo } from '@/api/types'
 import {
   GitBranch,
   Plus,
@@ -17,8 +17,6 @@ import {
   Folder,
   RefreshCw,
   AlertCircle,
-  Lock,
-  Activity,
   FolderSearch,
   Download,
   ExternalLink,
@@ -27,8 +25,7 @@ import {
 import { cn } from '@/utils/cn'
 
 interface WorkspaceWithData extends WorkspaceRecord {
-  agents: WorkspaceAgentRecord[]
-  worktrees: WorktreeInfo[]
+  checkouts: CheckoutRecord[]
 }
 
 export default function Workspaces() {
@@ -51,22 +48,17 @@ export default function Workspaces() {
       const workspacesWithData = await Promise.all(
         workspaceList.map(async (workspace) => {
           try {
-            const [agentsData, worktreesData] = await Promise.all([
-              api.listWorkspaceAgents(workspace.id),
-              api.listWorkspaceWorktrees(workspace.id),
-            ])
+            const checkoutsData = await api.listWorkspaceCheckouts(workspace.id)
 
             return {
               ...workspace,
-              agents: agentsData.agents || [],
-              worktrees: worktreesData.worktrees || [],
+              checkouts: checkoutsData.checkouts || [],
             }
           } catch (err) {
             console.error(`Failed to load data for workspace ${workspace.id}:`, err)
             return {
               ...workspace,
-              agents: [],
-              worktrees: [],
+              checkouts: [],
             }
           }
         })
@@ -98,7 +90,7 @@ export default function Workspaces() {
   const handleDeleteWorkspace = async (workspace: WorkspaceWithData) => {
     if (
       !confirm(
-        `Are you sure you want to delete workspace "${workspace.name}"?\n\nThis will remove all agents and their worktrees.`
+        `Are you sure you want to delete workspace "${workspace.name}"?\n\nThis will remove all checkouts and their clone directories.`
       )
     ) {
       return
@@ -116,22 +108,22 @@ export default function Workspaces() {
     }
   }
 
-  const handleDeleteAgent = async (workspace: WorkspaceWithData, agent: WorkspaceAgentRecord) => {
+  const handleDeleteCheckout = async (workspace: WorkspaceWithData, checkout: CheckoutRecord) => {
     if (
       !confirm(
-        `Are you sure you want to remove agent on branch "${agent.branch}"?\n\nThis will remove the worktree.`
+        `Are you sure you want to remove checkout "${checkout.name}"?\n\nThis will delete the clone directory.`
       )
     ) {
       return
     }
 
     try {
-      await api.deleteWorkspaceAgent(workspace.id, agent.id)
-      toast.success('Agent removed')
+      await api.deleteWorkspaceCheckout(workspace.id, checkout.id)
+      toast.success('Checkout removed')
       loadWorkspaces(true)
     } catch (error) {
       toast.error(
-        'Failed to remove agent',
+        'Failed to remove checkout',
         error instanceof Error ? error.message : 'Unknown error'
       )
     }
@@ -161,7 +153,7 @@ export default function Workspaces() {
               Workspaces
             </h1>
             <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-              Manage git worktrees and isolated agent environments
+              Manage repositories and isolated agent environments
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -195,7 +187,7 @@ export default function Workspaces() {
                 No workspaces yet
               </h3>
               <p className="text-[var(--color-text-secondary)] mb-4">
-                Create a workspace to enable multi-agent git worktree isolation
+                Create a workspace to enable multi-agent isolated environments
               </p>
               <Button
                 variant="primary"
@@ -213,7 +205,7 @@ export default function Workspaces() {
                 key={workspace.id}
                 workspace={workspace}
                 onDelete={() => handleDeleteWorkspace(workspace)}
-                onDeleteAgent={(agent) => handleDeleteAgent(workspace, agent)}
+                onDeleteCheckout={(checkout) => handleDeleteCheckout(workspace, checkout)}
                 onRefresh={() => loadWorkspaces(true)}
                 onNewSession={() => navigate(`/sessions/new?workspaceId=${workspace.id}`)}
               />
@@ -240,18 +232,17 @@ export default function Workspaces() {
 function WorkspaceCard({
   workspace,
   onDelete,
-  onDeleteAgent,
+  onDeleteCheckout,
   onRefresh,
   onNewSession,
 }: {
   workspace: WorkspaceWithData
   onDelete: () => void
-  onDeleteAgent: (agent: WorkspaceAgentRecord) => void
+  onDeleteCheckout: (checkout: CheckoutRecord) => void
   onRefresh: () => void
   onNewSession: () => void
 }) {
-  const [showAgents, setShowAgents] = useState(true)
-  const [showWorktrees, setShowWorktrees] = useState(true)
+  const [showCheckouts, setShowCheckouts] = useState(true)
 
   return (
     <Card variant="glass" padding="none" className="overflow-hidden hover:shadow-lg transition-shadow">
@@ -322,51 +313,54 @@ function WorkspaceCard({
         </div>
       </div>
 
-      {/* Agents Section */}
+      {/* Checkouts Section */}
       <div className="border-t border-[var(--color-border)]">
         <button
-          onClick={() => setShowAgents(!showAgents)}
+          onClick={() => setShowCheckouts(!showCheckouts)}
           className="w-full px-4 py-3 flex items-center justify-between hover:bg-[var(--color-surface)] transition-colors"
         >
           <div className="flex items-center gap-2">
-            <Activity size={16} className="text-[var(--color-text-muted)]" />
+            <GitBranch size={16} className="text-[var(--color-text-muted)]" />
             <span className="text-sm font-medium text-[var(--color-text-primary)]">
-              Active Agents
+              Checkouts
             </span>
           </div>
-          <Badge variant={workspace.agents.length > 0 ? 'success' : 'default'} size="sm">
-            {workspace.agents.length}
+          <Badge variant={workspace.checkouts.length > 0 ? 'success' : 'default'} size="sm">
+            {workspace.checkouts.length}
           </Badge>
         </button>
-        {showAgents && (
+        {showCheckouts && (
           <div className="px-4 pb-3">
-            {workspace.agents.length > 0 ? (
+            {workspace.checkouts.length > 0 ? (
               <div className="space-y-2">
-                {workspace.agents.map((agent) => (
+                {workspace.checkouts.map((checkout) => (
                   <div
-                    key={agent.id}
+                    key={checkout.id}
                     className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-bg-tertiary)]"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-success shrink-0" />
                         <span className="text-sm font-medium text-[var(--color-text-primary)] font-mono truncate">
-                          {agent.branch}
+                          {checkout.name}
                         </span>
+                        <Badge variant="default" size="sm">
+                          {checkout.cloneSource}
+                        </Badge>
                       </div>
                       <p className="text-xs text-[var(--color-text-muted)] font-mono mt-1 truncate">
-                        {agent.worktreePath}
+                        {checkout.path}
                       </p>
-                      {agent.sessionId && (
+                      {checkout.sessionId && (
                         <p className="text-2xs text-[var(--color-text-muted)] mt-1">
-                          Session: {agent.sessionId.slice(0, 12)}...
+                          Session: {checkout.sessionId.slice(0, 12)}...
                         </p>
                       )}
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onDeleteAgent(agent)}
+                      onClick={() => onDeleteCheckout(checkout)}
                       className="ml-2 p-1.5 text-danger hover:text-danger shrink-0"
                     >
                       <Trash2 size={12} />
@@ -376,75 +370,7 @@ function WorkspaceCard({
               </div>
             ) : (
               <p className="text-xs text-[var(--color-text-muted)] text-center py-3">
-                No active agents
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Worktrees Section */}
-      <div className="border-t border-[var(--color-border)]">
-        <button
-          onClick={() => setShowWorktrees(!showWorktrees)}
-          className="w-full px-4 py-3 flex items-center justify-between hover:bg-[var(--color-surface)] transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <GitBranch size={16} className="text-[var(--color-text-muted)]" />
-            <span className="text-sm font-medium text-[var(--color-text-primary)]">
-              Git Worktrees
-            </span>
-          </div>
-          <Badge variant="default" size="sm">
-            {workspace.worktrees.length}
-          </Badge>
-        </button>
-        {showWorktrees && (
-          <div className="px-4 pb-3">
-            {workspace.worktrees.length > 0 ? (
-              <div className="space-y-2">
-                {workspace.worktrees.map((worktree, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-2 p-2 rounded-lg bg-[var(--color-bg-tertiary)]"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={cn(
-                            'w-2 h-2 rounded-full shrink-0',
-                            worktree.isMain
-                              ? 'bg-accent'
-                              : worktree.isLocked
-                                ? 'bg-warning'
-                                : 'bg-success'
-                          )}
-                        />
-                        <span className="text-sm font-medium text-[var(--color-text-primary)] font-mono truncate">
-                          {worktree.branch}
-                        </span>
-                        {worktree.isMain && (
-                          <Badge variant="accent" size="sm">
-                            MAIN
-                          </Badge>
-                        )}
-                        {worktree.isLocked && (
-                          <Badge variant="warning" size="sm" className="flex items-center gap-1">
-                            <Lock size={10} />
-                            LOCKED
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-[var(--color-text-muted)] font-mono mt-1 truncate">
-                        {worktree.path}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-[var(--color-text-muted)] text-center py-3">
-                No worktrees
+                No checkouts
               </p>
             )}
           </div>
@@ -789,9 +715,9 @@ function CreateWorkspaceDialog({
             <div className="text-xs text-[var(--color-text-secondary)]">
               <p className="font-medium mb-1">About Workspaces</p>
               <p>
-                Workspaces enable parallel agent sessions using git worktrees. Each session gets
-                an isolated working directory, allowing multiple agents to work on different
-                branches simultaneously.
+                Workspaces enable parallel agent sessions using local clones. Each session gets
+                an isolated copy of the repository, allowing multiple agents to work independently
+                and simultaneously.
               </p>
             </div>
           </div>

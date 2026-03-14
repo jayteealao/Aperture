@@ -12,9 +12,8 @@ import uk.adedamola.aperture.domain.model.Message
 import uk.adedamola.aperture.domain.model.ResumableSession
 import uk.adedamola.aperture.domain.model.Session
 import uk.adedamola.aperture.domain.model.SessionStatus
-import uk.adedamola.aperture.domain.model.WorkspaceAgentRecord
+import uk.adedamola.aperture.domain.model.CheckoutRecord
 import uk.adedamola.aperture.domain.model.WorkspaceRecord
-import uk.adedamola.aperture.domain.model.WorktreeInfo
 import uk.adedamola.aperture.domain.model.websocket.OutboundMessage
 
 interface SessionRepository {
@@ -59,8 +58,7 @@ interface WorkspaceRepository {
     suspend fun deleteWorkspace(id: String): NetworkResult<Unit>
     suspend fun getWorkspace(id: String): NetworkResult<WorkspaceRecord?>
 
-    suspend fun getWorkspaceAgents(workspaceId: String): NetworkResult<List<WorkspaceAgentRecord>>
-    suspend fun getWorktrees(workspaceId: String): NetworkResult<List<WorktreeInfo>>
+    suspend fun getWorkspaceCheckouts(workspaceId: String): NetworkResult<List<CheckoutRecord>>
 
     suspend fun scanForRepos(startPath: String, maxDepth: Int = 3): NetworkResult<List<uk.adedamola.aperture.domain.model.DiscoveredRepo>>
     suspend fun cloneRepo(remoteUrl: String, targetDir: String, name: String?): NetworkResult<WorkspaceRecord>

@@ -161,7 +161,7 @@ describe('Workspace API Integration', () => {
     });
   });
 
-  describe('Workspace Agent Management', () => {
+  describe('Managed Repo / Checkout Management', () => {
     let workspaceId: string;
 
     beforeEach(async () => {
@@ -170,7 +170,7 @@ describe('Workspace API Integration', () => {
       workspaceId = randomUUID();
       db.saveWorkspace({
         id: workspaceId,
-        name: 'agent-test-workspace',
+        name: 'checkout-test-workspace',
         repo_root: testRepoPath,
         description: null,
         created_at: Date.now(),
@@ -181,91 +181,93 @@ describe('Workspace API Integration', () => {
       db.close();
     });
 
-    it('should create and retrieve workspace agent', async () => {
+    it('should create and retrieve checkout via managed_repos', async () => {
       const db = await createTestDb();
 
-      const agentId = randomUUID();
-      const sessionId = randomUUID();
-      const agent = {
-        id: agentId,
+      const repoId = randomUUID();
+      db.saveManagedRepo({
+        id: repoId,
         workspace_id: workspaceId,
-        session_id: sessionId,
-        branch: 'feature/test-branch',
-        worktree_path: join(testRepoPath, '.worktrees', 'feature-test-branch'),
+        path: join(testRepoPath, 'session-abc12345'),
+        name: 'session-abc12345',
+        origin_url: null,
         created_at: Date.now(),
         updated_at: Date.now(),
-      };
+        session_id: null,
+        clone_source: 'workspace',
+      });
 
-      db.saveWorkspaceAgent(agent);
-
-      const retrieved = db.getWorkspaceAgentBySession(sessionId);
+      const retrieved = db.getManagedRepo(repoId);
       expect(retrieved).toBeDefined();
-      expect(retrieved?.branch).toBe('feature/test-branch');
+      expect(retrieved?.name).toBe('session-abc12345');
       expect(retrieved?.workspace_id).toBe(workspaceId);
+      expect(retrieved?.clone_source).toBe('workspace');
 
       db.close();
     });
 
-    it('should list agents for workspace', async () => {
+    it('should list checkouts for workspace', async () => {
       const db = await createTestDb();
 
-      const agent1 = {
+      db.saveManagedRepo({
         id: randomUUID(),
         workspace_id: workspaceId,
-        session_id: randomUUID(),
-        branch: 'feature/branch-1',
-        worktree_path: join(testRepoPath, '.worktrees', 'feature-branch-1'),
+        path: join(testRepoPath, 'checkout-1'),
+        name: 'checkout-1',
+        origin_url: null,
         created_at: Date.now(),
         updated_at: Date.now(),
-      };
+        session_id: null,
+        clone_source: 'workspace',
+      });
 
-      const agent2 = {
+      db.saveManagedRepo({
         id: randomUUID(),
         workspace_id: workspaceId,
-        session_id: randomUUID(),
-        branch: 'feature/branch-2',
-        worktree_path: join(testRepoPath, '.worktrees', 'feature-branch-2'),
+        path: join(testRepoPath, 'checkout-2'),
+        name: 'checkout-2',
+        origin_url: null,
         created_at: Date.now(),
         updated_at: Date.now(),
-      };
+        session_id: null,
+        clone_source: 'init',
+      });
 
-      db.saveWorkspaceAgent(agent1);
-      db.saveWorkspaceAgent(agent2);
+      const repos = db.getManagedRepos(workspaceId);
+      expect(repos.length).toBeGreaterThanOrEqual(2);
 
-      const agents = db.getWorkspaceAgents(workspaceId);
-      expect(agents.length).toBeGreaterThanOrEqual(2);
-
-      const branches = agents.map(a => a.branch);
-      expect(branches).toContain('feature/branch-1');
-      expect(branches).toContain('feature/branch-2');
+      const names = repos.map(r => r.name);
+      expect(names).toContain('checkout-1');
+      expect(names).toContain('checkout-2');
 
       db.close();
     });
 
-    it('should delete workspace agent', async () => {
+    it('should delete checkout', async () => {
       const db = await createTestDb();
 
-      const agentId = randomUUID();
-      const sessionId = randomUUID();
-      db.saveWorkspaceAgent({
-        id: agentId,
+      const repoId = randomUUID();
+      db.saveManagedRepo({
+        id: repoId,
         workspace_id: workspaceId,
-        session_id: sessionId,
-        branch: 'feature/to-delete',
-        worktree_path: join(testRepoPath, '.worktrees', 'feature-to-delete'),
+        path: join(testRepoPath, 'to-delete'),
+        name: 'to-delete',
+        origin_url: null,
         created_at: Date.now(),
         updated_at: Date.now(),
+        session_id: null,
+        clone_source: 'workspace',
       });
 
       // Verify it exists
-      let retrieved = db.getWorkspaceAgentBySession(sessionId);
+      let retrieved = db.getManagedRepo(repoId);
       expect(retrieved).toBeDefined();
 
       // Delete it
-      db.deleteWorkspaceAgent(agentId);
+      db.deleteManagedRepo(repoId);
 
       // Verify it's gone
-      retrieved = db.getWorkspaceAgentBySession(sessionId);
+      retrieved = db.getManagedRepo(repoId);
       expect(retrieved).toBeNull();
 
       db.close();
@@ -284,13 +286,13 @@ describe('Workspace API Integration', () => {
       db.close();
     });
 
-    it('should return null for non-existent agent session', async () => {
+    it('should return null for non-existent managed repo', async () => {
       const db = await createTestDb();
 
-      const nonExistentSessionId = randomUUID();
-      const agent = db.getWorkspaceAgentBySession(nonExistentSessionId);
+      const nonExistentId = randomUUID();
+      const repo = db.getManagedRepo(nonExistentId);
 
-      expect(agent).toBeNull();
+      expect(repo).toBeNull();
 
       db.close();
     });

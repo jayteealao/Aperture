@@ -14,22 +14,15 @@ data class WorkspaceRecord(
 )
 
 @Serializable
-data class WorkspaceAgentRecord(
+data class CheckoutRecord(
     val id: String,
     val workspaceId: String,
     val sessionId: String? = null,
-    val branch: String,
-    val worktreePath: String,
-    val createdAt: String,
-    val updatedAt: String
-)
-
-@Serializable
-data class WorktreeInfo(
-    val branch: String,
     val path: String,
-    val isMain: Boolean,
-    val isLocked: Boolean
+    val name: String,
+    val cloneSource: String,
+    val createdAt: String,
+    val updatedAt: String? = null
 )
 
 @Serializable

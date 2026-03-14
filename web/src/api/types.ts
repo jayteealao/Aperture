@@ -350,21 +350,15 @@ export interface WorkspaceRecord {
   metadata: string | null
 }
 
-export interface WorkspaceAgentRecord {
+export interface CheckoutRecord {
   id: string
   workspaceId: string
   sessionId: string | null
-  branch: string
-  worktreePath: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface WorktreeInfo {
-  branch: string
   path: string
-  isMain: boolean
-  isLocked: boolean
+  name: string
+  cloneSource: 'workspace' | 'remote' | 'init' | 'external'
+  createdAt: string
+  updatedAt: string | null
 }
 
 export interface CreateWorkspaceRequest {
@@ -378,14 +372,8 @@ export interface ListWorkspacesResponse {
   total: number
 }
 
-export interface ListWorkspaceAgentsResponse {
-  agents: WorkspaceAgentRecord[]
-  total: number
-}
-
-export interface ListWorktreesResponse {
-  worktrees: WorktreeInfo[]
-  total: number
+export interface ListWorkspaceCheckoutsResponse {
+  checkouts: CheckoutRecord[]
 }
 
 // Discovery types

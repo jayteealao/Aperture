@@ -192,26 +192,12 @@ describe('Workspace API Error Scenarios', () => {
       expect(body.message).toContain('Workspace not found');
     });
 
-    it('should return 404 when listing agents for non-existent workspace', async () => {
+    it('should return 404 when listing checkouts for non-existent workspace', async () => {
       const nonExistentId = randomUUID();
 
       const response = await fastify.inject({
         method: 'GET',
-        url: `/v1/workspaces/${nonExistentId}/agents`,
-      });
-
-      expect(response.statusCode).toBe(404);
-      const body = JSON.parse(response.body);
-      expect(body.error).toBe('Not Found');
-      expect(body.message).toContain('Workspace not found');
-    });
-
-    it('should return 404 when listing worktrees for non-existent workspace', async () => {
-      const nonExistentId = randomUUID();
-
-      const response = await fastify.inject({
-        method: 'GET',
-        url: `/v1/workspaces/${nonExistentId}/worktrees`,
+        url: `/v1/workspaces/${nonExistentId}/checkouts`,
       });
 
       expect(response.statusCode).toBe(404);
@@ -234,36 +220,31 @@ describe('Workspace API Error Scenarios', () => {
       expect(body.message).toContain('Workspace not found');
     });
 
-    it('should return 404 when deleting non-existent agent', async () => {
+    it('should return 404 when deleting non-existent checkout', async () => {
       // First create a workspace
       const createResponse = await fastify.inject({
         method: 'POST',
         url: '/v1/workspaces',
         payload: {
-          name: 'test-workspace-for-agent-delete',
+          name: 'test-workspace-for-checkout-delete',
           repoRoot: testRepoPath,
         },
       });
 
-      if (createResponse.statusCode !== 201) {
-        // Skip this test if workspace creation fails (e.g., native addon not available)
-        console.warn('Skipping test: workspace creation failed');
-        return;
-      }
-
+      expect(createResponse.statusCode).toBe(201);
       const { workspace } = JSON.parse(createResponse.body);
 
-      // Try to delete non-existent agent
-      const nonExistentAgentId = randomUUID();
+      // Try to delete non-existent checkout
+      const nonExistentRepoId = randomUUID();
       const deleteResponse = await fastify.inject({
         method: 'DELETE',
-        url: `/v1/workspaces/${workspace.id}/agents/${nonExistentAgentId}`,
+        url: `/v1/workspaces/${workspace.id}/checkouts/${nonExistentRepoId}`,
       });
 
       expect(deleteResponse.statusCode).toBe(404);
       const body = JSON.parse(deleteResponse.body);
       expect(body.error).toBe('Not Found');
-      expect(body.message).toContain('Agent not found');
+      expect(body.message).toContain('Checkout not found');
 
       // Clean up workspace
       await fastify.inject({
@@ -360,35 +341,30 @@ describe('Workspace API Error Scenarios', () => {
       expect(response.statusCode).toBeLessThan(600);
     });
 
-    it('should return empty array for workspace with no agents', async () => {
+    it('should return empty array for workspace with no checkouts', async () => {
       // Create workspace
       const createResponse = await fastify.inject({
         method: 'POST',
         url: '/v1/workspaces',
         payload: {
-          name: 'workspace-no-agents',
+          name: 'workspace-no-checkouts',
           repoRoot: testRepoPath,
         },
       });
 
-      if (createResponse.statusCode !== 201) {
-        // Skip this test if workspace creation fails (e.g., native addon not available)
-        console.warn('Skipping test: workspace creation failed');
-        return;
-      }
-
+      expect(createResponse.statusCode).toBe(201);
       const { workspace } = JSON.parse(createResponse.body);
 
-      // List agents (should be empty)
+      // List checkouts (should be empty)
       const listResponse = await fastify.inject({
         method: 'GET',
-        url: `/v1/workspaces/${workspace.id}/agents`,
+        url: `/v1/workspaces/${workspace.id}/checkouts`,
       });
 
       expect(listResponse.statusCode).toBe(200);
-      const { agents } = JSON.parse(listResponse.body);
-      expect(Array.isArray(agents)).toBe(true);
-      expect(agents.length).toBe(0);
+      const { checkouts } = JSON.parse(listResponse.body);
+      expect(Array.isArray(checkouts)).toBe(true);
+      expect(checkouts.length).toBe(0);
 
       // Clean up
       await fastify.inject({

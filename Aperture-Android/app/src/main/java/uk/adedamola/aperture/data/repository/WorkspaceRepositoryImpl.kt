@@ -9,9 +9,8 @@ import uk.adedamola.aperture.data.remote.api.ApertureApi
 import uk.adedamola.aperture.domain.model.CloneWorkspaceRequest
 import uk.adedamola.aperture.domain.model.CreateWorkspaceRequest
 import uk.adedamola.aperture.domain.model.DiscoveredRepo
-import uk.adedamola.aperture.domain.model.WorkspaceAgentRecord
+import uk.adedamola.aperture.domain.model.CheckoutRecord
 import uk.adedamola.aperture.domain.model.WorkspaceRecord
-import uk.adedamola.aperture.domain.model.WorktreeInfo
 import uk.adedamola.aperture.domain.repository.WorkspaceRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -62,16 +61,9 @@ class WorkspaceRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getWorkspaceAgents(workspaceId: String): NetworkResult<List<WorkspaceAgentRecord>> {
-        return when (val result = api.getWorkspaceAgents(workspaceId)) {
-            is Result.Success -> Result.Success(result.value.agents)
-            is Result.Failure -> result
-        }
-    }
-
-    override suspend fun getWorktrees(workspaceId: String): NetworkResult<List<WorktreeInfo>> {
-        return when (val result = api.getWorktrees(workspaceId)) {
-            is Result.Success -> Result.Success(result.value.worktrees)
+    override suspend fun getWorkspaceCheckouts(workspaceId: String): NetworkResult<List<CheckoutRecord>> {
+        return when (val result = api.getWorkspaceCheckouts(workspaceId)) {
+            is Result.Success -> Result.Success(result.value.checkouts)
             is Result.Failure -> result
         }
     }

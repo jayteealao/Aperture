@@ -25,7 +25,9 @@ describe('ApertureDatabase - Managed Repos', () => {
       name: `test-repo-${randomUUID().substring(0, 8)}`,
       origin_url: null,
       created_at: Date.now(),
+      updated_at: Date.now(),
       session_id: null,
+      clone_source: 'external',
       ...overrides,
     };
   }
@@ -40,6 +42,22 @@ describe('ApertureDatabase - Managed Repos', () => {
       expect(result!.id).toBe(repo.id);
       expect(result!.name).toBe(repo.name);
       expect(result!.path).toBe(repo.path);
+      expect(result!.clone_source).toBe('external');
+      expect(result!.updated_at).toBe(repo.updated_at);
+    });
+
+    it('saves with different clone_source values', () => {
+      const workspaceRepo = createRepo({ clone_source: 'workspace' });
+      const remoteRepo = createRepo({ clone_source: 'remote' });
+      const initRepo = createRepo({ clone_source: 'init' });
+
+      db.saveManagedRepo(workspaceRepo);
+      db.saveManagedRepo(remoteRepo);
+      db.saveManagedRepo(initRepo);
+
+      expect(db.getManagedRepo(workspaceRepo.id)!.clone_source).toBe('workspace');
+      expect(db.getManagedRepo(remoteRepo.id)!.clone_source).toBe('remote');
+      expect(db.getManagedRepo(initRepo.id)!.clone_source).toBe('init');
     });
 
     it('upserts on duplicate ID', () => {

@@ -28,9 +28,8 @@ import uk.adedamola.aperture.domain.model.api.HealthResponse
 import uk.adedamola.aperture.domain.model.api.ListCredentialsResponse
 import uk.adedamola.aperture.domain.model.api.ListResumableSessionsResponse
 import uk.adedamola.aperture.domain.model.api.ListSessionsResponse
-import uk.adedamola.aperture.domain.model.api.ListWorkspaceAgentsResponse
+import uk.adedamola.aperture.domain.model.api.ListWorkspaceCheckoutsResponse
 import uk.adedamola.aperture.domain.model.api.ListWorkspacesResponse
-import uk.adedamola.aperture.domain.model.api.ListWorktreesResponse
 import uk.adedamola.aperture.domain.model.api.ListManagedReposResponse
 import uk.adedamola.aperture.domain.model.api.MessagesResponse
 import uk.adedamola.aperture.domain.model.api.ReadyResponse
@@ -184,15 +183,16 @@ class ApertureApi @Inject constructor(
         }
     }
 
-    suspend fun getWorkspaceAgents(workspaceId: String): NetworkResult<ListWorkspaceAgentsResponse> = safeCall {
-        client.get("$baseUrl/v1/workspaces/$workspaceId/agents") {
+    suspend fun getWorkspaceCheckouts(workspaceId: String): NetworkResult<ListWorkspaceCheckoutsResponse> = safeCall {
+        client.get("$baseUrl/v1/workspaces/$workspaceId/checkouts") {
             header("Authorization", authHeader())
         }
     }
 
-    suspend fun getWorktrees(workspaceId: String): NetworkResult<ListWorktreesResponse> = safeCall {
-        client.get("$baseUrl/v1/workspaces/$workspaceId/worktrees") {
+    suspend fun deleteWorkspaceCheckout(workspaceId: String, repoId: String): NetworkResult<Unit> = safeCall {
+        client.delete("$baseUrl/v1/workspaces/$workspaceId/checkouts/$repoId") {
             header("Authorization", authHeader())
+            headers.remove(io.ktor.http.HttpHeaders.ContentType)
         }
     }
 
