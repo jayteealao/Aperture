@@ -49,15 +49,7 @@ export interface WorkspaceRecord {
   metadata: string | null;
 }
 
-export interface WorkspaceAgentRecord {
-  id: string;
-  workspace_id: string;
-  session_id: string | null;
-  branch: string;
-  worktree_path: string;
-  created_at: number;
-  updated_at: number;
-}
+export type CloneSource = 'workspace' | 'remote' | 'init' | 'external';
 
 export interface ManagedRepoRecord {
   id: string;
@@ -66,7 +58,9 @@ export interface ManagedRepoRecord {
   name: string;
   origin_url: string | null;
   created_at: number;
+  updated_at: number;
   session_id: string | null;
+  clone_source: CloneSource;
 }
 
 export class ApertureDatabase {
@@ -472,59 +466,10 @@ export class ApertureDatabase {
   }
 
   /**
-   * Delete a workspace and all its agents
+   * Delete a workspace
    */
   deleteWorkspace(id: string): void {
-    // Foreign key constraints will cascade delete workspace_agents
     const stmt = this.db.prepare('DELETE FROM workspaces WHERE id = ?');
-    stmt.run(id);
-  }
-
-  /**
-   * Save or update a workspace agent
-   */
-  saveWorkspaceAgent(agent: WorkspaceAgentRecord): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO workspace_agents
-      (id, workspace_id, session_id, branch, worktree_path, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      agent.id,
-      agent.workspace_id,
-      agent.session_id,
-      agent.branch,
-      agent.worktree_path,
-      agent.created_at,
-      agent.updated_at
-    );
-  }
-
-  /**
-   * Get a workspace agent by session ID
-   */
-  getWorkspaceAgentBySession(sessionId: string): WorkspaceAgentRecord | null {
-    const stmt = this.db.prepare('SELECT * FROM workspace_agents WHERE session_id = ?');
-    const result = stmt.get(sessionId) as WorkspaceAgentRecord | undefined;
-    return result || null;
-  }
-
-  /**
-   * Get all agents for a workspace
-   */
-  getWorkspaceAgents(workspaceId: string): WorkspaceAgentRecord[] {
-    const stmt = this.db.prepare(
-      'SELECT * FROM workspace_agents WHERE workspace_id = ? ORDER BY created_at DESC'
-    );
-    return stmt.all(workspaceId) as WorkspaceAgentRecord[];
-  }
-
-  /**
-   * Delete a workspace agent
-   */
-  deleteWorkspaceAgent(id: string): void {
-    const stmt = this.db.prepare('DELETE FROM workspace_agents WHERE id = ?');
     stmt.run(id);
   }
 
@@ -536,8 +481,8 @@ export class ApertureDatabase {
   saveManagedRepo(repo: ManagedRepoRecord): void {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO managed_repos
-      (id, workspace_id, path, name, origin_url, created_at, session_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      (id, workspace_id, path, name, origin_url, created_at, updated_at, session_id, clone_source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -547,7 +492,9 @@ export class ApertureDatabase {
       repo.name,
       repo.origin_url,
       repo.created_at,
-      repo.session_id
+      repo.updated_at,
+      repo.session_id,
+      repo.clone_source
     );
   }
 

@@ -1,10 +1,14 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { randomUUID } from 'crypto';
 import { resolve, normalize } from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { rm } from 'fs/promises';
 import type { ApertureDatabase, WorkspaceRecord } from '../database.js';
-import { createWorktreeManager } from '../workspaces/worktreeManager.js';
 import { cloneRepository } from '../discovery/repoCloner.js';
 import { validatePathExists } from '../discovery/pathValidation.js';
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Normalize a repository path for comparison
@@ -20,7 +24,7 @@ function normalizeRepoPath(p: string): string {
  * Only allows HTTPS and SSH (git@) URLs, and blocks internal network addresses.
  */
 function validateGitUrl(url: string): { valid: boolean; error?: string } {
-  const httpsPattern = /^https:\/\/[^\/]+\/.+$/;
+  const httpsPattern = /^https:\/\/[^/]+\/.+$/;
   const sshPattern = /^git@[^:]+:.+$/;
 
   if (!httpsPattern.test(url) && !sshPattern.test(url)) {
@@ -85,12 +89,11 @@ export async function registerWorkspaceRoutes(
         return reply.status(400).send({ error: 'Missing or invalid field: repoRoot' });
       }
 
-      // Verify it's a git repository
-      const worktreeManager = createWorktreeManager();
+      // Verify it's a git repository using git CLI
       try {
-        await worktreeManager.ensureRepoReady(repoRoot);
+        await execFileAsync('git', ['rev-parse', '--git-dir'], { cwd: repoRoot });
       } catch (error) {
-        console.error('[Workspace API] Invalid repository error:', error);
+        fastify.log.error({ err: error }, 'Invalid repository path');
         return reply.status(400).send({
           error: 'INVALID_REPOSITORY',
           message: `Path is not a valid git repository: ${repoRoot}`,
@@ -132,7 +135,7 @@ export async function registerWorkspaceRoutes(
         },
       });
     } catch (error) {
-      console.error('[Workspace API] Create workspace error:', error);
+      fastify.log.error({ err: error }, 'Create workspace failed');
       return reply.status(500).send({
         error: 'CREATE_WORKSPACE_FAILED',
         message: 'Failed to create workspace',
@@ -228,11 +231,10 @@ export async function registerWorkspaceRoutes(
         // Clean up cloned directory since we can't use it
         if (clonedPath) {
           try {
-            const { rm } = await import('fs/promises');
             await rm(clonedPath, { recursive: true, force: true });
-            console.log(`[Workspace API] Cleaned up duplicate clone: ${clonedPath}`);
+            fastify.log.info({ path: clonedPath }, 'Cleaned up duplicate clone');
           } catch (cleanupError) {
-            console.error(`[Workspace API] Failed to cleanup ${clonedPath}:`, cleanupError);
+            fastify.log.error({ err: cleanupError, path: clonedPath }, 'Failed to cleanup duplicate clone');
           }
         }
         return reply.status(409).send({
@@ -243,7 +245,7 @@ export async function registerWorkspaceRoutes(
       }
 
       // Extract repo name from path for default workspace name
-      const repoName = clonedPath.split(/[\/\\]/).pop() || 'repository';
+      const repoName = clonedPath.split(/[/\\]/).pop() || 'repository';
       const workspaceName = name || repoName;
 
       // Create workspace record
@@ -284,15 +286,14 @@ export async function registerWorkspaceRoutes(
       // Cleanup cloned directory on any failure after clone succeeded
       if (clonedPath) {
         try {
-          const { rm } = await import('fs/promises');
           await rm(clonedPath, { recursive: true, force: true });
-          console.log(`[Workspace API] Cleaned up failed clone: ${clonedPath}`);
+          fastify.log.info({ path: clonedPath }, 'Cleaned up failed clone');
         } catch (cleanupError) {
-          console.error(`[Workspace API] Failed to cleanup ${clonedPath}:`, cleanupError);
+          fastify.log.error({ err: cleanupError, path: clonedPath }, 'Failed to cleanup clone');
         }
       }
 
-      console.error('[Workspace API] Clone workspace error:', error);
+      fastify.log.error({ err: error }, 'Clone workspace failed');
       return reply.status(500).send({
         error: 'CLONE_WORKSPACE_FAILED',
         message: 'Failed to clone repository and create workspace',
@@ -317,13 +318,10 @@ export async function registerWorkspaceRoutes(
       });
     }
 
-    const { resolve, join } = await import('path');
+    const { resolve: resolvePath, join } = await import('path');
     const { stat, mkdir } = await import('fs/promises');
-    const { exec } = await import('child_process');
-    const { promisify } = await import('util');
-    const execAsync = promisify(exec);
 
-    const resolvedPath = resolve(targetPath);
+    const resolvedPath = resolvePath(targetPath);
 
     try {
       // Check if directory exists
@@ -339,7 +337,7 @@ export async function registerWorkspaceRoutes(
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
           // Create directory if it doesn't exist
           await mkdir(resolvedPath, { recursive: true });
-          console.log(`[Workspace API] Created directory: ${resolvedPath}`);
+          fastify.log.info({ path: resolvedPath }, 'Created directory');
         } else {
           throw error;
         }
@@ -356,10 +354,10 @@ export async function registerWorkspaceRoutes(
         // Not a git repo, continue with init
       }
 
-      // Run git init
+      // Run git init (execFile avoids shell injection)
       try {
-        await execAsync('git init', { cwd: resolvedPath });
-        console.log(`[Workspace API] Initialized git repository at: ${resolvedPath}`);
+        await execFileAsync('git', ['init'], { cwd: resolvedPath });
+        fastify.log.info({ path: resolvedPath }, 'Initialized git repository');
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return reply.status(500).send({
@@ -370,7 +368,7 @@ export async function registerWorkspaceRoutes(
 
       // Optionally create workspace record
       if (createWorkspace) {
-        const repoName = resolvedPath.split(/[\/\\]/).pop() || 'repository';
+        const repoName = resolvedPath.split(/[/\\]/).pop() || 'repository';
         const workspaceName = name || repoName;
 
         const workspace: WorkspaceRecord = {
@@ -414,7 +412,7 @@ export async function registerWorkspaceRoutes(
         workspace: null,
       });
     } catch (error) {
-      console.error('[Workspace API] Init repository error:', error);
+      fastify.log.error({ err: error }, 'Init repository failed');
       return reply.status(500).send({
         error: 'INIT_FAILED',
         message: 'Failed to initialize repository',
@@ -441,7 +439,7 @@ export async function registerWorkspaceRoutes(
         })),
       });
     } catch (error) {
-      console.error('[Workspace API] List workspaces error:', error);
+      fastify.log.error({ err: error }, 'List workspaces failed');
       return reply.status(500).send({
         error: 'Internal Server Error',
         message: 'Failed to list workspaces',
@@ -479,7 +477,7 @@ export async function registerWorkspaceRoutes(
           },
         });
       } catch (error) {
-        console.error('[Workspace API] Get workspace error:', error);
+        fastify.log.error({ err: error }, 'Get workspace failed');
         return reply.status(500).send({
           error: 'Internal Server Error',
           message: 'Failed to get workspace',
@@ -489,11 +487,11 @@ export async function registerWorkspaceRoutes(
   );
 
   /**
-   * GET /v1/workspaces/:id/agents
-   * List all agents in a workspace
+   * GET /v1/workspaces/:id/checkouts
+   * List all checkouts (clones) for a workspace
    */
   fastify.get<{ Params: { id: string } }>(
-    '/v1/workspaces/:id/agents',
+    '/v1/workspaces/:id/checkouts',
     { preHandler: checkDatabase },
     async (request, reply) => {
       try {
@@ -508,65 +506,25 @@ export async function registerWorkspaceRoutes(
           });
         }
 
-        const agents = database!.getWorkspaceAgents(id);
+        const repos = database!.getManagedRepos(id);
 
         return reply.send({
-          agents: agents.map((a) => ({
-            id: a.id,
-            workspaceId: a.workspace_id,
-            sessionId: a.session_id,
-            branch: a.branch,
-            worktreePath: a.worktree_path,
-            createdAt: new Date(a.created_at).toISOString(),
-            updatedAt: new Date(a.updated_at).toISOString(),
+          checkouts: repos.map((r) => ({
+            id: r.id,
+            workspaceId: r.workspace_id,
+            sessionId: r.session_id,
+            path: r.path,
+            name: r.name,
+            cloneSource: r.clone_source,
+            createdAt: new Date(r.created_at).toISOString(),
+            updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : null,
           })),
         });
       } catch (error) {
-        console.error('[Workspace API] List agents error:', error);
+        fastify.log.error({ err: error }, 'List checkouts failed');
         return reply.status(500).send({
           error: 'Internal Server Error',
-          message: 'Failed to list workspace agents',
-        });
-      }
-    }
-  );
-
-  /**
-   * GET /v1/workspaces/:id/worktrees
-   * List all worktrees in a workspace
-   */
-  fastify.get<{ Params: { id: string } }>(
-    '/v1/workspaces/:id/worktrees',
-    { preHandler: checkDatabase },
-    async (request, reply) => {
-      try {
-        const { id } = request.params;
-
-        // Verify workspace exists
-        const workspace = database!.getWorkspace(id);
-        if (!workspace) {
-          return reply.status(404).send({
-            error: 'Not Found',
-            message: `Workspace not found: ${id}`,
-          });
-        }
-
-        const worktreeManager = createWorktreeManager();
-        const worktrees = await worktreeManager.listWorktrees(workspace.repo_root);
-
-        return reply.send({
-          worktrees: worktrees.map((w) => ({
-            branch: w.branch,
-            path: w.path,
-            isMain: w.isMain,
-            isLocked: w.isLocked,
-          })),
-        });
-      } catch (error) {
-        console.error('[Workspace API] List worktrees error:', error);
-        return reply.status(500).send({
-          error: 'LIST_WORKTREES_FAILED',
-          message: 'Failed to list worktrees',
+          message: 'Failed to list workspace checkouts',
         });
       }
     }
@@ -574,7 +532,7 @@ export async function registerWorkspaceRoutes(
 
   /**
    * DELETE /v1/workspaces/:id
-   * Delete a workspace and all its agents
+   * Delete a workspace and clean up its clones
    */
   fastify.delete<{ Params: { id: string } }>(
     '/v1/workspaces/:id',
@@ -592,30 +550,28 @@ export async function registerWorkspaceRoutes(
           });
         }
 
-        // Get all agents to clean up their worktrees
-        const agents = database!.getWorkspaceAgents(id);
-        const worktreeManager = createWorktreeManager();
-
-        // Clean up worktrees for all agents
-        for (const agent of agents) {
-          try {
-            await worktreeManager.removeWorktree(workspace.repo_root, agent.branch);
-            console.log(`[Workspace API] Removed worktree for branch: ${agent.branch}`);
-          } catch (error) {
-            console.warn(
-              `[Workspace API] Failed to remove worktree for branch ${agent.branch}:`,
-              error
-            );
-            // Continue with deletion even if worktree removal fails
+        // Clean up managed repo clones
+        const repos = database!.getManagedRepos(id);
+        for (const repo of repos) {
+          if (repo.clone_source !== 'external') {
+            try {
+              await rm(repo.path, { recursive: true, force: true });
+              fastify.log.info({ path: repo.path }, 'Removed clone directory');
+            } catch (error) {
+              fastify.log.warn({ err: error, path: repo.path }, 'Failed to remove clone directory');
+            }
           }
         }
 
-        // Delete workspace (cascade deletes agents via foreign key)
+        // Delete workspace (managed_repos are cleaned up separately since no FK cascade)
+        for (const repo of repos) {
+          database!.deleteManagedRepo(repo.id);
+        }
         database!.deleteWorkspace(id);
 
         return reply.status(204).send();
       } catch (error) {
-        console.error('[Workspace API] Delete workspace error:', error);
+        fastify.log.error({ err: error }, 'Delete workspace failed');
         return reply.status(500).send({
           error: 'DELETE_WORKSPACE_FAILED',
           message: 'Failed to delete workspace',
@@ -625,15 +581,15 @@ export async function registerWorkspaceRoutes(
   );
 
   /**
-   * DELETE /v1/workspaces/:id/agents/:agentId
-   * Remove a specific agent from a workspace
+   * DELETE /v1/workspaces/:id/checkouts/:repoId
+   * Remove a specific checkout from a workspace
    */
-  fastify.delete<{ Params: { id: string; agentId: string } }>(
-    '/v1/workspaces/:id/agents/:agentId',
+  fastify.delete<{ Params: { id: string; repoId: string } }>(
+    '/v1/workspaces/:id/checkouts/:repoId',
     { preHandler: checkDatabase },
     async (request, reply) => {
       try {
-        const { id, agentId } = request.params;
+        const { id, repoId } = request.params;
 
         // Verify workspace exists
         const workspace = database!.getWorkspace(id);
@@ -644,36 +600,34 @@ export async function registerWorkspaceRoutes(
           });
         }
 
-        // Get agent
-        const agents = database!.getWorkspaceAgents(id);
-        const agent = agents.find((a) => a.id === agentId);
-
-        if (!agent) {
+        // Get managed repo and verify it belongs to this workspace
+        const repo = database!.getManagedRepo(repoId);
+        if (!repo || repo.workspace_id !== id) {
           return reply.status(404).send({
             error: 'Not Found',
-            message: `Agent not found: ${agentId}`,
+            message: `Checkout not found: ${repoId}`,
           });
         }
 
-        // Remove worktree
-        const worktreeManager = createWorktreeManager();
-        try {
-          await worktreeManager.removeWorktree(workspace.repo_root, agent.branch);
-          console.log(`[Workspace API] Removed worktree for agent ${agentId}`);
-        } catch (error) {
-          console.warn(`[Workspace API] Failed to remove worktree for agent ${agentId}:`, error);
-          // Continue with deletion even if worktree removal fails
+        // Remove clone directory (only for non-external repos)
+        if (repo.clone_source !== 'external') {
+          try {
+            await rm(repo.path, { recursive: true, force: true });
+            fastify.log.info({ path: repo.path }, 'Removed checkout directory');
+          } catch (error) {
+            fastify.log.warn({ err: error, path: repo.path }, 'Failed to remove checkout directory');
+          }
         }
 
-        // Delete agent record
-        database!.deleteWorkspaceAgent(agentId);
+        // Delete managed repo record
+        database!.deleteManagedRepo(repoId);
 
         return reply.status(204).send();
       } catch (error) {
-        console.error('[Workspace API] Delete agent error:', error);
+        fastify.log.error({ err: error }, 'Delete checkout failed');
         return reply.status(500).send({
-          error: 'DELETE_AGENT_FAILED',
-          message: 'Failed to delete agent',
+          error: 'DELETE_CHECKOUT_FAILED',
+          message: 'Failed to delete checkout',
         });
       }
     }

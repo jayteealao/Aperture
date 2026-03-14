@@ -1,7 +1,10 @@
 import { readdir, access } from 'fs/promises';
 import { join, basename, resolve } from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import type { DiscoveredRepo, DiscoveryResult } from '../types/discovery.js';
-import { createWorktreeManager } from '../workspaces/worktreeManager.js';
+
+const execFileAsync = promisify(execFile);
 
 const EXCLUDED_DIRS = ['node_modules', 'vendor', '.cache', 'target', 'dist', '.git'];
 const MAX_DEPTH = 3;
@@ -25,8 +28,6 @@ export async function discoverRepositories(
     { path: normalizedRoot, depth: 0 }
   ];
 
-  const worktreeManager = createWorktreeManager();
-
   while (queue.length > 0 && repos.length < MAX_REPOS) {
     if (abortSignal?.aborted) break;
 
@@ -36,7 +37,7 @@ export async function discoverRepositories(
     if (depth > MAX_DEPTH) continue;
 
     try {
-      // Fast check: skip expensive ensureRepoReady if no .git directory
+      // Fast check: skip expensive git calls if no .git directory
       const gitDir = join(currentPath, '.git');
       let hasGitDir = false;
       try {
@@ -47,22 +48,24 @@ export async function discoverRepositories(
       }
 
       if (hasGitDir) {
-        // Only call ensureRepoReady for full validation if .git exists
-        const repoInfo = await worktreeManager.ensureRepoReady(currentPath)
-          .then(result => ({
-            isGitRepo: true,
-            remoteUrl: result.remoteUrl,
-          }))
-          .catch(() => ({ isGitRepo: false, remoteUrl: null }));
+        // Validate with git CLI and get remote URL
+        try {
+          await execFileAsync('git', ['rev-parse', '--git-dir'], { cwd: currentPath });
+          const { stdout: remoteUrl } = await execFileAsync(
+            'git', ['config', '--get', 'remote.origin.url'], { cwd: currentPath }
+          ).catch(() => ({ stdout: '' }));
 
-        if (repoInfo.isGitRepo) {
+          const trimmedUrl = remoteUrl.trim() || undefined;
+
           repos.push({
             path: currentPath,
             name: basename(currentPath),
-            remoteUrl: repoInfo.remoteUrl ?? undefined,
-            hasOrigin: !!repoInfo.remoteUrl,
+            remoteUrl: trimmedUrl,
+            hasOrigin: !!trimmedUrl,
           });
           continue; // Don't descend into repos
+        } catch {
+          // Not a valid git repo despite having .git dir
         }
       }
 

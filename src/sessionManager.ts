@@ -34,12 +34,12 @@ export interface CreateSessionOptions {
 }
 
 /**
- * Get the path for a managed repo
+ * Get the path for a managed repo checkout.
+ * Groups by human-readable repo name, not opaque workspace UUID.
  */
-function getManagedRepoPath(workspaceId: string | undefined, repoName: string): string {
+function getManagedRepoPath(groupName: string, checkoutName: string): string {
   const home = os.homedir();
-  const workspace = workspaceId || 'default';
-  return path.join(home, '.aperture', 'workspaces', workspace, repoName);
+  return path.join(home, '.aperture', 'workspaces', groupName, checkoutName);
 }
 
 /**
@@ -408,52 +408,56 @@ export class SessionManager {
 
     // Handle workspace-backed sessions, repo modes, or direct repo path
     let sessionCwd: string | undefined;
+    let managedRepoId: string | undefined;
     const repoMode = options.repoMode || 'none';
 
     if (options.workspaceId && this.database) {
-      // Workspace mode: create worktree for isolation
-      const { createWorktreeManager } = await import('./workspaces/worktreeManager.js');
-      const worktreeManager = createWorktreeManager();
-
+      // Workspace mode: create a local clone for isolation
       const workspace = this.database.getWorkspace(options.workspaceId);
       if (!workspace) {
         throw new Error(`Workspace not found: ${options.workspaceId}`);
       }
 
-      // Generate branch name for this agent (use session ID for uniqueness)
-      const branch = `agent/${id.substring(0, 8)}`;
+      const cloneName = id;
+      const groupName = path.basename(workspace.repo_root);
+      const clonePath = getManagedRepoPath(groupName, cloneName);
 
       try {
-        // Create worktree
-        const worktreeResult = await worktreeManager.ensureWorktree({
-          repoRoot: workspace.repo_root,
-          branch,
-          worktreeBaseDir: `${workspace.repo_root}/.worktrees`,
-          pathTemplate: '{worktreeBaseDir}/{branch}',
-        });
+        await mkdir(path.dirname(clonePath), { recursive: true });
 
-        sessionCwd = worktreeResult.worktreePath;
+        // --no-hardlinks on Windows avoids NTFS cross-volume failures
+        const cloneArgs = ['clone'];
+        if (process.platform === 'win32') cloneArgs.push('--no-hardlinks');
+        cloneArgs.push(workspace.repo_root, clonePath);
+        await execFileAsync('git', cloneArgs);
 
-        // Save workspace agent mapping
-        this.database.saveWorkspaceAgent({
-          id: randomUUID(),
+        sessionCwd = clonePath;
+
+        // Save managed repo with null session_id — the session row doesn't exist yet
+        // (FK constraint on managed_repos.session_id → sessions.id).
+        // The session_id is updated after the session is persisted.
+        managedRepoId = randomUUID();
+        this.database.saveManagedRepo({
+          id: managedRepoId,
           workspace_id: options.workspaceId,
-          session_id: id,
-          branch,
-          worktree_path: sessionCwd,
+          path: clonePath,
+          name: cloneName,
+          origin_url: null,
           created_at: Date.now(),
           updated_at: Date.now(),
+          session_id: null,
+          clone_source: 'workspace',
         });
 
-        this.logger.info(`Created worktree for session ${id} at ${sessionCwd}`);
+        this.logger.info(`Created local clone for session ${id} at ${clonePath}`);
       } catch (error) {
-        this.logger.error({ err: error }, `Failed to create worktree`);
-        throw new Error(`Failed to create worktree for workspace: ${error}`);
+        this.logger.error({ err: error }, `Failed to create clone for workspace`);
+        throw new Error(`Failed to create clone for workspace: ${error}`);
       }
     } else if (repoMode === 'init') {
       // Init mode: create a new empty git repository
-      const repoName = `session-${id.substring(0, 8)}`;
-      const repoPath = getManagedRepoPath(options.workspaceId, repoName);
+      const repoName = id;
+      const repoPath = getManagedRepoPath('standalone', repoName);
 
       try {
         // Create directory
@@ -466,14 +470,17 @@ export class SessionManager {
 
         // Save managed repo record (session_id is null initially, updated after session creation)
         if (this.database) {
+          managedRepoId = randomUUID();
           this.database.saveManagedRepo({
-            id: randomUUID(),
+            id: managedRepoId,
             workspace_id: options.workspaceId || 'default',
             path: repoPath,
             name: repoName,
             origin_url: null,
             created_at: Date.now(),
+            updated_at: Date.now(),
             session_id: null,
+            clone_source: 'init',
           });
         }
 
@@ -495,8 +502,8 @@ export class SessionManager {
       }
 
       const baseRepoName = extractRepoNameFromUrl(options.repoUrl);
-      const repoName = `${baseRepoName}-${id.substring(0, 8)}`;
-      const repoPath = getManagedRepoPath(options.workspaceId, repoName);
+      const repoName = id;
+      const repoPath = getManagedRepoPath(baseRepoName, repoName);
 
       try {
         // Create parent directory
@@ -509,14 +516,17 @@ export class SessionManager {
 
         // Save managed repo record (session_id is null initially, updated after session creation)
         if (this.database) {
+          managedRepoId = randomUUID();
           this.database.saveManagedRepo({
-            id: randomUUID(),
+            id: managedRepoId,
             workspace_id: options.workspaceId || 'default',
             path: repoPath,
             name: repoName,
             origin_url: options.repoUrl,
             created_at: Date.now(),
+            updated_at: Date.now(),
             session_id: null,
+            clone_source: 'remote',
           });
         }
 
@@ -584,11 +594,17 @@ export class SessionManager {
     }
     // repoMode === 'none' or no repo specified: sessionCwd stays undefined
 
+    // Link the managed repo to the session after session is persisted.
+    // We use a callback so the child methods can invoke it after saveSession().
+    const linkManagedRepo = managedRepoId
+      ? () => { this.database?.updateManagedRepoSession(managedRepoId, id); }
+      : undefined;
+
     // Create session based on agent type
     if (agentType === 'pi_sdk') {
-      return this.createPiSession(id, auth, options, resolvedApiKey, sessionCwd);
+      return this.createPiSession(id, auth, options, resolvedApiKey, sessionCwd, linkManagedRepo);
     } else {
-      return this.createClaudeSdkSession(id, auth, options, resolvedApiKey, sessionCwd);
+      return this.createClaudeSdkSession(id, auth, options, resolvedApiKey, sessionCwd, linkManagedRepo);
     }
   }
 
@@ -600,7 +616,8 @@ export class SessionManager {
     auth: SessionAuth,
     options: CreateSessionOptions,
     resolvedApiKey: string | undefined,
-    sessionCwd: string | undefined
+    sessionCwd: string | undefined,
+    linkManagedRepo?: () => void
   ): Promise<SdkSession> {
     // Build session config
     const sessionConfig: SessionConfig = {
@@ -637,6 +654,9 @@ export class SessionManager {
         working_directory: sessionCwd || null,
         pi_session_path: null,
       });
+
+      // Now that session row exists, link the managed repo to it
+      linkManagedRepo?.();
     }
 
     // Set up event handlers
@@ -691,7 +711,8 @@ export class SessionManager {
     auth: SessionAuth,
     options: CreateSessionOptions,
     resolvedApiKey: string | undefined,
-    sessionCwd: string | undefined
+    sessionCwd: string | undefined,
+    linkManagedRepo?: () => void
   ): Promise<PiSession> {
     // Build session config
     const sessionConfig: SessionConfig = {
@@ -723,6 +744,9 @@ export class SessionManager {
         working_directory: sessionCwd || null,
         pi_session_path: null, // Will be updated when Pi SDK creates session file
       });
+
+      // Now that session row exists, link the managed repo to it
+      linkManagedRepo?.();
     }
 
     // Set up event handlers

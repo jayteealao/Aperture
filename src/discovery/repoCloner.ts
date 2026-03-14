@@ -1,18 +1,11 @@
 import { join, resolve } from 'path';
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import type { CloneProgress } from '../types/discovery.js';
 
-/**
- * Type definition for the native clone function
- */
-interface NativeCloneModule {
-  cloneRepository(
-    url: string,
-    targetPath: string,
-    progressCallback: (progress: { phase: string; current: number; total: number; percent: number }) => void
-  ): string;
-}
+const execFileAsync = promisify(execFile);
 
 export interface CloneOptions {
   remoteUrl: string;
@@ -28,7 +21,7 @@ function extractRepoName(url: string): string {
   // https://github.com/user/repo.git
   // git@github.com:user/repo.git
   // ssh://git@github.com/user/repo.git
-  const match = url.match(/\/([^\/]+?)(\.git)?$/);
+  const match = url.match(/\/([^/]+?)(\.git)?$/);
   return match?.[1] ?? 'repository';
 }
 
@@ -44,18 +37,7 @@ function generateUniquePath(dir: string, baseName: string): string {
  * Clone a repository to the specified directory
  */
 export async function cloneRepository(options: CloneOptions): Promise<string> {
-  const { remoteUrl, targetDirectory, onProgress } = options;
-
-  // Lazy load the native module
-  let nativeModule: NativeCloneModule;
-  try {
-    const nativePath = new URL('../../packages/worktrunk-native/index.js', import.meta.url).pathname;
-    nativeModule = await import(nativePath) as NativeCloneModule;
-  } catch (error) {
-    throw new Error(
-      `Failed to load worktrunk-native addon. Make sure it's built: pnpm -C packages/worktrunk-native build\nError: ${error}`
-    );
-  }
+  const { remoteUrl, targetDirectory } = options;
 
   // Extract repo name from URL
   const repoName = extractRepoName(remoteUrl);
@@ -66,19 +48,8 @@ export async function cloneRepository(options: CloneOptions): Promise<string> {
     targetPath = generateUniquePath(targetDirectory, repoName);
   }
 
-  // Execute clone with progress callback
-  const progressCallback = onProgress
-    ? (progress: { phase: string; current: number; total: number; percent: number }) => {
-        onProgress({
-          phase: progress.phase as CloneProgress['phase'],
-          current: progress.current,
-          total: progress.total,
-          percent: progress.percent,
-        });
-      }
-    : () => {};
+  // Clone via git CLI (no shell interpolation, safe from injection)
+  await execFileAsync('git', ['clone', remoteUrl, targetPath]);
 
-  const resultPath = nativeModule.cloneRepository(remoteUrl, targetPath, progressCallback);
-
-  return resultPath;
+  return targetPath;
 }
