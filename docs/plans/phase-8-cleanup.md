@@ -68,6 +68,27 @@ Both files had their own `getLanguageFromPath`. Phase 1 consolidated this into `
 
 ---
 
+## 8.2.1 Delete temporary message handlers
+
+Phase 2's store refactoring extracted WS message handlers into:
+- `web/src/stores/sessions/sdk-message-handler.ts` (228 lines) — SDK streaming, content blocks
+- `web/src/stores/sessions/pi-message-handler.ts` (182 lines) — Pi streaming, tool execution
+- `web/src/stores/sessions/jsonrpc-message-handler.ts` (170 lines) — JSON-RPC session commands
+
+These serve the legacy `WorkspaceLegacy` codepath. After the feature flag is removed:
+1. Delete all three handler files
+2. Delete `web/src/stores/sessions/handler-types.ts`
+3. Delete `web/src/stores/sessions/message-slice.ts` (legacy message state)
+4. Remove the handler imports from `connection-slice.ts`
+5. Remove `MessageSlice` from the `SessionsStore` union in `index.ts`
+
+## 8.2.2 WS payload validation (deferred from Phase 2 review)
+
+Phase 2's review identified ~33 `as` type assertions on WebSocket payloads across the handler files (H4). These are external data boundaries that should be validated per CLAUDE.md rules. After the handler files are deleted (8.2.1), validation only needs to be added to:
+- `ws-to-uichunk.ts` (7 locations) — the translator that feeds `useChat`
+
+Add defensive type guards or zod schemas for the inner payload shapes. This is lower priority since the translator already has structural checks on most fields.
+
 ## 8.3 Remove feature flag
 
 Phase 2 shipped `USE_CHAT_TRANSPORT` behind a feature flag. After stability is confirmed:
@@ -372,6 +393,13 @@ Remove `react-syntax-highlighter` from chunking in Phase 1. Keep the router matc
 | `web/src/stores/sessions/sdk-slice.ts` | 2 | SDK-specific state |
 | `web/src/stores/sessions/pi-slice.ts` | 2 | Pi-specific state + commands |
 | `web/src/stores/sessions/persistence.ts` | 2 | IndexedDB helpers |
+| `web/src/stores/sessions/handler-types.ts` | 2 | Shared types for WS handlers |
+| `web/src/stores/sessions/sdk-message-handler.ts` | 2 | SDK WS handler (TEMPORARY) |
+| `web/src/stores/sessions/pi-message-handler.ts` | 2 | Pi WS handler (TEMPORARY) |
+| `web/src/stores/sessions/jsonrpc-message-handler.ts` | 2 | JSON-RPC handler (TEMPORARY) |
+| `web/src/stores/sessions/cleanup-helper.ts` | 2 | Generic session state cleanup |
+| `web/src/hooks/usePersistedUIMessages.ts` | 2 | useChat message persistence |
+| `web/src/utils/ui-message.ts` | 2 | UIMessage type + legacy coercion |
 | `web/src/lib/feature-flags.ts` | 2 | Feature flag (deleted in Phase 8) |
 | `web/src/components/chat/ApertureMessage.tsx` | 3 | Message component |
 | `web/src/components/chat/ApertureToolPart.tsx` | 3 | Tool part renderer |
@@ -395,7 +423,11 @@ Remove `react-syntax-highlighter` from chunking in Phase 1. Keep the router matc
 | `web/src/components/sdk/ToolCallGroup.tsx` | 3 | 89 |
 | `web/src/components/sdk/LoadingIndicator.tsx` | 3 | 18 |
 | `web/src/components/session/ToolCallDisplay.tsx` | 8 | 206 |
-| `web/src/stores/sessions/message-slice.ts` | 8 | ~450 |
+| `web/src/stores/sessions/message-slice.ts` | 8 | ~94 |
+| `web/src/stores/sessions/sdk-message-handler.ts` | 8 | ~228 |
+| `web/src/stores/sessions/pi-message-handler.ts` | 8 | ~182 |
+| `web/src/stores/sessions/jsonrpc-message-handler.ts` | 8 | ~170 |
+| `web/src/stores/sessions/handler-types.ts` | 8 | ~5 |
 
 ### Net line count change
 
