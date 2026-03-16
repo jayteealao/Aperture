@@ -1,5 +1,4 @@
 import { useChat } from '@ai-sdk/react'
-import type { FileUIPart } from 'ai'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { cn } from '@/utils/cn'
@@ -7,7 +6,6 @@ import { useSessionsStore } from '@/stores/sessions'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
-import { Textarea } from '@/components/ui/Textarea'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { SaveRepoPrompt } from '@/components/session/SaveRepoPrompt'
@@ -21,24 +19,32 @@ import {
 } from '@/components/ai-elements/conversation'
 import { Shimmer } from '@/components/ai-elements/shimmer'
 import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputFooter,
+  PromptInputHeader,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+  PromptInputActionMenu,
+  PromptInputActionMenuTrigger,
+  PromptInputActionMenuContent,
+  PromptInputActionAddAttachments,
+} from '@/components/ai-elements/prompt-input'
+import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
+import {
   ApertureMessage,
+  AttachmentsPreview,
   ChatErrorBoundary,
   ConnectionStatus,
   PermissionRequest,
 } from '@/components/chat'
-import type { ConnectionState, ImageAttachment, Session } from '@/api/types'
+import type { ConnectionState, Session } from '@/api/types'
 import { IMAGE_LIMITS } from '@/api/types'
 import { ApertureWebSocketTransport } from '@/api/chat-transport'
 import { usePersistedUIMessages } from '@/hooks/usePersistedUIMessages'
 import type { ApertureUIMessage } from '@/utils/ui-message'
-import {
-  Send,
-  StopCircle,
-  Plus,
-  Terminal,
-  Paperclip,
-  X,
-} from 'lucide-react'
+import { Plus, Terminal } from 'lucide-react'
 
 function WorkspaceChatView({ sessionId, isActive }: { sessionId: string; isActive: boolean }) {
   const session = useSessionsStore((state) => state.sessions.find((item) => item.id === sessionId) ?? null)
@@ -95,9 +101,6 @@ function WorkspaceChatSessionReady({
   sendPermissionResponse: (sessionId: string, toolCallId: string, optionId: string | null, answers?: Record<string, string>) => void
 }) {
   const toast = useToast()
-  const [input, setInput] = useState('')
-  const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const transport = useMemo(() => new ApertureWebSocketTransport(sessionId), [sessionId])
 
   const { messages, sendMessage, setMessages, status, stop } = useChat<ApertureUIMessage>({
@@ -115,117 +118,6 @@ function WorkspaceChatSessionReady({
   useEffect(() => {
     void persistMessages(messages)
   }, [messages, persistMessages])
-
-  const addImageFiles = useCallback((files: FileList | File[]) => {
-    const fileArray = Array.from(files)
-    const allowedTypes = IMAGE_LIMITS.ALLOWED_MIME_TYPES as readonly string[]
-
-    for (const file of fileArray) {
-      if (attachedImages.length >= IMAGE_LIMITS.MAX_COUNT) {
-        break
-      }
-      if (!allowedTypes.includes(file.type)) {
-        continue
-      }
-      if (file.size > IMAGE_LIMITS.MAX_BYTES) {
-        continue
-      }
-
-      const reader = new FileReader()
-      reader.onload = () => {
-        const dataUrl = reader.result as string
-        const base64 = dataUrl.split(',')[1]
-        if (!base64) {
-          return
-        }
-
-        setAttachedImages((current) => {
-          if (current.length >= IMAGE_LIMITS.MAX_COUNT) {
-            return current
-          }
-          return [
-            ...current,
-            {
-              data: base64,
-              mimeType: file.type as ImageAttachment['mimeType'],
-              filename: file.name,
-            },
-          ]
-        })
-      }
-      reader.readAsDataURL(file)
-    }
-  }, [attachedImages.length])
-
-  const handleSend = useCallback(async () => {
-    if (!input.trim()) {
-      return
-    }
-    if (!connection || connection.status !== 'connected') {
-      return
-    }
-    if (status === 'submitted' || status === 'streaming') {
-      return
-    }
-
-    const content = input.trim()
-    const files: FileUIPart[] | undefined =
-      attachedImages.length > 0
-        ? attachedImages.map((image) => ({
-            type: 'file',
-            mediaType: image.mimeType,
-            filename: image.filename,
-            url: `data:${image.mimeType};base64,${image.data}`,
-          }))
-        : undefined
-
-    setInput('')
-    setAttachedImages([])
-
-    try {
-      await sendMessage({
-        text: content,
-        files,
-        metadata: { timestamp: new Date().toISOString() },
-      })
-    } catch (error) {
-      console.error('[useChat] Send error:', error)
-      toast.error('Failed to send message', 'Check your connection and try again.')
-      setInput(content)
-    }
-  }, [attachedImages, connection, input, sendMessage, status, toast])
-
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault()
-        void handleSend()
-      }
-    },
-    [handleSend]
-  )
-
-  const handlePaste = useCallback((event: React.ClipboardEvent) => {
-    const items = event.clipboardData?.items
-    if (!items) {
-      return
-    }
-
-    const imageFiles: File[] = []
-    for (const item of Array.from(items)) {
-      if (!item.type.startsWith('image/')) {
-        continue
-      }
-      const file = item.getAsFile()
-      if (file) {
-        imageFiles.push(file)
-      }
-    }
-
-    if (imageFiles.length > 0) {
-      addImageFiles(imageFiles)
-    }
-  }, [addImageFiles])
 
   /**
    * MED-4 fix: Functional setMessages updater avoids stale closure over `messages`.
@@ -252,7 +144,42 @@ function WorkspaceChatSessionReady({
     [setMessages, persistMessages]
   )
 
-  const isSending = status === 'submitted'
+  /**
+   * PromptInput submit handler — receives { text, files } with files already
+   * converted from blob URLs to data URLs by PromptInput's internal handler.
+   * If this throws, PromptInput preserves the user's input for retry.
+   */
+  const handleSubmit = useCallback(
+    async (message: PromptInputMessage) => {
+      if (!connection || connection.status !== 'connected') {
+        toast.error('Not connected', 'Check your connection and try again.')
+        throw new Error('Not connected')
+      }
+
+      try {
+        await sendMessage({
+          text: message.text,
+          files: message.files.length > 0 ? message.files : undefined,
+          metadata: { timestamp: new Date().toISOString() },
+        })
+      } catch (error) {
+        console.error('[useChat] Send error:', error)
+        toast.error('Failed to send message', 'Check your connection and try again.')
+        throw error
+      }
+    },
+    [connection, sendMessage, toast]
+  )
+
+  /** Show a toast when PromptInput rejects a file (wrong type, too large, too many). */
+  const handleFileError = useCallback(
+    (err: { code: string; message: string }) => {
+      toast.error('File error', err.message)
+    },
+    [toast]
+  )
+
+  const isConnected = connection?.status === 'connected'
   const isStreaming = status === 'streaming' || status === 'submitted'
 
   return (
@@ -287,7 +214,7 @@ function WorkspaceChatSessionReady({
                 <ApertureMessage key={message.id} message={message} />
               ))
             )}
-            {isSending && (
+            {status === 'submitted' && (
               <div className="flex items-center gap-2 text-sm text-(--color-text-muted)">
                 <Shimmer>Thinking...</Shimmer>
               </div>
@@ -311,94 +238,43 @@ function WorkspaceChatSessionReady({
 
       <div className="px-4 py-4 border-t border-(--color-border) bg-(--color-bg-secondary)">
         <div className="max-w-3xl mx-auto">
-          {attachedImages.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2">
-              {attachedImages.map((image, index) => (
-                <div key={`${image.filename}-${index}`} className="relative group">
-                  <img
-                    src={`data:${image.mimeType};base64,${image.data}`}
-                    alt={image.filename || `Image ${index + 1}`}
-                    className="h-16 w-16 rounded-lg object-cover border border-(--color-border)"
-                  />
-                  <button
-                    onClick={() => setAttachedImages((current) => current.filter((_, currentIndex) => currentIndex !== index))}
-                    className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-(--color-bg-primary) border border-(--color-border) opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Remove image"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-              {attachedImages.length < IMAGE_LIMITS.MAX_COUNT && (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="h-16 w-16 rounded-lg border border-dashed border-(--color-border) flex items-center justify-center text-(--color-text-muted) hover:text-(--color-text-secondary) hover:border-(--color-text-muted) transition-colors"
-                  title="Add more images"
-                >
-                  <Plus size={20} />
-                </button>
-              )}
-            </div>
-          )}
-
-          <input
-            ref={fileInputRef}
-            type="file"
+          <PromptInput
             accept={IMAGE_LIMITS.ALLOWED_MIME_TYPES.join(',')}
+            maxFileSize={IMAGE_LIMITS.MAX_BYTES}
+            maxFiles={IMAGE_LIMITS.MAX_COUNT}
             multiple
-            className="hidden"
-            onChange={(event) => {
-              if (event.target.files) {
-                addImageFiles(event.target.files)
-              }
-              event.target.value = ''
-            }}
-          />
-
-          <div className="flex items-end gap-3">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="p-2.5 rounded-lg text-(--color-text-muted) hover:text-(--color-text-secondary) hover:bg-(--color-surface) transition-colors"
-              title="Attach images"
-              disabled={connection?.status !== 'connected'}
-            >
-              <Paperclip size={20} />
-            </button>
-
-            <div className="flex-1">
-              <Textarea
+            onError={handleFileError}
+            onSubmit={handleSubmit}
+          >
+            <PromptInputHeader>
+              <AttachmentsPreview maxFiles={IMAGE_LIMITS.MAX_COUNT} />
+            </PromptInputHeader>
+            <PromptInputBody>
+              <PromptInputTextarea
+                disabled={!isConnected}
                 placeholder="Type your message... (Shift+Enter for new line)"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
-                autoGrow
-                maxHeight={200}
-                disabled={connection?.status !== 'connected'}
-                className="min-h-[44px]"
               />
-            </div>
-
-            {isStreaming ? (
-              <Button variant="danger" size="lg" onClick={() => void stop()}>
-                <StopCircle size={20} />
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() => void handleSend()}
-                disabled={!input.trim() || isSending || connection?.status !== 'connected'}
-                loading={isSending}
-              >
-                <Send size={20} />
-              </Button>
-            )}
-          </div>
+            </PromptInputBody>
+            <PromptInputFooter>
+              <PromptInputTools>
+                <PromptInputActionMenu>
+                  <PromptInputActionMenuTrigger />
+                  <PromptInputActionMenuContent>
+                    <PromptInputActionAddAttachments />
+                  </PromptInputActionMenuContent>
+                </PromptInputActionMenu>
+              </PromptInputTools>
+              <PromptInputSubmit
+                disabled={!isConnected}
+                onStop={stop}
+                status={status}
+              />
+            </PromptInputFooter>
+          </PromptInput>
 
           <div className="mt-2 flex items-center justify-between text-xs text-(--color-text-muted)">
             <span>
-              {connection?.status === 'connected'
+              {isConnected
                 ? 'Connected via WebSocket'
                 : connection?.status === 'reconnecting'
                   ? `Reconnecting (attempt ${connection.retryCount})...`
