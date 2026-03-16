@@ -152,7 +152,7 @@ function WorkspaceChatSessionReady({
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
       if (!connection || connection.status !== 'connected') {
-        toast.error('Not connected', 'Check your connection and try again.')
+        toast.error('Session not connected', 'Wait for the session to reconnect, or start a new one.')
         throw new Error('Not connected')
       }
 
@@ -164,7 +164,7 @@ function WorkspaceChatSessionReady({
         })
       } catch (error) {
         console.error('[useChat] Send error:', error)
-        toast.error('Failed to send message', 'Check your connection and try again.')
+        toast.error('Message not sent', 'Something went wrong. Your message has been preserved — try again.')
         throw error
       }
     },
@@ -174,7 +174,7 @@ function WorkspaceChatSessionReady({
   /** Show a toast when PromptInput rejects a file (wrong type, too large, too many). */
   const handleFileError = useCallback(
     (err: { code: string; message: string }) => {
-      toast.error('File error', err.message)
+      toast.error('Attachment not added', err.message)
     },
     [toast]
   )
@@ -265,7 +265,7 @@ function WorkspaceChatSessionReady({
                 </PromptInputActionMenu>
               </PromptInputTools>
               <PromptInputSubmit
-                disabled={!isConnected}
+                disabled={!isConnected && !isStreaming}
                 onStop={stop}
                 status={status}
               />

@@ -44,7 +44,7 @@ export function AttachmentsPreview({ maxFiles }: { maxFiles?: number }) {
         <button
           className="h-16 w-16 rounded-lg border border-dashed border-(--color-border) flex items-center justify-center text-(--color-text-muted) hover:text-(--color-text-secondary) hover:border-(--color-text-muted) transition-colors"
           onClick={openFileDialog}
-          title="Add more images"
+          title="Add more files"
           type="button"
         >
           <Plus size={20} />
