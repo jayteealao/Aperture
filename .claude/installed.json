@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "installedAt": "2026-01-21T17:19:52.735Z",
-  "updatedAt": "2026-02-09T12:00:00.690Z",
+  "updatedAt": "2026-03-14T16:59:21.553Z",
   "plugins": [
     {
       "name": "session-workflow",
@@ -175,6 +175,32 @@
             "git-release-workflow",
             "pre-release-validation",
             "version-bump"
+          ],
+          "isSymlinked": false
+        }
+      }
+    },
+    {
+      "name": "dev-browser",
+      "version": "1.0.1",
+      "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\dev-browser",
+      "installedAt": "2026-03-14T16:59:21.553Z",
+      "components": {
+        "agents": 0,
+        "commands": 0,
+        "skills": 1,
+        "mcpServers": 0,
+        "variants": 0
+      },
+      "installedTo": [
+        "claude"
+      ],
+      "installedFiles": {
+        "claude": {
+          "agents": [],
+          "commands": [],
+          "skills": [
+            "dev-browser"
           ],
           "isSymlinked": false
         }

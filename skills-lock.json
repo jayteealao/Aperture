@@ -16,6 +16,11 @@
       "sourceType": "github",
       "computedHash": "cb71f9b5e9cf87c2e0a69384347818ddbbf50dd372cf7e7f90877b397de87e83"
     },
+    "dev-browser": {
+      "source": "sawyerhood/dev-browser",
+      "sourceType": "github",
+      "computedHash": "79eb25d27226ecf688dbbdd3f6d66c3b4acc121589e84ebb8d430bd8c0bbc33a"
+    },
     "vercel-composition-patterns": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
