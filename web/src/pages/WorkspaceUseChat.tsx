@@ -1,6 +1,5 @@
 import { useChat } from '@ai-sdk/react'
 import type { FileUIPart } from 'ai'
-import { isTextUIPart, isReasoningUIPart, isFileUIPart, isToolUIPart } from 'ai'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { cn } from '@/utils/cn'
@@ -12,47 +11,34 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { SaveRepoPrompt } from '@/components/session/SaveRepoPrompt'
-import { ToolCallDisplay } from '@/components/session/ToolCallDisplay'
-import { AskUserQuestionDisplay, isAskUserQuestionInput } from '@/components/session/AskUserQuestionDisplay'
 import { SdkControlPanel } from '@/components/sdk'
 import { PiControlPanel } from '@/components/pi/PiControlPanel'
-import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning'
-import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from '@/components/ai-elements/tool'
-import { MessageResponse } from '@/components/ai-elements/message'
-import type { ConnectionState, PermissionOption, ImageAttachment, Session } from '@/api/types'
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from '@/components/ai-elements/conversation'
+import { Shimmer } from '@/components/ai-elements/shimmer'
+import {
+  ApertureMessage,
+  ChatErrorBoundary,
+  ConnectionStatus,
+  PermissionRequest,
+} from '@/components/chat'
+import type { ConnectionState, ImageAttachment, Session } from '@/api/types'
 import { IMAGE_LIMITS } from '@/api/types'
 import { ApertureWebSocketTransport } from '@/api/chat-transport'
 import { usePersistedUIMessages } from '@/hooks/usePersistedUIMessages'
 import type { ApertureUIMessage } from '@/utils/ui-message'
-import { getMessageTimestamp } from '@/utils/ui-message'
 import {
   Send,
   StopCircle,
   Plus,
-  AlertCircle,
   Terminal,
-  ArrowDown,
   Paperclip,
   X,
 } from 'lucide-react'
-
-function ConnectionStatus({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    connected: 'bg-success',
-    connecting: 'bg-warning animate-pulse',
-    reconnecting: 'bg-warning animate-pulse',
-    disconnected: 'bg-(--color-text-muted)',
-    error: 'bg-danger',
-    ended: 'bg-(--color-text-muted)',
-  }
-
-  return (
-    <span
-      className={cn('w-2.5 h-2.5 rounded-full shrink-0', colors[status] || colors.disconnected)}
-      title={status}
-    />
-  )
-}
 
 function WorkspaceChatView({ sessionId, isActive }: { sessionId: string; isActive: boolean }) {
   const session = useSessionsStore((state) => state.sessions.find((item) => item.id === sessionId) ?? null)
@@ -111,9 +97,6 @@ function WorkspaceChatSessionReady({
   const toast = useToast()
   const [input, setInput] = useState('')
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([])
-  const [isAtBottom, setIsAtBottom] = useState(true)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const transport = useMemo(() => new ApertureWebSocketTransport(sessionId), [sessionId])
 
@@ -132,31 +115,6 @@ function WorkspaceChatSessionReady({
   useEffect(() => {
     void persistMessages(messages)
   }, [messages, persistMessages])
-
-  const handleScroll = useCallback(() => {
-    const container = scrollContainerRef.current
-    if (!container) {
-      return
-    }
-
-    const threshold = 100
-    const nextIsAtBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight < threshold
-    setIsAtBottom(nextIsAtBottom)
-  }, [])
-
-  useEffect(() => {
-    if (!isActive || !isAtBottom) {
-      return
-    }
-
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [isActive, isAtBottom, messages])
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    setIsAtBottom(true)
-  }, [])
 
   const addImageFiles = useCallback((files: FileList | File[]) => {
     const fileArray = Array.from(files)
@@ -231,7 +189,8 @@ function WorkspaceChatSessionReady({
         metadata: { timestamp: new Date().toISOString() },
       })
     } catch (error) {
-      toast.error('Failed to send', error instanceof Error ? error.message : 'Unknown error')
+      console.error('[useChat] Send error:', error)
+      toast.error('Failed to send message', 'Check your connection and try again.')
       setInput(content)
     }
   }, [attachedImages, connection, input, sendMessage, status, toast])
@@ -268,6 +227,31 @@ function WorkspaceChatSessionReady({
     }
   }, [addImageFiles])
 
+  /**
+   * MED-4 fix: Functional setMessages updater avoids stale closure over `messages`.
+   * RS-1 fix: Explicit persistMessages call ensures the message is saved before
+   * the caller sends the permission response over WebSocket.
+   */
+  const handleAddUserMessage = useCallback(
+    async (content: string) => {
+      const nextMessage: ApertureUIMessage = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        metadata: { timestamp: new Date().toISOString() },
+        parts: [{ type: 'text', text: content }],
+      }
+      // Capture the updated array from the functional updater (runs synchronously)
+      let updatedMessages: ApertureUIMessage[] = []
+      setMessages((current) => {
+        updatedMessages = [...current, nextMessage]
+        return updatedMessages
+      })
+      // Persist explicitly — don't rely on useEffect timing for permission flow
+      await persistMessages(updatedMessages)
+    },
+    [setMessages, persistMessages]
+  )
+
   const isSending = status === 'submitted'
   const isStreaming = status === 'streaming' || status === 'submitted'
 
@@ -290,50 +274,37 @@ function WorkspaceChatSessionReady({
         )}
       </div>
 
-      <div
-        ref={scrollContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto scrollbar-thin relative"
-      >
-        <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
-          {messages.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-(--color-text-muted)">Send a message to start the conversation</p>
-            </div>
-          ) : (
-            messages.map((message) => <UIMessageBubble key={message.id} message={message} />)
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-        {!isAtBottom && (
-          <button
-            onClick={scrollToBottom}
-            className="sticky bottom-4 left-1/2 -translate-x-1/2 p-3 bg-accent text-nebula-bg-primary rounded-full shadow-lg hover:bg-accent/90 transition-colors z-10"
-            title="Scroll to bottom"
-          >
-            <ArrowDown className="w-5 h-5" />
-          </button>
-        )}
-      </div>
+      <ChatErrorBoundary>
+        <Conversation className="scrollbar-thin">
+          <ConversationContent className="max-w-3xl mx-auto">
+            {messages.length === 0 ? (
+              <ConversationEmptyState
+                description="Type a message below to get started"
+                title="Start a conversation"
+              />
+            ) : (
+              messages.map((message) => (
+                <ApertureMessage key={message.id} message={message} />
+              ))
+            )}
+            {isSending && (
+              <div className="flex items-center gap-2 text-sm text-(--color-text-muted)">
+                <Shimmer>Thinking...</Shimmer>
+              </div>
+            )}
+          </ConversationContent>
+          <ConversationScrollButton className="bg-accent text-nebula-bg-primary hover:bg-accent/90 shadow-lg" />
+        </Conversation>
+      </ChatErrorBoundary>
 
       {pendingPermissions.length > 0 && (
         <div className="px-4 py-3 border-t border-(--color-border) bg-warning/5">
           <PermissionRequest
-            permission={pendingPermissions[0]}
-            onAddUserMessage={(content) => {
-              const nextMessage: ApertureUIMessage = {
-                id: crypto.randomUUID(),
-                role: 'user',
-                metadata: { timestamp: new Date().toISOString() },
-                parts: [{ type: 'text', text: content }],
-              }
-
-              setMessages((current) => [...current, nextMessage])
-              return persistMessages([...messages, nextMessage])
-            }}
+            onAddUserMessage={handleAddUserMessage}
             onRespond={(toolCallId, optionId, answers) => {
               sendPermissionResponse(sessionId, toolCallId, optionId, answers)
             }}
+            permission={pendingPermissions[0]}
           />
         </div>
       )}
@@ -438,190 +409,6 @@ function WorkspaceChatSessionReady({
         </div>
       </div>
     </div>
-  )
-}
-
-function UIMessageBubble({ message }: { message: ApertureUIMessage }) {
-  const isUser = message.role === 'user'
-  const textParts = message.parts.filter(isTextUIPart)
-  const reasoningParts = message.parts.filter(isReasoningUIPart)
-  const fileParts = message.parts.filter(isFileUIPart)
-  const toolParts = message.parts.filter(isToolUIPart)
-  const timestamp = getMessageTimestamp(message)
-
-  return (
-    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
-      <div
-        className={cn(
-          'max-w-[85%] rounded-2xl px-4 py-3 animate-in',
-          isUser ? 'bg-accent text-nebula-bg-primary rounded-br-md' : 'glass rounded-bl-md'
-        )}
-      >
-        <div className="text-xs font-medium opacity-70 mb-2">
-          {isUser ? 'You' : message.role === 'assistant' ? 'Assistant' : message.role}
-        </div>
-
-        {fileParts.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
-            {fileParts.map((part) => (
-              part.mediaType.startsWith('image/') ? (
-                <img
-                  key={part.url}
-                  src={part.url}
-                  alt={part.filename || 'Attachment'}
-                  className="max-h-48 max-w-[280px] rounded-lg object-contain border border-(--color-border)"
-                />
-              ) : (
-                <a
-                  key={part.url}
-                  href={part.url}
-                  download={part.filename}
-                  className="text-sm underline underline-offset-4"
-                >
-                  {part.filename || part.mediaType}
-                </a>
-              )
-            ))}
-          </div>
-        )}
-
-        {reasoningParts.length > 0 && (
-          <div className="mb-3 space-y-2">
-            {reasoningParts.map((part, index) => (
-              <Reasoning key={`${message.id}-reasoning-${index}`} isStreaming={part.state === 'streaming'}>
-                <ReasoningTrigger />
-                <ReasoningContent>{part.text}</ReasoningContent>
-              </Reasoning>
-            ))}
-          </div>
-        )}
-
-        {textParts.length > 0 && (
-          <div className="prose prose-sm max-w-none dark:prose-invert">
-            {textParts.map((part, index) => (
-              <MessageResponse key={`${message.id}-text-${index}`} isAnimating={part.state === 'streaming'}>
-                {part.text}
-              </MessageResponse>
-            ))}
-          </div>
-        )}
-
-        {toolParts.length > 0 && (
-          <div className="mt-3 space-y-2">
-            {toolParts.map((part) => {
-              const toolName =
-                part.type === 'dynamic-tool'
-                  ? part.toolName
-                  : part.type.split('-').slice(1).join('-')
-              return (
-                <Tool key={part.toolCallId} defaultOpen={part.state !== 'output-available'}>
-                  {part.type === 'dynamic-tool' ? (
-                    <ToolHeader
-                      state={part.state}
-                      title={toolName}
-                      type={part.type}
-                      toolName={toolName}
-                    />
-                  ) : (
-                    <ToolHeader state={part.state} title={toolName} type={part.type} />
-                  )}
-                  <ToolContent>
-                    {part.input !== undefined && <ToolInput input={part.input} />}
-                    <ToolOutput
-                      errorText={'errorText' in part ? part.errorText : undefined}
-                      output={'output' in part ? part.output : undefined}
-                    />
-                  </ToolContent>
-                </Tool>
-              )
-            })}
-          </div>
-        )}
-
-        {timestamp && (
-          <div className="mt-2 text-2xs opacity-50">
-            {new Date(timestamp).toLocaleTimeString()}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function PermissionRequest({
-  permission,
-  onRespond,
-  onAddUserMessage,
-}: {
-  permission: { toolCallId: string; toolCall: unknown; options: unknown[] }
-  onRespond: (toolCallId: string, optionId: string | null, answers?: Record<string, string>) => void
-  onAddUserMessage: (content: string) => Promise<void>
-}) {
-  const toolCall = permission.toolCall as { name?: string; title?: string; rawInput?: unknown }
-  const options = permission.options as PermissionOption[]
-  const toolName = toolCall?.name || toolCall?.title
-  const isAskUserQuestion = toolName === 'AskUserQuestion' && isAskUserQuestionInput(toolCall.rawInput)
-  const allowOption = options.find((option) => option.kind?.includes('allow'))
-
-  const handleAskUserQuestionSubmit = async (answers: Record<string, string>) => {
-    if (!allowOption) {
-      return
-    }
-
-    const answerText = Object.entries(answers)
-      .map(([header, value]) => `${header}: ${value}`)
-      .join('\n')
-
-    await onAddUserMessage(`My answers:\n${answerText}`)
-    onRespond(permission.toolCallId, allowOption.optionId, answers)
-  }
-
-  return (
-    <Card variant="glass" padding="md" className={cn('border-l-4', isAskUserQuestion ? 'border-l-accent' : 'border-l-warning')}>
-      <div className="flex items-start gap-3">
-        <AlertCircle size={20} className={cn('shrink-0 mt-0.5', isAskUserQuestion ? 'text-accent' : 'text-warning')} />
-        <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-(--color-text-primary)">
-            {isAskUserQuestion ? 'Question from Agent' : 'Permission Required'}
-          </h4>
-
-          {!isAskUserQuestion && (
-            <p className="text-sm text-(--color-text-secondary) mt-1">
-              {toolCall?.title || 'The agent wants to perform an action'}
-            </p>
-          )}
-
-          {isAskUserQuestion ? (
-            <AskUserQuestionDisplay
-              input={toolCall.rawInput as { questions: Array<{ question: string; header: string; options: Array<{ label: string; description: string }>; multiSelect: boolean }> }}
-              onSubmit={handleAskUserQuestionSubmit}
-            />
-          ) : toolCall?.rawInput ? (
-            <>
-              <ToolCallDisplay name={toolCall.name} rawInput={toolCall.rawInput as Record<string, unknown>} />
-              <div className="flex flex-wrap gap-2 mt-3">
-                {options.map((option) => {
-                  const isAllow = option.kind?.includes('allow')
-                  return (
-                    <Button
-                      key={option.optionId}
-                      variant={isAllow ? 'primary' : 'secondary'}
-                      size="sm"
-                      onClick={() => onRespond(permission.toolCallId, option.optionId)}
-                    >
-                      {option.name}
-                    </Button>
-                  )
-                })}
-                <Button variant="ghost" size="sm" onClick={() => onRespond(permission.toolCallId, null)}>
-                  Deny
-                </Button>
-              </div>
-            </>
-          ) : null}
-        </div>
-      </div>
-    </Card>
   )
 }
 
