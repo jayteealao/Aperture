@@ -5,6 +5,7 @@ import type {
   JsonRpcMessage,
   ConnectionStatus,
 } from './types'
+import type { UIMessageChunk } from 'ai'
 
 type MessageHandler = (sessionId: string, message: JsonRpcMessage) => void
 type StatusHandler = (sessionId: string, status: ConnectionStatus, error?: string) => void
@@ -20,6 +21,7 @@ interface Connection {
 
 class WebSocketManager {
   private connections = new Map<string, Connection>()
+  private uiChunkHandlers = new Map<string, Set<(chunk: UIMessageChunk) => void>>()
   private maxConnections = 10
   private maxRetries = 20
   private baseRetryDelay = 1000
@@ -87,6 +89,7 @@ class WebSocketManager {
       }
 
       ws.onerror = () => {
+        this.endUIChunkStream(sessionId, { type: 'abort', reason: 'WebSocket error' })
         conn.statusHandler(sessionId, 'error', 'WebSocket error')
       }
 
@@ -95,14 +98,23 @@ class WebSocketManager {
         // These are non-retryable — the server explicitly rejected the connection
         const nonRetryableCodes = [1003, 1008]
         if (nonRetryableCodes.includes(event.code) || (event.code >= 4000 && event.code <= 4999)) {
+          this.endUIChunkStream(sessionId, {
+            type: 'abort',
+            reason: event.reason || `Connection rejected (${event.code})`,
+          })
           conn.statusHandler(sessionId, 'error', event.reason || `Connection rejected (${event.code})`)
           this.connections.delete(sessionId)
           return
         }
 
         if (!event.wasClean || event.code !== 1000) {
+          this.endUIChunkStream(sessionId, {
+            type: 'abort',
+            reason: event.reason || `Connection closed (${event.code})`,
+          })
           this.scheduleRetry(sessionId, wsUrl)
         } else {
+          this.endUIChunkStream(sessionId, { type: 'abort', reason: 'Connection closed' })
           conn.statusHandler(sessionId, 'disconnected')
           this.connections.delete(sessionId)
         }
@@ -160,6 +172,7 @@ class WebSocketManager {
 
   disconnect(sessionId: string): void {
     this.cleanupConnection(sessionId)
+    this.endUIChunkStream(sessionId, { type: 'abort', reason: 'Disconnected' })
     const conn = this.connections.get(sessionId)
     if (conn) {
       conn.statusHandler(sessionId, 'disconnected')
@@ -211,6 +224,44 @@ class WebSocketManager {
 
   getRetryCount(sessionId: string): number {
     return this.connections.get(sessionId)?.retryCount ?? 0
+  }
+
+  onUIChunk(sessionId: string, handler: (chunk: UIMessageChunk) => void): () => void {
+    const handlers = this.uiChunkHandlers.get(sessionId) ?? new Set<(chunk: UIMessageChunk) => void>()
+    handlers.add(handler)
+    this.uiChunkHandlers.set(sessionId, handlers)
+
+    return () => {
+      const currentHandlers = this.uiChunkHandlers.get(sessionId)
+      if (!currentHandlers) {
+        return
+      }
+      currentHandlers.delete(handler)
+      if (currentHandlers.size === 0) {
+        this.uiChunkHandlers.delete(sessionId)
+      }
+    }
+  }
+
+  emitUIChunk(sessionId: string, chunk: UIMessageChunk): void {
+    const handlers = this.uiChunkHandlers.get(sessionId)
+    if (!handlers) {
+      return
+    }
+
+    for (const handler of handlers) {
+      try {
+        handler(chunk)
+      } catch (error) {
+        console.error('[WS] Failed to emit UI chunk:', error)
+      }
+    }
+  }
+
+  private endUIChunkStream(sessionId: string, chunk: UIMessageChunk): void {
+    // Emit terminal chunk to all handlers, then let each handle its own cleanup.
+    // Do NOT delete the handler set — individual handler cleanup functions remove themselves.
+    this.emitUIChunk(sessionId, chunk)
   }
 
   private findOldestConnection(): string | null {
