@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/utils/cn'
+import { USE_CHAT_TRANSPORT } from '@/lib/feature-flags'
 import { useSessionsStore } from '@/stores/sessions'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/components/ui/Toast'
@@ -11,6 +12,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { SaveRepoPrompt } from '@/components/session/SaveRepoPrompt'
+import WorkspaceUseChat from './WorkspaceUseChat'
 import { ToolCallDisplay } from '@/components/session/ToolCallDisplay'
 import { AskUserQuestionDisplay, isAskUserQuestionInput } from '@/components/session/AskUserQuestionDisplay'
 import { SdkControlPanel, ThinkingBlock, ToolUseBlock, ToolCallGroup, LoadingIndicator } from '@/components/sdk'
@@ -36,7 +38,7 @@ import {
   X,
 } from 'lucide-react'
 
-export default function Workspace() {
+function WorkspaceLegacy() {
   const navigate = useNavigate()
   const { sessionId: urlSessionId } = useParams()
   const toast = useToast()
@@ -954,4 +956,12 @@ function extractContentBlocks(content: string | ContentBlock[]): ExtractedConten
     toolUseBlocks,
     toolResults,
   }
+}
+
+export default function Workspace() {
+  if (USE_CHAT_TRANSPORT) {
+    return <WorkspaceUseChat />
+  }
+
+  return <WorkspaceLegacy />
 }
