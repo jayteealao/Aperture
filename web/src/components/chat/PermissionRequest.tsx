@@ -1,7 +1,13 @@
 import { AlertCircle } from 'lucide-react'
 import { cn } from '@/utils/cn'
-import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import {
+  Confirmation,
+  ConfirmationActions,
+  ConfirmationAction,
+  ConfirmationRequest,
+  ConfirmationTitle,
+} from '@/components/ai-elements/confirmation'
 import { ToolCallDisplay } from '@/components/session/ToolCallDisplay'
 import {
   AskUserQuestionDisplay,
@@ -31,8 +37,14 @@ export interface PermissionRequestProps {
 /**
  * Displays a pending permission request or AskUserQuestion prompt.
  *
- * MED-4 fix: onAddUserMessage uses a functional setMessages updater (no stale closure).
- * RS-1 fix: onAddUserMessage is async — persists before onRespond fires.
+ * Normal permissions use the ai-elements `<Confirmation>` compound component
+ * for consistent styling and accessibility (`role="alert"`).
+ *
+ * AskUserQuestion has its own multi-question tabbed UI with no ai-elements
+ * equivalent, so it keeps the custom Card wrapper.
+ *
+ * The component always renders in `approval-requested` state because it
+ * unmounts when the user responds (permission is removed from the store).
  */
 export function PermissionRequest({
   permission,
@@ -48,55 +60,25 @@ export function PermissionRequest({
   const toolName = toolCall?.name || toolCall?.title
   const isAskUserQuestion =
     toolName === 'AskUserQuestion' && isAskUserQuestionInput(toolCall.rawInput)
-  const allowOption = options.find((option) =>
-    option.kind?.includes('allow'),
-  )
 
-  const handleAskUserQuestionSubmit = async (answers: Record<string, string>) => {
-    if (!allowOption) {
-      return
-    }
+  // AskUserQuestion has its own interactive UI — keep in custom Card
+  if (isAskUserQuestion) {
+    const allowOption = options.find((option) =>
+      option.kind?.includes('allow'),
+    )
 
-    const answerText = Object.entries(answers)
-      .map(([header, value]) => `${header}: ${value}`)
-      .join('\n')
-
-    // Await persistence before sending the permission response (RS-1 fix)
-    await onAddUserMessage(`My answers:\n${answerText}`)
-    onRespond(permission.toolCallId, allowOption.optionId, answers)
-  }
-
-  return (
-    <Card
-      className={cn(
-        'border-l-4',
-        isAskUserQuestion ? 'border-l-accent' : 'border-l-warning',
-      )}
-      padding="md"
-      variant="glass"
-    >
-      <div className="flex items-start gap-3">
-        <AlertCircle
-          className={cn(
-            'shrink-0 mt-0.5',
-            isAskUserQuestion ? 'text-accent' : 'text-warning',
-          )}
-          size={20}
-        />
-        <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-(--color-text-primary)">
-            {isAskUserQuestion
-              ? 'Question from Agent'
-              : `Approve ${toolName || 'action'}?`}
-          </h4>
-
-          {!isAskUserQuestion && (
-            <p className="text-sm text-(--color-text-secondary) mt-1">
-              {toolCall?.title || 'The agent is requesting permission to proceed.'}
-            </p>
-          )}
-
-          {isAskUserQuestion ? (
+    return (
+      <Card
+        className="border-l-4 border-l-accent"
+        padding="md"
+        variant="glass"
+      >
+        <div className="flex items-start gap-3">
+          <AlertCircle className="shrink-0 mt-0.5 text-accent" size={20} />
+          <div className="flex-1 min-w-0">
+            <h4 className="font-medium text-(--color-text-primary)">
+              Question from Agent
+            </h4>
             <AskUserQuestionDisplay
               input={
                 toolCall.rawInput as {
@@ -111,49 +93,73 @@ export function PermissionRequest({
                   }>
                 }
               }
-              onSubmit={handleAskUserQuestionSubmit}
-            />
-          ) : toolCall?.rawInput ? (
-            <>
-              <ToolCallDisplay
-                name={toolCall.name}
-                rawInput={
-                  toolCall.rawInput as Record<string, unknown>
+              onSubmit={async (answers) => {
+                if (!allowOption) {
+                  return
                 }
-              />
-              <div className="flex flex-wrap gap-2 mt-3">
-                {options.map((option) => {
-                  const isAllow = option.kind?.includes('allow')
-                  return (
-                    <Button
-                      key={option.optionId}
-                      onClick={() =>
-                        onRespond(
-                          permission.toolCallId,
-                          option.optionId,
-                        )
-                      }
-                      size="sm"
-                      variant={isAllow ? 'primary' : 'secondary'}
-                    >
-                      {option.name}
-                    </Button>
-                  )
-                })}
-                <Button
-                  onClick={() =>
-                    onRespond(permission.toolCallId, null)
-                  }
-                  size="sm"
-                  variant="ghost"
-                >
-                  Decline
-                </Button>
-              </div>
-            </>
-          ) : null}
+                const answerText = Object.entries(answers)
+                  .map(([header, value]) => `${header}: ${value}`)
+                  .join('\n')
+                await onAddUserMessage(`My answers:\n${answerText}`)
+                onRespond(permission.toolCallId, allowOption.optionId, answers)
+              }}
+            />
+          </div>
         </div>
+      </Card>
+    )
+  }
+
+  // Normal permission — use ai-elements Confirmation for consistent styling.
+  // Always in "approval-requested" state: the component unmounts when the user
+  // responds because sendPermissionResponse removes it from the store.
+  return (
+    <Confirmation
+      approval={{ id: permission.toolCallId }}
+      className={cn(
+        'border-l-4 border-l-warning',
+        // Override Confirmation's flex-col with flex-row for icon placement
+        'flex-row items-start gap-3',
+      )}
+      state="approval-requested"
+    >
+      <AlertCircle className="shrink-0 mt-0.5 text-warning" size={20} />
+      <div className="flex flex-col gap-2 flex-1 min-w-0">
+        <ConfirmationTitle className="inline font-medium text-(--color-text-primary)">
+          Approve {toolName || 'action'}?
+        </ConfirmationTitle>
+
+        <ConfirmationRequest>
+          {toolCall?.rawInput ? (
+            <ToolCallDisplay
+              name={toolCall.name}
+              rawInput={toolCall.rawInput as Record<string, unknown>}
+            />
+          ) : (
+            <p className="text-sm text-(--color-text-secondary)">
+              {toolCall?.title || 'The agent is requesting permission to proceed.'}
+            </p>
+          )}
+        </ConfirmationRequest>
+
+        <ConfirmationActions className="self-start">
+          {options.map((option) => (
+            <ConfirmationAction
+              key={option.optionId}
+              onClick={() => onRespond(permission.toolCallId, option.optionId)}
+              variant={option.kind?.includes('allow') ? 'default' : 'outline'}
+            >
+              {option.name}
+            </ConfirmationAction>
+          ))}
+          <ConfirmationAction
+            onClick={() => onRespond(permission.toolCallId, null)}
+            variant="ghost"
+          >
+            Decline
+          </ConfirmationAction>
+        </ConfirmationActions>
       </div>
-    </Card>
+    </Confirmation>
   )
 }
