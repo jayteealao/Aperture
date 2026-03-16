@@ -42,6 +42,7 @@ import {
 import type { ConnectionState, Session } from '@/api/types'
 import { IMAGE_LIMITS } from '@/api/types'
 import { ApertureWebSocketTransport } from '@/api/chat-transport'
+import { submitChatMessage } from '@/utils/chat-submit'
 import { usePersistedUIMessages } from '@/hooks/usePersistedUIMessages'
 import type { ApertureUIMessage } from '@/utils/ui-message'
 import { Plus, Terminal } from 'lucide-react'
@@ -151,22 +152,11 @@ function WorkspaceChatSessionReady({
    */
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
-      if (!connection || connection.status !== 'connected') {
-        toast.error('Session not connected', 'Wait for the session to reconnect, or start a new one.')
-        throw new Error('Not connected')
-      }
-
-      try {
-        await sendMessage({
-          text: message.text,
-          files: message.files.length > 0 ? message.files : undefined,
-          metadata: { timestamp: new Date().toISOString() },
-        })
-      } catch (error) {
-        console.error('[useChat] Send error:', error)
-        toast.error('Message not sent', 'Something went wrong. Your message has been preserved — try again.')
-        throw error
-      }
+      await submitChatMessage(message, {
+        connection,
+        sendMessage,
+        notifyError: toast.error,
+      })
     },
     [connection, sendMessage, toast]
   )
