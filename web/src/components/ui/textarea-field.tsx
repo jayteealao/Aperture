@@ -74,7 +74,7 @@ export function TextareaField({
         id={textareaId}
         className={cn(
           autoGrow && 'field-sizing-content',
-          error && 'border-destructive focus-visible:ring-destructive/20',
+          error && 'border-danger focus-visible:ring-danger',
           className
         )}
         style={{ maxHeight: autoGrow ? maxHeight : undefined }}
@@ -93,7 +93,7 @@ export function TextareaField({
         {...props}
       />
       {error && (
-        <p id={`${textareaId}-error`} className="text-xs text-destructive">
+        <p id={`${textareaId}-error`} className="text-xs text-danger">
           {error}
         </p>
       )}
