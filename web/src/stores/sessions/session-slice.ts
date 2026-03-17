@@ -149,12 +149,16 @@ export const createSessionSlice: StateCreator<SessionsStore, [], [], SessionSlic
           localSessions.push(session)
           // Save to IndexedDB for consistency
           await persistSession(session)
-          console.log(`[Sessions] Discovered resumable SDK session: ${session.id}`)
+          if (import.meta.env.DEV) {
+            console.log(`[Sessions] Discovered resumable SDK session: ${session.id}`)
+          }
         }
       }
     } catch (err) {
       // Backend might not be available yet, that's okay
-      console.warn('[Sessions] Failed to fetch resumable sessions from backend:', err)
+      if (import.meta.env.DEV) {
+        console.warn('[Sessions] Failed to fetch resumable sessions from backend:', err)
+      }
     }
 
     if (localSessions.length > 0) {

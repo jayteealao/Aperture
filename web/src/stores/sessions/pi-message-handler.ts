@@ -33,12 +33,15 @@ export function handlePiWebSocketMessage(
           get().setStreaming(sessionId, true)
         }
       } else if (msgEvent.type === 'done') {
+        const { activeSessionId } = get()
         get().setStreaming(sessionId, false)
-        if (sessionId !== get().activeSessionId) {
+        if (sessionId !== activeSessionId) {
           get().incrementUnread(sessionId)
         }
       } else if (msgEvent.type === 'error') {
-        console.error('[Pi WS] Error:', msgEvent.error)
+        if (import.meta.env.DEV) {
+          console.error('[Pi WS] Error:', msgEvent.error)
+        }
         get().setStreaming(sessionId, false)
       }
       break

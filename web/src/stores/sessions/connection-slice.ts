@@ -12,7 +12,6 @@ import { api } from '@/api/client'
 import { wsManager } from '@/api/websocket'
 import { WsToUIChunkTranslator } from '@/api/ws-to-uichunk'
 import type { SessionsStore } from './index'
-import { defaultConnectionState } from './persistence'
 import { handleSdkWebSocketMessage } from './sdk-message-handler'
 import { handlePiWebSocketMessage } from './pi-message-handler'
 import { handleJsonRpcMessage } from './jsonrpc-message-handler'
@@ -21,7 +20,7 @@ export interface ConnectionSlice {
   connections: Record<string, ConnectionState>
 
   updateConnection: (sessionId: string, updates: Partial<ConnectionState>) => void
-  setStreaming: (sessionId: string, isStreaming: boolean, streamMessageId?: string) => void
+  setStreaming: (sessionId: string, isStreaming: boolean) => void
   incrementUnread: (sessionId: string) => void
   clearUnread: (sessionId: string) => void
   cleanupConnection: (sessionId: string) => void
@@ -41,32 +40,36 @@ export const createConnectionSlice: StateCreator<SessionsStore, [], [], Connecti
   ...connectionSliceInitialState,
 
   updateConnection: (sessionId, updates) => {
-    set((state) => ({
-      connections: {
-        ...state.connections,
-        [sessionId]: {
-          ...defaultConnectionState(),
-          ...state.connections[sessionId],
-          ...updates,
-          lastActivity: Date.now(),
+    set((state) => {
+      // Guard: do not recreate a connection entry for a session that has been
+      // removed. Delayed WS callbacks (statusHandler, message handlers) can
+      // fire after removeSession → cleanupConnection; without this guard they
+      // would resurrect a ghost ConnectionState entry.
+      if (!state.connections[sessionId]) return state
+      return {
+        connections: {
+          ...state.connections,
+          [sessionId]: {
+            ...state.connections[sessionId],
+            ...updates,
+            lastActivity: Date.now(),
+          },
         },
-      },
-    }))
+      }
+    })
   },
 
-  setStreaming: (sessionId, isStreaming, streamMessageId) => {
-    get().updateConnection(sessionId, {
-      isStreaming,
-      // Explicitly clear currentStreamMessageId when streaming stops
-      currentStreamMessageId: isStreaming ? streamMessageId : undefined,
-    })
+  setStreaming: (sessionId, isStreaming) => {
+    get().updateConnection(sessionId, { isStreaming })
   },
 
   incrementUnread: (sessionId) => {
     const { activeSessionId, connections } = get()
     if (sessionId === activeSessionId) return
 
-    const conn = connections[sessionId] || defaultConnectionState()
+    const conn = connections[sessionId]
+    if (!conn) return
+
     get().updateConnection(sessionId, {
       hasUnread: true,
       unreadCount: conn.unreadCount + 1,
@@ -94,11 +97,15 @@ export const createConnectionSlice: StateCreator<SessionsStore, [], [], Connecti
     try {
       const response = await api.connectSession(sessionId)
       if (response.restored) {
-        console.log(`[Sessions] Restored SDK session ${sessionId}`)
+        if (import.meta.env.DEV) {
+          console.log(`[Sessions] Restored SDK session ${sessionId}`)
+        }
         get().updateSessionStatus(sessionId, response.status)
       }
     } catch (err) {
-      console.warn(`[Sessions] Failed to connect/restore session ${sessionId}:`, err)
+      if (import.meta.env.DEV) {
+        console.warn(`[Sessions] Failed to connect/restore session ${sessionId}:`, err)
+      }
       get().updateConnection(sessionId, {
         status: 'error',
         error: err instanceof Error ? err.message : 'Session not found on server',
