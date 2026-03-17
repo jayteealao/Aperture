@@ -152,10 +152,6 @@
   --animate-slide-up: slide-up 0.2s ease-out;
   --animate-slide-down: slide-down 0.2s ease-out;
   --animate-slide-left: slide-left 0.2s ease-out;
-  --animate-slide-right: slide-right 0.2s ease-out;
-  --animate-pulse-slow: pulse 3s ease-in-out infinite;
-  --animate-spin-slow: spin 2s linear infinite;
-  --animate-typing: typing 1s steps(1) infinite;
 }
 
 @keyframes fade-in {
@@ -204,29 +200,6 @@
   }
 }
 
-@keyframes slide-right {
-  from {
-    transform: translateX(-10px);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes typing {
-  0%,
-  50% {
-    opacity: 1;
-  }
-
-  51%,
-  100% {
-    opacity: 0;
-  }
-}
 
 @keyframes animate-in {
   from {

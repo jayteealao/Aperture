@@ -7,7 +7,7 @@ import {
   ConfirmationRequest,
   ConfirmationTitle,
 } from '@/components/ai-elements/confirmation'
-import { ToolCallDisplay } from '@/components/session/ToolCallDisplay'
+import { ToolInputDisplay } from '@/components/sdk/ToolInputDisplay'
 import {
   AskUserQuestionDisplay,
   isAskUserQuestionInput,
@@ -152,9 +152,9 @@ export function PermissionRequest({
 
       <ConfirmationRequest>
         {toolCall?.rawInput ? (
-          <ToolCallDisplay
-            name={toolCall.name}
-            rawInput={toolCall.rawInput as Record<string, unknown>}
+          <ToolInputDisplay
+            name={toolCall.name ?? 'Unknown Tool'}
+            input={toolCall.rawInput}
           />
         ) : (
           <p className="text-sm text-(--color-text-secondary)">

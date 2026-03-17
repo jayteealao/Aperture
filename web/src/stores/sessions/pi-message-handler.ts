@@ -1,5 +1,7 @@
-// Pi WebSocket message handler — streaming, tool execution, compaction, Pi JSON-RPC
-// TEMPORARY: serves the legacy WorkspaceLegacy codepath. Deleted in Phase 8.
+// Pi WebSocket message handler — streaming state and Pi JSON-RPC responses
+// Content rendering is handled by WsToUIChunkTranslator + useChat.
+// This handler only updates the non-message parts of the store that
+// PiControlPanel, PermissionRequest, and connection status rely on.
 
 import type {
   PiWsMessage,
@@ -9,102 +11,46 @@ import type {
   PiForkableEntry,
   PiModelInfo,
 } from '@/api/pi-types'
-import { debouncedPersist, flushPersist } from './persistence'
 import type { StoreGet, StoreSet } from './handler-types'
 
-/** Handle first-class Pi WebSocket messages */
 export function handlePiWebSocketMessage(
   sessionId: string,
   message: PiWsMessage,
   get: StoreGet,
-  set: StoreSet
+  _set: StoreSet,
 ) {
   const { type, payload } = message
-  const { activeSessionId } = get()
-  const isActive = sessionId === activeSessionId
 
   switch (type) {
     case 'message_update': {
       const event = payload as {
-        assistantMessageEvent: {
-          type: string
-          delta?: string
-          toolCallId?: string
-          toolName?: string
-          error?: string
-        }
+        assistantMessageEvent: { type: string; delta?: string; error?: string }
       }
       const msgEvent = event.assistantMessageEvent
 
       if (msgEvent.type === 'text_delta' && msgEvent.delta) {
-        const currentState = get().piStreamingState[sessionId]
-        if (!currentState) {
-          const msgId = crypto.randomUUID()
-          get().setStreaming(sessionId, true, msgId)
-
-          get().addMessage(sessionId, {
-            id: msgId,
-            sessionId,
-            role: 'assistant',
-            content: msgEvent.delta,
-            timestamp: new Date().toISOString(),
-          })
-
-          set((state) => ({
-            piStreamingState: {
-              ...state.piStreamingState,
-              [sessionId]: {
-                messageId: msgId,
-                contentBlocks: [{ type: 'text', text: msgEvent.delta || '' }],
-                currentBlockIndex: 0,
-                isStreaming: true,
-              },
-            },
-          }))
-        } else {
-          const msgId = currentState.messageId
-          const messages = get().messages[sessionId] || []
-          const msgIndex = messages.findIndex((m) => m.id === msgId)
-          if (msgIndex !== -1) {
-            const msg = messages[msgIndex]
-            const updatedContent = (typeof msg.content === 'string' ? msg.content : '') + msgEvent.delta
-            get().updateMessage(sessionId, msgId, { content: updatedContent })
-            debouncedPersist(sessionId, get().messages[sessionId] || [])
-          }
+        if (!get().connections[sessionId]?.isStreaming) {
+          get().setStreaming(sessionId, true)
         }
       } else if (msgEvent.type === 'done') {
         get().setStreaming(sessionId, false)
-        flushPersist(sessionId, get().messages[sessionId] || [])
-        set((state) => ({
-          piStreamingState: { ...state.piStreamingState, [sessionId]: null },
-        }))
-        if (!isActive) {
+        if (sessionId !== get().activeSessionId) {
           get().incrementUnread(sessionId)
         }
       } else if (msgEvent.type === 'error') {
         console.error('[Pi WS] Error:', msgEvent.error)
         get().setStreaming(sessionId, false)
-        // Clear piStreamingState on error to prevent stale state
-        set((state) => ({
-          piStreamingState: { ...state.piStreamingState, [sessionId]: null },
-        }))
       }
       break
     }
 
-    case 'agent_start': {
+    case 'agent_start':
       get().setStreaming(sessionId, true)
       break
-    }
 
-    case 'agent_end': {
+    case 'agent_end':
       get().setStreaming(sessionId, false)
-      flushPersist(sessionId, get().messages[sessionId] || [])
-      set((state) => ({
-        piStreamingState: { ...state.piStreamingState, [sessionId]: null },
-      }))
       break
-    }
 
     case 'tool_execution_start':
     case 'tool_execution_end':
@@ -114,8 +60,11 @@ export function handlePiWebSocketMessage(
       break
 
     default:
-      // Handle JSON-RPC responses for Pi-specific commands
-      if (typeof payload === 'object' && payload !== null && 'method' in (payload as Record<string, unknown>)) {
+      if (
+        typeof payload === 'object' &&
+        payload !== null &&
+        'method' in (payload as Record<string, unknown>)
+      ) {
         const rpcPayload = payload as { method: string; params: unknown }
         handlePiJsonRpcResponse(sessionId, rpcPayload.method, rpcPayload.params, get)
       } else if (import.meta.env.DEV) {
@@ -124,12 +73,11 @@ export function handlePiWebSocketMessage(
   }
 }
 
-/** Handle Pi JSON-RPC responses */
 function handlePiJsonRpcResponse(
   sessionId: string,
   method: string,
   params: unknown,
-  get: StoreGet
+  get: StoreGet,
 ) {
   switch (method) {
     case 'pi/model_changed':

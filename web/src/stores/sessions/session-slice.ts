@@ -17,7 +17,6 @@ import {
   cancelAllPendingPersists,
 } from './persistence'
 import { connectionSliceInitialState } from './connection-slice'
-import { messageSliceInitialState } from './message-slice'
 import { permissionSliceInitialState } from './permission-slice'
 import { sdkSliceInitialState } from './sdk-slice'
 import { piSliceInitialState } from './pi-slice'
@@ -86,17 +85,10 @@ export const createSessionSlice: StateCreator<SessionsStore, [], [], SessionSlic
     get().cleanupConnection(sessionId)
     get().removePendingPermissionsForSession(sessionId)
 
-    set((state) => {
-      // Clean up messages inside set() to avoid stale snapshot
-      const messages = { ...state.messages }
-      delete messages[sessionId]
-
-      return {
-        sessions: state.sessions.filter((s) => s.id !== sessionId),
-        messages,
-        activeSessionId: state.activeSessionId === sessionId ? null : state.activeSessionId,
-      }
-    })
+    set((state) => ({
+      sessions: state.sessions.filter((s) => s.id !== sessionId),
+      activeSessionId: state.activeSessionId === sessionId ? null : state.activeSessionId,
+    }))
 
     // Remove from IndexedDB
     await removePersistedSession(sessionId)
@@ -175,7 +167,6 @@ export const createSessionSlice: StateCreator<SessionsStore, [], [], SessionSlic
       const exists = localSessions.find((s) => s.id === activeId)
       if (exists) {
         set({ activeSessionId: activeId })
-        await get().loadMessagesForSession(activeId)
       }
     }
   },
@@ -190,7 +181,6 @@ export const createSessionSlice: StateCreator<SessionsStore, [], [], SessionSlic
     set({
       ...sessionSliceInitialState,
       ...connectionSliceInitialState,
-      ...messageSliceInitialState,
       ...permissionSliceInitialState,
       ...sdkSliceInitialState,
       ...piSliceInitialState,

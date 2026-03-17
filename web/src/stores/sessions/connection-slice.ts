@@ -4,10 +4,7 @@ import type { StateCreator } from 'zustand'
 import type {
   ConnectionState,
   ConnectionStatus,
-  ContentBlock,
   PermissionResponse,
-  ImageAttachment,
-  Message,
 } from '@/api/types'
 import { isSdkWsMessage } from '@/api/types'
 import { isPiWsMessage } from '@/api/pi-types'
@@ -32,7 +29,6 @@ export interface ConnectionSlice {
   // WebSocket lifecycle
   connectSession: (sessionId: string) => Promise<void>
   disconnectSession: (sessionId: string) => void
-  sendMessage: (sessionId: string, content: string, images?: ImageAttachment[]) => Promise<void>
   sendPermissionResponse: (sessionId: string, toolCallId: string, optionId: string | null, answers?: Record<string, string>) => void
   cancelPrompt: (sessionId: string) => void
 }
@@ -155,42 +151,6 @@ export const createConnectionSlice: StateCreator<SessionsStore, [], [], Connecti
   disconnectSession: (sessionId) => {
     wsManager.disconnect(sessionId)
     get().updateConnection(sessionId, { status: 'disconnected' })
-  },
-
-  sendMessage: async (sessionId, content, images) => {
-    // Build message content: include image content blocks if present
-    const messageContent: string | ContentBlock[] = images && images.length > 0
-      ? [
-          ...images.map((img) => ({
-            type: 'image' as const,
-            mimeType: img.mimeType,
-            data: img.data,
-            filename: img.filename,
-          })),
-          { type: 'text' as const, text: content },
-        ]
-      : content
-
-    // Add user message to store
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      sessionId,
-      role: 'user',
-      content: messageContent,
-      timestamp: new Date().toISOString(),
-    }
-    await get().addMessage(sessionId, userMessage)
-
-    // Send via WebSocket (images sent alongside content)
-    const sent = wsManager.send(sessionId, {
-      type: 'user_message',
-      content,
-      ...(images && images.length > 0 ? { images } : {}),
-    })
-
-    if (!sent) {
-      throw new Error('Failed to send message - not connected')
-    }
   },
 
   sendPermissionResponse: (sessionId, toolCallId, optionId, answers) => {

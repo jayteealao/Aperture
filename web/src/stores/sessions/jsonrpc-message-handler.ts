@@ -1,8 +1,8 @@
-// JSON-RPC message handler — routes session/update, permission, config, models, etc.
+// JSON-RPC message handler — routes SDK control-plane events (models, config,
+// checkpoints, permissions, usage) to the appropriate store slices.
 
 import type {
   JsonRpcMessage,
-  ContentBlock,
   SdkSessionConfig,
   SessionResult,
   AccountInfo,
@@ -12,26 +12,28 @@ import type {
   RewindFilesResult,
   PermissionMode,
 } from '@/api/types'
-import { flushPersist } from './persistence'
 import type { StoreGet, StoreSet } from './handler-types'
 
-/** Handle JSON-RPC wrapped messages (legacy SDK path) */
 export function handleJsonRpcMessage(
   sessionId: string,
   data: unknown,
   get: StoreGet,
-  _set: StoreSet
+  _set: StoreSet,
 ) {
   const msg = data as JsonRpcMessage
   const { activeSessionId } = get()
   const isActive = sessionId === activeSessionId
 
   if (msg.method === 'session/update') {
-    const params = msg.params as { update: { sessionUpdate: string; content?: ContentBlock; [key: string]: unknown } } | undefined
+    const params = msg.params as { update: { sessionUpdate: string; [key: string]: unknown } } | undefined
     handleSessionUpdate(sessionId, params, get, isActive)
   } else if (msg.method === 'session/request_permission') {
     const params = msg.params as { toolCallId: string; toolCall: unknown; options: unknown[] }
-    handlePermissionRequest(sessionId, params, get)
+    get().setStreaming(sessionId, false)
+    get().addPendingPermission(sessionId, { toolCallId: params.toolCallId, toolCall: params.toolCall, options: params.options })
+    if (!isActive) {
+      get().incrementUnread(sessionId)
+    }
   } else if (msg.method === 'session/exit') {
     get().setStreaming(sessionId, false)
     get().updateConnection(sessionId, { status: 'ended' })
@@ -98,9 +100,9 @@ export function handleJsonRpcMessage(
 
 function handleSessionUpdate(
   sessionId: string,
-  params: { update: { sessionUpdate: string; content?: ContentBlock; [key: string]: unknown } } | undefined,
+  params: { update: { sessionUpdate: string; [key: string]: unknown } } | undefined,
   get: StoreGet,
-  isActive: boolean
+  isActive: boolean,
 ) {
   const update = params?.update
   if (!update) return
@@ -108,63 +110,19 @@ function handleSessionUpdate(
   const updateType = update.sessionUpdate
 
   if (updateType === 'agent_message_chunk') {
-    const { connections } = get()
-    const conn = connections[sessionId]
-
-    // Start streaming if not already
-    if (!conn?.isStreaming) {
-      const msgId = crypto.randomUUID()
-      get().setStreaming(sessionId, true, msgId)
-      get().addMessage(sessionId, {
-        id: msgId,
-        sessionId,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date().toISOString(),
-      })
+    if (!get().connections[sessionId]?.isStreaming) {
+      get().setStreaming(sessionId, true)
     }
-
-    // Append content
-    const content = update.content
-    if (content?.type === 'text' && content.text) {
-      const streamMsgId = get().connections[sessionId]?.currentStreamMessageId
-      if (streamMsgId) {
-        const sessionMessages = get().messages[sessionId] || []
-        const currentMsg = sessionMessages.find((m) => m.id === streamMsgId)
-        if (currentMsg) {
-          const currentContent = typeof currentMsg.content === 'string' ? currentMsg.content : ''
-          get().updateMessage(sessionId, streamMsgId, {
-            content: currentContent + content.text,
-          })
-        }
-      }
-    }
-
     if (!isActive) {
       get().incrementUnread(sessionId)
     }
   } else if (updateType === 'prompt_complete' || updateType === 'prompt_error') {
     get().setStreaming(sessionId, false)
-    flushPersist(sessionId, get().messages[sessionId] || [])
   } else if (updateType === 'config_changed') {
     const currentConfig = get().sdkConfig[sessionId] || {}
     const newConfig: SdkSessionConfig = { ...currentConfig }
     if ('model' in update) newConfig.model = update.model as string | undefined
     if ('permissionMode' in update) newConfig.permissionMode = update.permissionMode as PermissionMode
     get().setSdkConfig(sessionId, newConfig)
-  }
-}
-
-function handlePermissionRequest(
-  sessionId: string,
-  params: { toolCallId: string; toolCall: unknown; options: unknown[] },
-  get: StoreGet
-) {
-  const { toolCallId, toolCall, options } = params
-  get().setStreaming(sessionId, false)
-  get().addPendingPermission(sessionId, { toolCallId, toolCall, options })
-
-  if (sessionId !== get().activeSessionId) {
-    get().incrementUnread(sessionId)
   }
 }

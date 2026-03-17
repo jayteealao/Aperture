@@ -160,7 +160,6 @@ describe('useSessionsStore cleanup', () => {
     expect(websocketMocks.disconnect).toHaveBeenCalledWith(sessionId)
     expect(state.sessions).toEqual([])
     expect(state.activeSessionId).toBeNull()
-    expect(state.messages[sessionId]).toBeUndefined()
     expect(state.connections[sessionId]).toBeUndefined()
     expect(state.pendingPermissions[`${sessionId}:tool-1`]).toBeUndefined()
     expect(state.piConfig[sessionId]).toBeUndefined()
@@ -179,7 +178,6 @@ describe('useSessionsStore cleanup', () => {
       ...state,
       sessions: [makeSession('sdk-1', 'claude_sdk'), makeSession('pi-1', 'pi_sdk')],
       activeSessionId: 'pi-1',
-      messages: { 'pi-1': [], 'sdk-1': [] },
       connections: {
         'pi-1': {
           status: 'connected',
@@ -218,7 +216,6 @@ describe('useSessionsStore cleanup', () => {
     expect(websocketMocks.disconnectAll).toHaveBeenCalled()
     expect(state.sessions).toEqual([])
     expect(state.activeSessionId).toBeNull()
-    expect(state.messages).toEqual({})
     expect(state.connections).toEqual({})
     expect(state.pendingPermissions).toEqual({})
     expect(state.sdkConfig).toEqual({})
