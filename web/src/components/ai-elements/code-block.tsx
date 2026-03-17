@@ -12,7 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/Select";
+} from "@/components/ui/select";
 import { cn } from "@/utils/cn";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import type { ThemedToken } from "@shikijs/types";

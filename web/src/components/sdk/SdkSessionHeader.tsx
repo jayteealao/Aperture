@@ -1,6 +1,6 @@
 // SDK Session Header - Model selector, permission mode, interrupt button
 
-import { FormSelect } from '@/components/ui/Select'
+import { FormSelect } from '@/components/ui/form-select'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { StopCircle } from 'lucide-react'

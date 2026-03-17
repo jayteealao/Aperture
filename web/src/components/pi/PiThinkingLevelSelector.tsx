@@ -3,7 +3,7 @@
  * Allows users to select or cycle through thinking levels
  */
 
-import { FormSelect } from '@/components/ui/Select'
+import { FormSelect } from '@/components/ui/form-select'
 import { Button } from '@/components/ui/Button'
 import type { PiThinkingLevel } from '@/api/pi-types'
 
