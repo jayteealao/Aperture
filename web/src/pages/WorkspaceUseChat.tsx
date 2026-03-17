@@ -56,6 +56,7 @@ function WorkspaceChatView({ sessionId, isActive }: { sessionId: string; isActiv
       .map(([, permission]) => permission)
   )
   const sendPermissionResponse = useSessionsStore((state) => state.sendPermissionResponse)
+  const setStreaming = useSessionsStore((state) => state.setStreaming)
   const { initialMessages, persistMessages } = usePersistedUIMessages(sessionId)
 
   if (!session || initialMessages === null) {
@@ -78,6 +79,7 @@ function WorkspaceChatView({ sessionId, isActive }: { sessionId: string; isActiv
       sendPermissionResponse={sendPermissionResponse}
       session={session}
       sessionId={sessionId}
+      setStreaming={setStreaming}
     />
   )
 }
@@ -91,6 +93,7 @@ function WorkspaceChatSessionReady({
   initialMessages,
   persistMessages,
   sendPermissionResponse,
+  setStreaming,
 }: {
   sessionId: string
   session: Session
@@ -100,6 +103,7 @@ function WorkspaceChatSessionReady({
   initialMessages: ApertureUIMessage[]
   persistMessages: (messages: ApertureUIMessage[]) => Promise<void>
   sendPermissionResponse: (sessionId: string, toolCallId: string, optionId: string | null, answers?: Record<string, string>) => void
+  setStreaming: (sessionId: string, isStreaming: boolean) => void
 }) {
   const toast = useToast()
   const transport = useMemo(() => new ApertureWebSocketTransport(sessionId), [sessionId])
@@ -119,6 +123,15 @@ function WorkspaceChatSessionReady({
   useEffect(() => {
     void persistMessages(messages)
   }, [messages, persistMessages])
+
+  /**
+   * 6.2 sync: Bridge useChat.status back to the Zustand connection slice so that
+   * SdkControlPanel, PiControlPanel, and Sidebar can read isStreaming from the
+   * store without calling useChat (which is only available in this component).
+   */
+  useEffect(() => {
+    setStreaming(sessionId, status === 'streaming')
+  }, [sessionId, status, setStreaming])
 
   /**
    * MED-4 fix: Functional setMessages updater avoids stale closure over `messages`.
@@ -184,9 +197,14 @@ function WorkspaceChatSessionReady({
             <p className="text-xs text-(--color-text-muted)">{session.agent}</p>
           </div>
         </div>
-        {isStreaming && (
+        {status === 'streaming' && (
           <Badge variant="accent" size="sm" className="animate-pulse">
             Streaming...
+          </Badge>
+        )}
+        {status === 'submitted' && (
+          <Badge variant="outline" size="sm">
+            Sending...
           </Badge>
         )}
       </div>
