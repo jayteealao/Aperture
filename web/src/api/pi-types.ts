@@ -263,38 +263,3 @@ export interface PiCompactionEndPayload {
   postTokens: number;
 }
 
-// =============================================================================
-// Content Block Types (for streaming state)
-// =============================================================================
-
-export type PiContentBlockType = 'text' | 'thinking' | 'tool_call';
-
-export interface PiTextContentBlock {
-  type: 'text';
-  text: string;
-}
-
-export interface PiThinkingContentBlock {
-  type: 'thinking';
-  thinking: string;
-}
-
-export interface PiToolCallContentBlock {
-  type: 'tool_call';
-  id: string;
-  name: string;
-  input: string; // JSON string being built up
-}
-
-export type PiContentBlock = PiTextContentBlock | PiThinkingContentBlock | PiToolCallContentBlock;
-
-// =============================================================================
-// Streaming State
-// =============================================================================
-
-export interface PiStreamingState {
-  messageId: string;
-  contentBlocks: PiContentBlock[];
-  currentBlockIndex: number;
-  isStreaming: boolean;
-}

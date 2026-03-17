@@ -9,7 +9,6 @@ import type {
   SlashCommand,
   McpServerStatus,
   RewindFilesResult,
-  SdkContentBlock,
 } from '@/api/types'
 import type { SessionsStore } from './index'
 import { cleanupSessionState } from './cleanup-helper'
@@ -31,13 +30,6 @@ interface SdkErrorState {
   accountInfo?: string
 }
 
-// SDK streaming state for tracking content blocks during streaming
-export interface SdkStreamingState {
-  messageId: string
-  contentBlocks: SdkContentBlock[]
-  currentBlockIndex: number
-}
-
 export interface SdkSlice {
   // State
   sdkConfig: Record<string, SdkSessionConfig>
@@ -50,7 +42,6 @@ export interface SdkSlice {
   sdkLoading: Record<string, SdkLoadingState>
   sdkErrors: Record<string, SdkErrorState>
   sdkRewindResult: Record<string, RewindFilesResult | null>
-  sdkStreamingState: Record<string, SdkStreamingState | null>
 
   // Actions
   setSdkConfig: (sessionId: string, config: SdkSessionConfig) => void
@@ -79,7 +70,6 @@ export const sdkSliceInitialState = {
   sdkLoading: {} as Record<string, SdkLoadingState>,
   sdkErrors: {} as Record<string, SdkErrorState>,
   sdkRewindResult: {} as Record<string, RewindFilesResult | null>,
-  sdkStreamingState: {} as Record<string, SdkStreamingState | null>,
 }
 
 export const createSdkSlice: StateCreator<SessionsStore, [], [], SdkSlice> = (set) => ({

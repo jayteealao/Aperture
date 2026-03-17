@@ -7,7 +7,6 @@ import type {
   PiModelInfo,
   PiSessionTree,
   PiThinkingLevel,
-  PiStreamingState,
   PiForkableEntry,
 } from '@/api/pi-types'
 import { wsManager } from '@/api/websocket'
@@ -40,7 +39,6 @@ export interface PiSlice {
   piThinkingLevel: Record<string, PiThinkingLevel>
   piLoading: Record<string, PiLoadingState>
   piErrors: Record<string, PiErrorState>
-  piStreamingState: Record<string, PiStreamingState | null>
 
   // Setters
   setPiConfig: (sessionId: string, config: PiSessionConfig) => void
@@ -81,7 +79,6 @@ export const piSliceInitialState = {
   piThinkingLevel: {} as Record<string, PiThinkingLevel>,
   piLoading: {} as Record<string, PiLoadingState>,
   piErrors: {} as Record<string, PiErrorState>,
-  piStreamingState: {} as Record<string, PiStreamingState | null>,
 }
 
 export const createPiSlice: StateCreator<SessionsStore, [], [], PiSlice> = (set, get) => ({

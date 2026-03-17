@@ -336,7 +336,6 @@ export interface ConnectionState {
   hasUnread: boolean
   unreadCount: number
   lastActivity: number
-  currentStreamMessageId?: string
 }
 
 // Workspace types
@@ -438,23 +437,6 @@ export interface ToolResultContentBlock {
   tool_use_id: string
   content: string
   is_error?: boolean
-}
-
-export type SdkContentBlock =
-  | TextContentBlock
-  | ThinkingContentBlock
-  | ToolUseContentBlock
-  | ToolResultContentBlock
-
-export interface SdkMessage {
-  id: string
-  sessionId: string
-  role: 'user' | 'assistant' | 'system'
-  content: SdkContentBlock[]
-  timestamp: string
-  messageId?: string
-  stopReason?: string
-  usage?: { input_tokens: number; output_tokens: number }
 }
 
 export interface SdkWsMessage {
