@@ -56,7 +56,6 @@ function WorkspaceChatView({ sessionId, isActive }: { sessionId: string; isActiv
       .map(([, permission]) => permission)
   )
   const sendPermissionResponse = useSessionsStore((state) => state.sendPermissionResponse)
-  const setStreaming = useSessionsStore((state) => state.setStreaming)
   const { initialMessages, persistMessages } = usePersistedUIMessages(sessionId)
 
   if (!session || initialMessages === null) {
@@ -79,7 +78,6 @@ function WorkspaceChatView({ sessionId, isActive }: { sessionId: string; isActiv
       sendPermissionResponse={sendPermissionResponse}
       session={session}
       sessionId={sessionId}
-      setStreaming={setStreaming}
     />
   )
 }
@@ -93,7 +91,6 @@ function WorkspaceChatSessionReady({
   initialMessages,
   persistMessages,
   sendPermissionResponse,
-  setStreaming,
 }: {
   sessionId: string
   session: Session
@@ -103,9 +100,10 @@ function WorkspaceChatSessionReady({
   initialMessages: ApertureUIMessage[]
   persistMessages: (messages: ApertureUIMessage[]) => Promise<void>
   sendPermissionResponse: (sessionId: string, toolCallId: string, optionId: string | null, answers?: Record<string, string>) => void
-  setStreaming: (sessionId: string, isStreaming: boolean) => void
 }) {
   const toast = useToast()
+  // Selected directly here — not prop-drilled — since useChat owns the status
+  const setStreaming = useSessionsStore((state) => state.setStreaming)
   const transport = useMemo(() => new ApertureWebSocketTransport(sessionId), [sessionId])
 
   const { messages, sendMessage, setMessages, status, stop } = useChat<ApertureUIMessage>({
@@ -125,13 +123,15 @@ function WorkspaceChatSessionReady({
   }, [messages, persistMessages])
 
   /**
-   * 6.2 sync: Bridge useChat.status back to the Zustand connection slice so that
-   * SdkControlPanel, PiControlPanel, and Sidebar can read isStreaming from the
-   * store without calling useChat (which is only available in this component).
+   * 6.2 cleanup guard: WS message handlers (sdk-message-handler, pi-message-handler)
+   * own writing isStreaming=true to the store with the correct streamMessageId.
+   * This effect's sole job is to reset isStreaming=false if this component unmounts
+   * while a stream is in progress (e.g. session error, tab close) — a case the WS
+   * teardown message may not cover. Writing true here would clobber currentStreamMessageId.
    */
   useEffect(() => {
-    setStreaming(sessionId, status === 'streaming')
-  }, [sessionId, status, setStreaming])
+    return () => { setStreaming(sessionId, false) }
+  }, [sessionId, setStreaming])
 
   /**
    * MED-4 fix: Functional setMessages updater avoids stale closure over `messages`.
@@ -183,7 +183,10 @@ function WorkspaceChatSessionReady({
   )
 
   const isConnected = connection?.status === 'connected'
-  const isStreaming = status === 'streaming' || status === 'submitted'
+  // isInFlight covers both 'submitted' (waiting for first token) and 'streaming'
+  // (tokens arriving). Used only for the stop-button disabled guard — broader than
+  // the store's isStreaming which only covers the active streaming phase.
+  const isInFlight = status === 'streaming' || status === 'submitted'
 
   return (
     <div className={cn('flex h-full flex-col', !isActive && 'hidden')}>
@@ -199,7 +202,7 @@ function WorkspaceChatSessionReady({
         </div>
         {status === 'streaming' && (
           <Badge variant="accent" size="sm" className="animate-pulse">
-            Streaming...
+            Responding...
           </Badge>
         )}
         {status === 'submitted' && (
@@ -273,7 +276,7 @@ function WorkspaceChatSessionReady({
                 </PromptInputActionMenu>
               </PromptInputTools>
               <PromptInputSubmit
-                disabled={!isConnected && !isStreaming}
+                disabled={!isConnected && !isInFlight}
                 onStop={stop}
                 status={status}
               />

@@ -154,10 +154,20 @@ export function Sidebar({ className }: SidebarProps) {
                       {session.id.slice(0, 8)}
                     </span>
                     {conn?.isStreaming && (
-                      <span className="w-2 h-2 rounded-full bg-success animate-[pulse_0.75s_ease-in-out_infinite]" title="Streaming" />
+                      <span
+                        aria-label="Responding"
+                        className="w-2 h-2 rounded-full bg-success animate-pulse"
+                        role="status"
+                        title="Responding"
+                      />
                     )}
                     {hasUnread && !conn?.isStreaming && (
-                      <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                      <span
+                        aria-label="Unread messages"
+                        className="w-2 h-2 rounded-full bg-accent animate-pulse"
+                        role="status"
+                        title="Unread messages"
+                      />
                     )}
                   </button>
                 )
