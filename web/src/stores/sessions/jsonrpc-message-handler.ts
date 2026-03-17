@@ -20,18 +20,18 @@ export function handleJsonRpcMessage(
   get: StoreGet,
   _set: StoreSet,
 ) {
+  if (typeof data !== 'object' || data === null) return
   const msg = data as JsonRpcMessage
-  const { activeSessionId } = get()
-  const isActive = sessionId === activeSessionId
 
   if (msg.method === 'session/update') {
     const params = msg.params as { update: { sessionUpdate: string; [key: string]: unknown } } | undefined
-    handleSessionUpdate(sessionId, params, get, isActive)
+    handleSessionUpdate(sessionId, params, get)
   } else if (msg.method === 'session/request_permission') {
     const params = msg.params as { toolCallId: string; toolCall: unknown; options: unknown[] }
+    const { activeSessionId } = get()
     get().setStreaming(sessionId, false)
     get().addPendingPermission(sessionId, { toolCallId: params.toolCallId, toolCall: params.toolCall, options: params.options })
-    if (!isActive) {
+    if (sessionId !== activeSessionId) {
       get().incrementUnread(sessionId)
     }
   } else if (msg.method === 'session/exit') {
@@ -39,7 +39,18 @@ export function handleJsonRpcMessage(
     get().updateConnection(sessionId, { status: 'ended' })
   } else if (msg.method === 'session/error') {
     const params = msg.params as { message?: string } | undefined
-    console.error('[WS] Session error:', params?.message)
+    if (import.meta.env.DEV) {
+      console.error('[WS] Session error:', params?.message)
+    }
+    get().setStreaming(sessionId, false)
+    // Sanitize: only accept a string ≤200 chars to prevent server-side error
+    // internals (stack traces, paths) from being stored verbatim in client state.
+    const rawMessage = typeof params?.message === 'string' ? params.message : null
+    const safeError = rawMessage !== null && rawMessage.length <= 200 ? rawMessage : 'Session error'
+    get().updateConnection(sessionId, {
+      status: 'error',
+      error: safeError,
+    })
   } else if (msg.method === 'session/supported_models') {
     const params = msg.params as { models?: ModelInfo[]; error?: string }
     if (params.error) {
@@ -102,18 +113,24 @@ function handleSessionUpdate(
   sessionId: string,
   params: { update: { sessionUpdate: string; [key: string]: unknown } } | undefined,
   get: StoreGet,
-  isActive: boolean,
 ) {
   const update = params?.update
   if (!update) return
 
+  // Snapshot activeSessionId once at the top — before any writes — so that
+  // all branches in this function use a consistent value. Capturing after a
+  // store write would expose a race if any subscriber mutates activeSessionId
+  // as a side-effect (e.g. an auto-focus that switches sessions on permission).
+  const { activeSessionId } = get()
   const updateType = update.sessionUpdate
 
   if (updateType === 'agent_message_chunk') {
+    // Streaming flag for legacy JSON-RPC sessions (non-SDK/Pi agents).
+    // SDK and Pi sessions receive this via their own message handlers.
     if (!get().connections[sessionId]?.isStreaming) {
       get().setStreaming(sessionId, true)
     }
-    if (!isActive) {
+    if (sessionId !== activeSessionId) {
       get().incrementUnread(sessionId)
     }
   } else if (updateType === 'prompt_complete' || updateType === 'prompt_error') {
