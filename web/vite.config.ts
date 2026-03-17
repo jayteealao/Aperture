@@ -38,11 +38,6 @@ export default defineConfig({
             { name: 'router', test: /\/node_modules\/react-router\//, priority: 9 },
             { name: 'query', test: /\/node_modules\/@tanstack\/react-query/, priority: 8 },
             { name: 'state', test: /\/node_modules\/zustand/, priority: 7 },
-            {
-              name: 'markdown',
-              test: /\/node_modules\/(react-markdown|remark-gfm|remark-math|rehype-katex)\//,
-              priority: 6,
-            },
             { name: 'shiki', test: /\/src\/lib\/shiki\.bundle\.ts$/, priority: 5 },
             { name: 'motion', test: /\/node_modules\/motion\//, priority: 4 },
             { name: 'radix', test: /\/node_modules\/(@radix-ui|radix-ui)\//, priority: 3 },
