@@ -1,5 +1,4 @@
 import { AlertCircle } from 'lucide-react'
-import { cn } from '@/utils/cn'
 import { Card } from '@/components/ui/Card'
 import {
   Confirmation,
@@ -38,7 +37,7 @@ export interface PermissionRequestProps {
  * Displays a pending permission request or AskUserQuestion prompt.
  *
  * Normal permissions use the ai-elements `<Confirmation>` compound component
- * for consistent styling and accessibility (`role="alert"`).
+ * for consistent styling and built-in `role="alert"` accessibility (via Alert).
  *
  * AskUserQuestion has its own multi-question tabbed UI with no ai-elements
  * equivalent, so it keeps the custom Card wrapper.
@@ -61,11 +60,33 @@ export function PermissionRequest({
   const isAskUserQuestion =
     toolName === 'AskUserQuestion' && isAskUserQuestionInput(toolCall.rawInput)
 
-  // AskUserQuestion has its own interactive UI — keep in custom Card
+  // AskUserQuestion has its own interactive UI — keep in custom Card.
   if (isAskUserQuestion) {
-    const allowOption = options.find((option) =>
-      option.kind?.includes('allow'),
-    )
+    const allowOption = options.find((option) => option.kind?.includes('allow'))
+
+    /**
+     * CR-2 fix: If no allow option exists (malformed permission from server),
+     * unblock the agent with a null response and log for observability rather
+     * than silently no-op and leave the session hanging.
+     */
+    const handleAskUserQuestionSubmit = async (
+      answers: Record<string, string>,
+    ) => {
+      if (!allowOption) {
+        console.error(
+          '[PermissionRequest] AskUserQuestion has no allow option — responding null to unblock agent',
+          { toolCallId: permission.toolCallId, options },
+        )
+        onRespond(permission.toolCallId, null)
+        return
+      }
+      const answerText = Object.entries(answers)
+        .map(([header, value]) => `${header}: ${value}`)
+        .join('\n')
+      // Await persistence before sending the permission response (RS-1 fix)
+      await onAddUserMessage(`My answers:\n${answerText}`)
+      onRespond(permission.toolCallId, allowOption.optionId, answers)
+    }
 
     return (
       <Card
@@ -93,16 +114,7 @@ export function PermissionRequest({
                   }>
                 }
               }
-              onSubmit={async (answers) => {
-                if (!allowOption) {
-                  return
-                }
-                const answerText = Object.entries(answers)
-                  .map(([header, value]) => `${header}: ${value}`)
-                  .join('\n')
-                await onAddUserMessage(`My answers:\n${answerText}`)
-                onRespond(permission.toolCallId, allowOption.optionId, answers)
-              }}
+              onSubmit={handleAskUserQuestionSubmit}
             />
           </div>
         </div>
@@ -110,40 +122,59 @@ export function PermissionRequest({
     )
   }
 
+  // DX-1 fix: Guard against an empty toolCallId — Confirmation returns null for
+  // falsy approval.id with no error, which would silently hide the permission UI.
+  if (!permission.toolCallId) {
+    console.error('[PermissionRequest] Received permission with empty toolCallId', permission)
+    return null
+  }
+
   // Normal permission — use ai-elements Confirmation for consistent styling.
   // Always in "approval-requested" state: the component unmounts when the user
   // responds because sendPermissionResponse removes it from the store.
+  //
+  // ST-1 fix: Icon is placed inside ConfirmationTitle (a flex row) rather than
+  // as a direct sibling of the content div — avoids fighting Confirmation's
+  // internal flex-col layout via className override.
+  //
+  // CR-1 fix: No hardcoded Decline button — the backend always includes a deny
+  // option in the options array. Rendering one here would duplicate it.
   return (
     <Confirmation
       approval={{ id: permission.toolCallId }}
-      className={cn(
-        'border-l-4 border-l-warning',
-        // Override Confirmation's flex-col with flex-row for icon placement
-        'flex-row items-start gap-3',
-      )}
+      className="border-l-4 border-l-warning"
       state="approval-requested"
     >
-      <AlertCircle className="shrink-0 mt-0.5 text-warning" size={20} />
-      <div className="flex flex-col gap-2 flex-1 min-w-0">
-        <ConfirmationTitle className="inline font-medium text-(--color-text-primary)">
-          Approve {toolName || 'action'}?
-        </ConfirmationTitle>
+      <ConfirmationTitle className="flex items-center gap-2 font-medium text-(--color-text-primary)">
+        <AlertCircle className="shrink-0 text-warning" size={16} />
+        Approve {toolName || 'this request'}?
+      </ConfirmationTitle>
 
-        <ConfirmationRequest>
-          {toolCall?.rawInput ? (
-            <ToolCallDisplay
-              name={toolCall.name}
-              rawInput={toolCall.rawInput as Record<string, unknown>}
-            />
-          ) : (
-            <p className="text-sm text-(--color-text-secondary)">
-              {toolCall?.title || 'The agent is requesting permission to proceed.'}
-            </p>
-          )}
-        </ConfirmationRequest>
+      <ConfirmationRequest>
+        {toolCall?.rawInput ? (
+          <ToolCallDisplay
+            name={toolCall.name}
+            rawInput={toolCall.rawInput as Record<string, unknown>}
+          />
+        ) : (
+          <p className="text-sm text-(--color-text-secondary)">
+            {toolCall?.title || 'The agent is requesting permission to proceed.'}
+          </p>
+        )}
+      </ConfirmationRequest>
 
-        <ConfirmationActions className="self-start">
-          {options.map((option) => (
+      <ConfirmationActions>
+        {/* CR-3 fix: If the server sends no options (malformed), render a single
+            dismiss button so the user can always unblock the session. */}
+        {options.length === 0 ? (
+          <ConfirmationAction
+            onClick={() => onRespond(permission.toolCallId, null)}
+            variant="outline"
+          >
+            Dismiss
+          </ConfirmationAction>
+        ) : (
+          options.map((option) => (
             <ConfirmationAction
               key={option.optionId}
               onClick={() => onRespond(permission.toolCallId, option.optionId)}
@@ -151,15 +182,9 @@ export function PermissionRequest({
             >
               {option.name}
             </ConfirmationAction>
-          ))}
-          <ConfirmationAction
-            onClick={() => onRespond(permission.toolCallId, null)}
-            variant="ghost"
-          >
-            Decline
-          </ConfirmationAction>
-        </ConfirmationActions>
-      </div>
+          ))
+        )}
+      </ConfirmationActions>
     </Confirmation>
   )
 }
