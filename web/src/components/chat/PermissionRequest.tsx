@@ -1,5 +1,5 @@
 import { AlertCircle } from 'lucide-react'
-import { Card } from '@/components/ui/Card'
+import { Card } from '@/components/ui/card'
 import {
   Confirmation,
   ConfirmationActions,
@@ -97,7 +97,7 @@ export function PermissionRequest({
         <div className="flex items-start gap-3">
           <AlertCircle className="shrink-0 mt-0.5 text-accent" size={20} />
           <div className="flex-1 min-w-0">
-            <h4 className="font-medium text-(--color-text-primary)">
+            <h4 className="font-medium text-foreground">
               Question from Agent
             </h4>
             <AskUserQuestionDisplay
@@ -145,7 +145,7 @@ export function PermissionRequest({
       className="border-l-4 border-l-warning"
       state="approval-requested"
     >
-      <ConfirmationTitle className="flex items-center gap-2 font-medium text-(--color-text-primary)">
+      <ConfirmationTitle className="flex items-center gap-2 font-medium text-foreground">
         <AlertCircle className="shrink-0 text-warning" size={16} />
         Approve {toolName || 'this request'}?
       </ConfirmationTitle>
@@ -157,7 +157,7 @@ export function PermissionRequest({
             input={toolCall.rawInput}
           />
         ) : (
-          <p className="text-sm text-(--color-text-secondary)">
+          <p className="text-sm text-muted-foreground">
             {toolCall?.title || 'The agent is requesting permission to proceed.'}
           </p>
         )}

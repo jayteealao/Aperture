@@ -1,6 +1,6 @@
 // SDK MCP Status - MCP server list with status badges
 
-import { Badge } from '@/components/ui/Badge'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { Server, RefreshCw, AlertCircle, CheckCircle2, Clock, Lock } from 'lucide-react'
@@ -38,8 +38,8 @@ export function SdkMcpStatus({ mcpStatus, loading, error, onRefresh }: SdkMcpSta
   if (needsPrompt) {
     return (
       <div className="text-center py-3">
-        <Server size={24} className="mx-auto text-(--color-text-muted) mb-2" />
-        <p className="text-xs text-(--color-text-muted)">Send a prompt to load MCP status</p>
+        <Server size={24} className="mx-auto text-foreground/40 mb-2" />
+        <p className="text-xs text-foreground/40">Send a prompt to load MCP status</p>
       </div>
     )
   }
@@ -47,8 +47,8 @@ export function SdkMcpStatus({ mcpStatus, loading, error, onRefresh }: SdkMcpSta
   if (mcpStatus.length === 0) {
     return (
       <div className="text-center py-3">
-        <Server size={24} className="mx-auto text-(--color-text-muted) mb-2" />
-        <p className="text-xs text-(--color-text-muted)">No MCP servers configured</p>
+        <Server size={24} className="mx-auto text-foreground/40 mb-2" />
+        <p className="text-xs text-foreground/40">No MCP servers configured</p>
       </div>
     )
   }
@@ -57,7 +57,7 @@ export function SdkMcpStatus({ mcpStatus, loading, error, onRefresh }: SdkMcpSta
     <div className="space-y-2">
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-(--color-text-secondary)">
+        <span className="text-xs font-medium text-muted-foreground">
           {mcpStatus.length} server{mcpStatus.length !== 1 ? 's' : ''}
         </span>
         <Button variant="ghost" size="sm" onClick={onRefresh} className="h-6 px-2">
@@ -72,11 +72,11 @@ export function SdkMcpStatus({ mcpStatus, loading, error, onRefresh }: SdkMcpSta
           return (
             <div
               key={server.name}
-              className="flex items-center justify-between p-2 bg-(--color-surface) rounded-lg"
+              className="flex items-center justify-between p-2 bg-secondary rounded-lg"
             >
               <div className="flex items-center gap-2 min-w-0">
-                <Server size={14} className="text-(--color-text-muted) shrink-0" />
-                <span className="text-xs text-(--color-text-primary) truncate">
+                <Server size={14} className="text-foreground/40 shrink-0" />
+                <span className="text-xs text-foreground truncate">
                   {server.name}
                 </span>
               </div>

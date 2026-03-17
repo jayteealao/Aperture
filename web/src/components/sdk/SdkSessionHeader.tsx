@@ -47,13 +47,13 @@ export function SdkSessionHeader({
       {/* Model Selector */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <label className="text-xs font-medium text-(--color-text-secondary)">
+          <label className="text-xs font-medium text-muted-foreground">
             Model
           </label>
           {loading.models && <Spinner size="sm" />}
         </div>
         {modelsNeedPrompt ? (
-          <div className="text-xs text-(--color-text-muted) py-2">
+          <div className="text-xs text-foreground/40 py-2">
             Send a prompt to load models
           </div>
         ) : (
@@ -70,7 +70,7 @@ export function SdkSessionHeader({
 
       {/* Permission Mode */}
       <div>
-        <label className="text-xs font-medium text-(--color-text-secondary) mb-1.5 block">
+        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
           Permission Mode
         </label>
         <FormSelect

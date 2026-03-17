@@ -51,7 +51,7 @@ export function PiThinkingLevelSelector({
 
   return (
     <div className="flex items-center gap-2">
-      <label className="text-sm text-(--color-text-muted)">Thinking:</label>
+      <label className="text-sm text-foreground/40">Thinking:</label>
       <FormSelect
         value={level}
         onChange={(e) => onLevelChange(e.target.value as PiThinkingLevel)}

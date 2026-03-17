@@ -1,87 +1,97 @@
-import type { HTMLAttributes, ReactNode } from 'react'
+import type { HTMLAttributes } from 'react'
+import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/utils/cn'
 
-export interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'glass' | 'outline'
-  padding?: 'none' | 'sm' | 'md' | 'lg'
+const cardVariants = cva('rounded-xl border transition-all duration-200', {
+  variants: {
+    variant: {
+      default: 'bg-card border-border',
+      glass: 'glass',
+      outline: 'border-border bg-transparent',
+    },
+    padding: {
+      none: '',
+      sm: 'p-3',
+      md: 'p-4',
+      lg: 'p-6',
+    },
+  },
+  defaultVariants: { variant: 'default', padding: 'md' },
+})
+
+export interface CardProps
+  extends HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof cardVariants> {
   hover?: boolean
 }
 
 export function Card({
   className,
-  variant = 'default',
-  padding = 'md',
+  variant,
+  padding,
   hover = false,
-  children,
   ...props
 }: CardProps) {
-  const variants = {
-    default: 'bg-(--color-bg-secondary) border border-(--color-border)',
-    glass: 'glass',
-    outline: 'border border-(--color-border) bg-transparent',
-  }
-
-  const paddings = {
-    none: '',
-    sm: 'p-3',
-    md: 'p-4',
-    lg: 'p-6',
-  }
-
   return (
     <div
+      data-slot="card"
       className={cn(
-        'rounded-xl transition-all duration-200',
-        variants[variant],
-        paddings[padding],
-        hover && 'hover:border-(--color-border-strong) hover:bg-(--color-surface-hover) cursor-pointer',
+        cardVariants({ variant, padding }),
+        hover && 'hover:border-ring hover:bg-secondary-hover cursor-pointer',
         className
       )}
       {...props}
-    >
-      {children}
-    </div>
+    />
   )
 }
 
-export interface CardHeaderProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
-  title: ReactNode
-  subtitle?: ReactNode
-  action?: ReactNode
-}
-
-export function CardHeader({ title, subtitle, action, className, ...props }: CardHeaderProps) {
-  return (
-    <div className={cn('flex items-start justify-between gap-4', className)} {...props}>
-      <div>
-        <h3 className="font-semibold text-(--color-text-primary)">{title}</h3>
-        {subtitle && (
-          <p className="text-sm text-(--color-text-secondary) mt-1">{subtitle}</p>
-        )}
-      </div>
-      {action && <div className="shrink-0">{action}</div>}
-    </div>
-  )
-}
-
-export function CardContent({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div className={cn('mt-4', className)} {...props}>
-      {children}
-    </div>
-  )
-}
-
-export function CardFooter({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
+// Children-based header — callers compose CardTitle / CardDescription / action elements.
+export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn(
-        'mt-4 pt-4 border-t border-(--color-border) flex items-center gap-3',
-        className
-      )}
+      data-slot="card-header"
+      className={cn('flex flex-col gap-1', className)}
       {...props}
-    >
-      {children}
-    </div>
+    />
+  )
+}
+
+export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
+  return (
+    <h3
+      data-slot="card-title"
+      className={cn('font-semibold text-foreground leading-snug', className)}
+      {...props}
+    />
+  )
+}
+
+export function CardDescription({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
+  return (
+    <p
+      data-slot="card-description"
+      className={cn('text-sm text-muted-foreground', className)}
+      {...props}
+    />
+  )
+}
+
+export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      data-slot="card-content"
+      className={cn('mt-4', className)}
+      {...props}
+    />
+  )
+}
+
+export function CardFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      data-slot="card-footer"
+      className={cn('mt-4 pt-4 border-t border-border flex items-center gap-3', className)}
+      {...props}
+    />
   )
 }

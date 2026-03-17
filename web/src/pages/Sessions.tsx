@@ -5,12 +5,13 @@ import { api } from '@/api/client'
 import { useSessionsStore } from '@/stores/sessions'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
-import { Dropdown } from '@/components/ui/Dropdown'
-import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
+import { Input } from '@/components/ui/input'
+import { InputField } from '@/components/ui/input-field'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/Select'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, ConfirmDialog } from '@/components/ui/Dialog'
-import { SkeletonCard } from '@/components/ui/Skeleton'
+import { SkeletonCard } from '@/components/ui'
 import { Spinner } from '@/components/ui/Spinner'
 import { RepoSelector, type RepoSelection } from '@/components/session/RepoSelector'
 import type { AgentType, AuthMode, Session } from '@/api/types'
@@ -111,8 +112,8 @@ export default function Sessions() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-(--color-text-primary)">Sessions</h2>
-            <p className="text-(--color-text-secondary)">
+            <h2 className="text-2xl font-bold text-foreground">Sessions</h2>
+            <p className="text-muted-foreground">
               Manage your agent sessions
             </p>
           </div>
@@ -153,11 +154,11 @@ export default function Sessions() {
         ) : filteredSessions.length === 0 ? (
           <Card variant="glass" padding="lg" className="text-center">
             <div className="py-8">
-              <Cpu size={48} className="mx-auto text-(--color-text-muted) mb-4" />
-              <h3 className="text-lg font-semibold text-(--color-text-primary)">
+              <Cpu size={48} className="mx-auto text-foreground/40 mb-4" />
+              <h3 className="text-lg font-semibold text-foreground">
                 No sessions yet
               </h3>
-              <p className="text-(--color-text-secondary) mb-4">
+              <p className="text-muted-foreground mb-4">
                 Create your first session to start chatting with an AI agent
               </p>
               <Button
@@ -245,19 +246,21 @@ function SessionCard({
 
   return (
     <Card variant="glass" hover onClick={onOpen}>
-      <CardHeader
-        title={
-          <span className="font-mono text-sm">{session.id.slice(0, 12)}...</span>
-        }
-        subtitle={session.agent}
-        action={
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle>
+              <span className="font-mono text-sm">{session.id.slice(0, 12)}...</span>
+            </CardTitle>
+            <CardDescription>{session.agent}</CardDescription>
+          </div>
           <Badge variant={isRunning ? 'success' : 'default'}>
             {isRunning ? 'Running' : 'Stopped'}
           </Badge>
-        }
-      />
+        </div>
+      </CardHeader>
       <CardContent>
-        <div className="flex items-center gap-4 text-sm text-(--color-text-secondary)">
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-1">
             <Clock size={14} />
             <span>{formatIdleTime(session.status?.idleMs || 0)}</span>
@@ -436,12 +439,19 @@ function NewSessionDialog({
     <Dialog open={open} onClose={onClose} title="Create New Session" size="lg">
       <div className="space-y-4">
         {/* Agent Type */}
-        <Dropdown
-          label="Agent"
-          options={agentOptions}
-          value={agentType}
-          onChange={(value) => setAgentType(value as AgentType)}
-        />
+        <div className="w-full flex flex-col gap-1.5">
+          <label className="block text-sm font-medium text-muted-foreground">Agent</label>
+          <Select value={agentType} onValueChange={(value) => setAgentType(value as AgentType)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select agent..." />
+            </SelectTrigger>
+            <SelectContent>
+              {agentOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Repository Selection */}
         <RepoSelector
@@ -455,7 +465,7 @@ function NewSessionDialog({
         {!repoSelection && (
           <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
             <AlertCircle size={16} className="text-accent shrink-0 mt-0.5" />
-            <div className="text-xs text-(--color-text-secondary)">
+            <div className="text-xs text-muted-foreground">
               <p>
                 Sessions require a git repository. Select from your saved repos, browse for a local repo,
                 clone from a URL, or initialize a new one.
@@ -464,15 +474,22 @@ function NewSessionDialog({
           </div>
         )}
 
-        <Dropdown
-          label="Authentication"
-          options={authOptions}
-          value={authMode}
-          onChange={(value) => setAuthMode(value as AuthMode)}
-        />
+        <div className="w-full flex flex-col gap-1.5">
+          <label className="block text-sm font-medium text-muted-foreground">Authentication</label>
+          <Select value={authMode} onValueChange={(value) => setAuthMode(value as AuthMode)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select auth mode..." />
+            </SelectTrigger>
+            <SelectContent>
+              {authOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {authMode === 'api_key' && (
-          <Input
+          <InputField
             label="API Key"
             type="password"
             placeholder="Enter your API key"
@@ -484,9 +501,9 @@ function NewSessionDialog({
 
         {/* Creation progress */}
         {creationStep && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-(--color-bg-tertiary)">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
             <Spinner size="sm" />
-            <span className="text-sm text-(--color-text-secondary)">{creationStep}</span>
+            <span className="text-sm text-muted-foreground">{creationStep}</span>
           </div>
         )}
 

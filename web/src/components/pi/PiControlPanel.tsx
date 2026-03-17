@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
-import { Badge } from '@/components/ui/Badge'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/Spinner'
 import { PanelSection } from '@/components/ui/PanelSection'
 import { usePiSession } from '@/hooks/usePiSession'
@@ -58,7 +58,7 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
   // Collapsed state
   if (!isOpen) {
     return (
-      <div className="h-full flex flex-col border-l border-(--color-border) bg-(--color-bg-secondary)">
+      <div className="h-full flex flex-col border-l border-border bg-card">
         <Button
           variant="ghost"
           size="sm"
@@ -92,10 +92,10 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
   }
 
   return (
-    <div className="h-full w-[280px] flex flex-col border-l border-(--color-border) bg-(--color-bg-secondary)">
+    <div className="h-full w-[280px] flex flex-col border-l border-border bg-card">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-(--color-border)">
-        <h2 className="text-sm font-semibold text-(--color-text-primary)">Pi Controls</h2>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+        <h2 className="text-sm font-semibold text-foreground">Pi Controls</h2>
         <Button
           variant="ghost"
           size="sm"
@@ -164,7 +164,7 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-2 border-t border-(--color-border) text-2xs text-(--color-text-muted)">
+      <div className="px-3 py-2 border-t border-border text-2xs text-foreground/40">
         Pi SDK Session
       </div>
     </div>
@@ -240,7 +240,7 @@ function StreamingSection({
 }) {
   if (!isStreaming) {
     return (
-      <p className="text-xs text-(--color-text-muted)">
+      <p className="text-xs text-foreground/40">
         Streaming controls available while the model is generating.
       </p>
     )
@@ -298,24 +298,24 @@ function UsageSection({
       {stats ? (
         <div className="space-y-1 text-xs">
           <div className="flex justify-between">
-            <span className="text-(--color-text-muted)">Input Tokens</span>
-            <span className="text-(--color-text-secondary)">{stats.inputTokens.toLocaleString()}</span>
+            <span className="text-foreground/40">Input Tokens</span>
+            <span className="text-muted-foreground">{stats.inputTokens.toLocaleString()}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-(--color-text-muted)">Output Tokens</span>
-            <span className="text-(--color-text-secondary)">{stats.outputTokens.toLocaleString()}</span>
+            <span className="text-foreground/40">Output Tokens</span>
+            <span className="text-muted-foreground">{stats.outputTokens.toLocaleString()}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-(--color-text-muted)">Total Cost</span>
-            <span className="text-(--color-text-secondary)">${stats.totalCost.toFixed(4)}</span>
+            <span className="text-foreground/40">Total Cost</span>
+            <span className="text-muted-foreground">${stats.totalCost.toFixed(4)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-(--color-text-muted)">Turns</span>
-            <span className="text-(--color-text-secondary)">{stats.turnCount}</span>
+            <span className="text-foreground/40">Turns</span>
+            <span className="text-muted-foreground">{stats.turnCount}</span>
           </div>
         </div>
       ) : (
-        <p className="text-xs text-(--color-text-muted)">No stats yet. Send a message to begin.</p>
+        <p className="text-xs text-foreground/40">No stats yet. Send a message to begin.</p>
       )}
     </div>
   )
@@ -350,7 +350,7 @@ function ModelsSection({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-(--color-text-muted)">No models loaded yet.</p>
+        <p className="text-xs text-foreground/40">No models loaded yet.</p>
       )}
     </div>
   )
@@ -381,7 +381,7 @@ function ForkableSection({
           {entries.map((entry) => (
             <div key={entry.id} className="flex items-center gap-1.5 text-xs">
               <span
-                className="flex-1 truncate text-(--color-text-muted)"
+                className="flex-1 truncate text-foreground/40"
                 title={entry.content}
               >
                 {entry.content.length > 50 ? `${entry.content.slice(0, 50)}…` : entry.content}
@@ -393,7 +393,7 @@ function ForkableSection({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-(--color-text-muted)">No branch points yet. Messages you can fork a new session from will appear here.</p>
+        <p className="text-xs text-foreground/40">No branch points yet. Messages you can fork a new session from will appear here.</p>
       )}
     </div>
   )

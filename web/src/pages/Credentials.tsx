@@ -3,12 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
+import { InputField } from '@/components/ui/input-field'
 import { FormSelect } from '@/components/ui/Select'
-import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, ConfirmDialog } from '@/components/ui/Dialog'
-import { SkeletonCard } from '@/components/ui/Skeleton'
+import { SkeletonCard } from '@/components/ui'
 import type { Credential, ProviderKey } from '@/api/types'
 import { Plus, Trash2, Key, Shield, Clock } from 'lucide-react'
 
@@ -70,8 +70,8 @@ export default function Credentials() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-(--color-text-primary)">Credentials</h2>
-            <p className="text-(--color-text-secondary)">
+            <h2 className="text-2xl font-bold text-foreground">Credentials</h2>
+            <p className="text-muted-foreground">
               Manage your stored API keys securely
             </p>
           </div>
@@ -89,10 +89,10 @@ export default function Credentials() {
           <div className="flex items-start gap-3">
             <Shield size={20} className="text-accent shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm text-(--color-text-primary) font-medium">
+              <p className="text-sm text-foreground font-medium">
                 Security Notice
               </p>
-              <p className="text-sm text-(--color-text-secondary) mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 API keys are stored securely on the gateway server. Keys are never sent back to
                 this browser after creation. Use stored credentials to avoid pasting keys repeatedly.
               </p>
@@ -110,11 +110,11 @@ export default function Credentials() {
         ) : credentials.length === 0 ? (
           <Card variant="glass" padding="lg" className="text-center">
             <div className="py-8">
-              <Key size={48} className="mx-auto text-(--color-text-muted) mb-4" />
-              <h3 className="text-lg font-semibold text-(--color-text-primary)">
+              <Key size={48} className="mx-auto text-foreground/40 mb-4" />
+              <h3 className="text-lg font-semibold text-foreground">
                 No credentials stored
               </h3>
-              <p className="text-(--color-text-secondary) mb-4">
+              <p className="text-muted-foreground mb-4">
                 Add your API keys to use them across sessions without re-entering
               </p>
               <Button
@@ -131,7 +131,7 @@ export default function Credentials() {
             {(Object.entries(groupedCredentials) as [ProviderKey, Credential[]][]).map(
               ([provider, creds]) => (
                 <div key={provider}>
-                  <h3 className="text-sm font-semibold text-(--color-text-secondary) uppercase tracking-wider mb-3">
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                     {providerLabels[provider]}
                   </h3>
                   <div className="space-y-3">
@@ -193,16 +193,16 @@ function CredentialCard({
     <Card variant="glass" padding="md">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-(--color-surface) flex items-center justify-center">
+          <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
             <Key size={20} className="text-accent" />
           </div>
           <div>
-            <p className="font-medium text-(--color-text-primary)">{credential.label}</p>
+            <p className="font-medium text-foreground">{credential.label}</p>
             <div className="flex items-center gap-2 mt-1">
               <Badge variant={providerColors[credential.provider] as 'accent' | 'success' | 'warning'} size="sm">
                 {providerLabels[credential.provider]}
               </Badge>
-              <span className="flex items-center gap-1 text-xs text-(--color-text-muted)">
+              <span className="flex items-center gap-1 text-xs text-foreground/40">
                 <Clock size={12} />
                 {createdDate}
               </span>
@@ -274,7 +274,7 @@ function AddCredentialDialog({
           onChange={(e) => setProvider(e.target.value as ProviderKey)}
         />
 
-        <Input
+        <InputField
           label="Label"
           placeholder="e.g., Personal API Key"
           value={label}
@@ -282,7 +282,7 @@ function AddCredentialDialog({
           hint="A friendly name to identify this credential"
         />
 
-        <Input
+        <InputField
           label="API Key"
           type="password"
           placeholder="sk-..."

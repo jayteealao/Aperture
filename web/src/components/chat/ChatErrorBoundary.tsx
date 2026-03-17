@@ -43,10 +43,10 @@ export class ChatErrorBoundary extends Component<
               className="mx-auto text-danger"
               size={32}
             />
-            <h3 className="font-medium text-(--color-text-primary)">
+            <h3 className="font-medium text-foreground">
               Unable to display conversation
             </h3>
-            <p className="text-sm text-(--color-text-secondary)">
+            <p className="text-sm text-muted-foreground">
               A display error occurred, but your messages are safe.
               Try again, or refresh the page if the problem persists.
             </p>

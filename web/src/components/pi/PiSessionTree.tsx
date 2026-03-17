@@ -5,8 +5,8 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/Spinner'
 import { usePiSession } from '@/hooks/usePiSession'
 import type { PiSessionTree as PiSessionTreeType, PiSessionEntry } from '@/api/pi-types'

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
+import { Card } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/Spinner'
 import { Checkpoint, CheckpointTrigger } from '@/components/ai-elements/checkpoint'
 import { History, RotateCcw, Eye, AlertTriangle, X, FileText } from 'lucide-react'
@@ -36,9 +36,9 @@ export function SdkCheckpoints({
   if (checkpoints.length === 0) {
     return (
       <div className="text-center py-3">
-        <History size={24} className="mx-auto text-(--color-text-muted) mb-2" />
-        <p className="text-xs text-(--color-text-muted)">No checkpoints available</p>
-        <p className="text-2xs text-(--color-text-muted) mt-1">
+        <History size={24} className="mx-auto text-foreground/40 mb-2" />
+        <p className="text-xs text-foreground/40">No checkpoints available</p>
+        <p className="text-2xs text-foreground/40 mt-1">
           File checkpointing must be enabled in session configuration to use rewind
         </p>
       </div>
@@ -84,14 +84,14 @@ export function SdkCheckpoints({
                       {rewindResult.filesChanged.slice(0, 3).map((file) => (
                         <div
                           key={file}
-                          className="text-2xs text-(--color-text-muted) flex items-center gap-1"
+                          className="text-2xs text-foreground/40 flex items-center gap-1"
                         >
                           <FileText size={10} />
                           <span className="truncate">{file}</span>
                         </div>
                       ))}
                       {rewindResult.filesChanged.length > 3 && (
-                        <div className="text-2xs text-(--color-text-muted)">
+                        <div className="text-2xs text-foreground/40">
                           ...and {rewindResult.filesChanged.length - 3} more
                         </div>
                       )}
@@ -137,7 +137,7 @@ export function SdkCheckpoints({
       <div className="space-y-0.5 [&_[data-slot=separator]]:hidden">
         {checkpoints.map((checkpoint, index) => (
           <Checkpoint key={checkpoint}>
-            <span className="shrink-0 text-(--color-text-muted)" aria-hidden="true">
+            <span className="shrink-0 text-foreground/40" aria-hidden="true">
               <History size={12} />
             </span>
             <span className="flex-1 truncate text-xs font-mono">

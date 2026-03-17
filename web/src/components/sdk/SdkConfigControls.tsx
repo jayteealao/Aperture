@@ -1,7 +1,7 @@
 // SDK Config Controls - Thinking tokens, budget controls
 
 import { useState, useCallback } from 'react'
-import { Input } from '@/components/ui/Input'
+import { Input } from '@/components/ui/input'
 import { Brain, DollarSign, RefreshCw } from 'lucide-react'
 import type { SdkSessionConfig } from '@/api/types'
 
@@ -66,11 +66,12 @@ export function SdkConfigControls({
     <div className="space-y-3">
       {/* Thinking Tokens */}
       <div>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-(--color-text-secondary) mb-1.5">
+        <label htmlFor="sdk-thinking-tokens" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1.5">
           <Brain size={12} />
           Thinking Tokens
         </label>
         <Input
+          id="sdk-thinking-tokens"
           type="number"
           min={0}
           max={100000}
@@ -80,17 +81,18 @@ export function SdkConfigControls({
           onChange={(e) => setThinkingInput(e.target.value)}
           onBlur={handleThinkingBlur}
           className="text-xs"
-          hint="0-100,000 tokens for extended thinking"
         />
+        <p className="mt-1 text-xs text-foreground/40">0–100,000 tokens for extended thinking</p>
       </div>
 
       {/* Max Budget */}
       <div>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-(--color-text-secondary) mb-1.5">
+        <label htmlFor="sdk-max-budget" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1.5">
           <DollarSign size={12} />
           Max Budget (USD)
         </label>
         <Input
+          id="sdk-max-budget"
           type="number"
           min={0}
           step={0.1}
@@ -104,11 +106,12 @@ export function SdkConfigControls({
 
       {/* Max Turns */}
       <div>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-(--color-text-secondary) mb-1.5">
+        <label htmlFor="sdk-max-turns" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1.5">
           <RefreshCw size={12} />
           Max Turns
         </label>
         <Input
+          id="sdk-max-turns"
           type="number"
           min={1}
           step={1}

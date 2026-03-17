@@ -115,7 +115,7 @@ export function AskUserQuestionDisplay({ input, onSubmit }: AskUserQuestionDispl
     <div className="mt-3">
       {/* Tab bar for multiple questions */}
       {isMultiQuestion && (
-        <div className="flex items-center gap-1 mb-3 pb-2 border-b border-(--color-border)">
+        <div className="flex items-center gap-1 mb-3 pb-2 border-b border-border">
           <div className="flex items-center gap-1 flex-1 overflow-x-auto scrollbar-none">
             {questions.map((q, idx) => {
               const isAnswered = (selectedAnswers[idx] || []).length > 0
@@ -132,7 +132,7 @@ export function AskUserQuestionDisplay({ input, onSubmit }: AskUserQuestionDispl
                       ? 'bg-accent text-nebula-bg-primary'
                       : isAnswered
                         ? 'bg-accent/20 text-accent hover:bg-accent/30'
-                        : 'bg-(--color-surface) text-(--color-text-secondary) hover:bg-(--color-surface-hover)'
+                        : 'bg-secondary text-muted-foreground hover:bg-secondary-hover'
                   )}
                 >
                   {isAnswered && !isActive && <Check size={12} />}
@@ -141,7 +141,7 @@ export function AskUserQuestionDisplay({ input, onSubmit }: AskUserQuestionDispl
               )
             })}
           </div>
-          <span className="text-xs text-(--color-text-muted) shrink-0 ml-2">
+          <span className="text-xs text-foreground/40 shrink-0 ml-2">
             {answeredCount}/{questions.length}
           </span>
         </div>
@@ -157,7 +157,7 @@ export function AskUserQuestionDisplay({ input, onSubmit }: AskUserQuestionDispl
       />
 
       {/* Navigation and submit */}
-      <div className="flex items-center justify-between pt-3 mt-3 border-t border-(--color-border)">
+      <div className="flex items-center justify-between pt-3 mt-3 border-t border-border">
         {isMultiQuestion ? (
           <div className="flex items-center gap-2">
             <Button
@@ -169,7 +169,7 @@ export function AskUserQuestionDisplay({ input, onSubmit }: AskUserQuestionDispl
               <ChevronLeft size={16} />
               Prev
             </Button>
-            <span className="text-xs text-(--color-text-muted)">
+            <span className="text-xs text-foreground/40">
               {activeTab + 1} of {questions.length}
             </span>
             <Button
@@ -212,25 +212,25 @@ function QuestionCard({ question, selectedOptions, onOptionClick, otherText, onO
   const isOtherSelected = selectedOptions.includes(OTHER_OPTION_KEY)
 
   return (
-    <div className="rounded-lg border border-(--color-border) bg-(--color-bg-tertiary) overflow-hidden">
+    <div className="rounded-lg border border-border bg-muted overflow-hidden">
       {/* Question header */}
-      <div className="px-3 py-2 border-b border-(--color-border) bg-(--color-surface)">
+      <div className="px-3 py-2 border-b border-border bg-secondary">
         <div className="flex items-center gap-2">
           <MessageCircleQuestion size={14} className="text-accent shrink-0" />
           <span className="text-xs font-medium text-accent">{question.header}</span>
           {question.multiSelect && (
-            <span className="text-2xs text-(--color-text-muted) ml-auto">
+            <span className="text-2xs text-foreground/40 ml-auto">
               (select multiple)
             </span>
           )}
         </div>
-        <p className="text-sm text-(--color-text-primary) mt-1">
+        <p className="text-sm text-foreground mt-1">
           {question.question}
         </p>
       </div>
 
       {/* Options - scrollable if too many */}
-      <div className="divide-y divide-(--color-border) max-h-[240px] overflow-y-auto scrollbar-thin">
+      <div className="divide-y divide-border max-h-[240px] overflow-y-auto scrollbar-thin">
         {question.options.map((option, oIdx) => {
           const isSelected = selectedOptions.includes(option.label)
           const Icon = question.multiSelect
@@ -243,7 +243,7 @@ function QuestionCard({ question, selectedOptions, onOptionClick, otherText, onO
               onClick={() => onOptionClick(option.label)}
               className={cn(
                 'w-full px-3 py-2 text-left transition-colors',
-                'hover:bg-(--color-surface-hover)',
+                'hover:bg-secondary-hover',
                 isSelected && 'bg-accent/10'
               )}
             >
@@ -252,18 +252,18 @@ function QuestionCard({ question, selectedOptions, onOptionClick, otherText, onO
                   size={16}
                   className={cn(
                     'shrink-0 mt-0.5 transition-colors',
-                    isSelected ? 'text-accent' : 'text-(--color-text-muted)'
+                    isSelected ? 'text-accent' : 'text-foreground/40'
                   )}
                 />
                 <div className="min-w-0 flex-1">
                   <div className={cn(
                     'text-sm font-medium',
-                    isSelected ? 'text-accent' : 'text-(--color-text-primary)'
+                    isSelected ? 'text-accent' : 'text-foreground'
                   )}>
                     {option.label}
                   </div>
                   {option.description && (
-                    <div className="text-xs text-(--color-text-muted) mt-0.5">
+                    <div className="text-xs text-foreground/40 mt-0.5">
                       {option.description}
                     </div>
                   )}
@@ -284,19 +284,19 @@ function QuestionCard({ question, selectedOptions, onOptionClick, otherText, onO
           >
             <div className="flex items-start gap-2">
               {question.multiSelect ? (
-                isOtherSelected ? <CheckSquare size={16} className="shrink-0 mt-0.5 text-accent" /> : <Square size={16} className="shrink-0 mt-0.5 text-(--color-text-muted)" />
+                isOtherSelected ? <CheckSquare size={16} className="shrink-0 mt-0.5 text-accent" /> : <Square size={16} className="shrink-0 mt-0.5 text-foreground/40" />
               ) : (
-                isOtherSelected ? <Check size={16} className="shrink-0 mt-0.5 text-accent" /> : <Circle size={16} className="shrink-0 mt-0.5 text-(--color-text-muted)" />
+                isOtherSelected ? <Check size={16} className="shrink-0 mt-0.5 text-accent" /> : <Circle size={16} className="shrink-0 mt-0.5 text-foreground/40" />
               )}
               <div className="min-w-0 flex-1">
                 <div className={cn(
                   'text-sm font-medium flex items-center gap-1.5',
-                  isOtherSelected ? 'text-accent' : 'text-(--color-text-primary)'
+                  isOtherSelected ? 'text-accent' : 'text-foreground'
                 )}>
                   <PenLine size={14} />
                   Other
                 </div>
-                <div className="text-xs text-(--color-text-muted) mt-0.5">
+                <div className="text-xs text-foreground/40 mt-0.5">
                   Enter a custom response
                 </div>
               </div>
@@ -314,8 +314,8 @@ function QuestionCard({ question, selectedOptions, onOptionClick, otherText, onO
                 autoFocus
                 className={cn(
                   'w-full px-3 py-2 text-sm rounded-md',
-                  'bg-(--color-bg-primary) border border-(--color-border)',
-                  'text-(--color-text-primary) placeholder:text-(--color-text-muted)',
+                  'bg-background border border-border',
+                  'text-foreground placeholder:text-foreground/40',
                   'focus:outline-hidden focus:ring-2 focus:ring-accent/50 focus:border-accent'
                 )}
               />

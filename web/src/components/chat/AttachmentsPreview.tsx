@@ -22,16 +22,16 @@ export function AttachmentsPreview({ maxFiles }: { maxFiles?: number }) {
           {file.mediaType.startsWith('image/') ? (
             <img
               alt={file.filename || 'Attachment'}
-              className="h-16 w-16 rounded-lg object-cover border border-(--color-border)"
+              className="h-16 w-16 rounded-lg object-cover border border-border"
               src={file.url}
             />
           ) : (
-            <div className="h-16 w-16 rounded-lg border border-(--color-border) flex items-center justify-center text-2xs text-(--color-text-muted) text-center p-1">
+            <div className="h-16 w-16 rounded-lg border border-border flex items-center justify-center text-2xs text-foreground/40 text-center p-1">
               {file.filename || file.mediaType}
             </div>
           )}
           <button
-            className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-(--color-bg-primary) border border-(--color-border) opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-background border border-border opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={() => remove(file.id)}
             title="Remove attachment"
             type="button"
@@ -42,7 +42,7 @@ export function AttachmentsPreview({ maxFiles }: { maxFiles?: number }) {
       ))}
       {(maxFiles === undefined || files.length < maxFiles) && (
         <button
-          className="h-16 w-16 rounded-lg border border-dashed border-(--color-border) flex items-center justify-center text-(--color-text-muted) hover:text-(--color-text-secondary) hover:border-(--color-text-muted) transition-colors"
+          className="h-16 w-16 rounded-lg border border-dashed border-border flex items-center justify-center text-foreground/40 hover:text-muted-foreground hover:border-foreground/40 transition-colors"
           onClick={openFileDialog}
           title="Add more files"
           type="button"

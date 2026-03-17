@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/badge";
 import {
   Collapsible,
   CollapsibleContent,
@@ -57,8 +57,8 @@ const statusLabels: Record<ToolPart["state"], string> = {
 const statusIcons: Record<ToolPart["state"], ReactNode> = {
   "approval-requested": <ClockIcon className="size-4 text-warning" />,
   "approval-responded": <CheckCircleIcon className="size-4 text-accent" />,
-  "input-available": <ClockIcon className="size-4 animate-pulse text-(--color-text-muted)" />,
-  "input-streaming": <CircleIcon className="size-4 text-(--color-text-muted)" />,
+  "input-available": <ClockIcon className="size-4 animate-pulse text-foreground/40" />,
+  "input-streaming": <CircleIcon className="size-4 text-foreground/40" />,
   "output-available": <CheckCircleIcon className="size-4 text-success" />,
   "output-denied": <XCircleIcon className="size-4 text-warning" />,
   "output-error": <XCircleIcon className="size-4 text-danger" />,
@@ -91,11 +91,11 @@ export const ToolHeader = ({
       {...props}
     >
       <div className="flex items-center gap-2">
-        <WrenchIcon className="size-4 text-(--color-text-muted)" />
+        <WrenchIcon className="size-4 text-foreground/40" />
         <span className="font-mono font-medium text-sm">{title ?? derivedName}</span>
         {getStatusBadge(state)}
       </div>
-      <ChevronDownIcon className="size-4 text-(--color-text-muted) transition-transform group-data-[state=open]:rotate-180" />
+      <ChevronDownIcon className="size-4 text-foreground/40 transition-transform group-data-[state=open]:rotate-180" />
     </CollapsibleTrigger>
   );
 };

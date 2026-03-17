@@ -59,13 +59,13 @@ export function Dialog({
                 {title && (
                   <h2
                     id="dialog-title"
-                    className="text-lg font-semibold text-(--color-text-primary)"
+                    className="text-lg font-semibold text-foreground"
                   >
                     {title}
                   </h2>
                 )}
                 {description && (
-                  <p className="text-sm text-(--color-text-secondary) mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     {description}
                   </p>
                 )}
@@ -73,7 +73,7 @@ export function Dialog({
               {!hideClose && (
                 <button
                   onClick={onClose}
-                  className="p-2 rounded-lg text-(--color-text-muted) hover:text-(--color-text-primary) hover:bg-(--color-surface) transition-colors"
+                  className="p-2 rounded-lg text-foreground/40 hover:text-foreground hover:bg-secondary transition-colors"
                   aria-label="Close dialog"
                 >
                   <X size={20} />

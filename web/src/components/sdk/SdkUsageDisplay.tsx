@@ -11,7 +11,7 @@ interface SdkUsageDisplayProps {
 export function SdkUsageDisplay({ usage }: SdkUsageDisplayProps) {
   if (!usage) {
     return (
-      <div className="text-xs text-(--color-text-muted) text-center py-3">
+      <div className="text-xs text-foreground/40 text-center py-3">
         No usage data yet
       </div>
     )
@@ -34,13 +34,13 @@ export function SdkUsageDisplay({ usage }: SdkUsageDisplayProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <Coins size={14} className="text-success" />
-          <span className="text-sm font-medium text-(--color-text-primary)">
+          <span className="text-sm font-medium text-foreground">
             {formatCurrency(usage.totalCostUsd)}
           </span>
         </div>
         <div className="flex items-center gap-1.5">
           <Zap size={14} className="text-warning" />
-          <span className="text-sm text-(--color-text-secondary)">
+          <span className="text-sm text-muted-foreground">
             {usage.numTurns} turns
           </span>
         </div>
@@ -75,7 +75,7 @@ export function SdkUsageDisplay({ usage }: SdkUsageDisplayProps) {
       </div>
 
       {/* Duration */}
-      <div className="flex items-center gap-1.5 text-xs text-(--color-text-muted)">
+      <div className="flex items-center gap-1.5 text-xs text-foreground/40">
         <Clock size={12} />
         <span>
           {(usage.durationMs / 1000).toFixed(1)}s total ({(usage.durationApiMs / 1000).toFixed(1)}s API)
@@ -97,12 +97,12 @@ function TokenStat({
   color: string
 }) {
   return (
-    <div className="bg-(--color-surface) rounded-lg p-2">
+    <div className="bg-secondary rounded-lg p-2">
       <div className={`flex items-center gap-1 text-2xs ${color}`}>
         {icon}
         <span>{label}</span>
       </div>
-      <div className="text-sm font-mono font-medium text-(--color-text-primary)">
+      <div className="text-sm font-mono font-medium text-foreground">
         {formatNumber(value)}
       </div>
     </div>

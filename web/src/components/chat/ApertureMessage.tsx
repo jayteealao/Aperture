@@ -105,7 +105,7 @@ function FilePart({ part }: { part: { mediaType: string; url: string; filename?:
         alt={part.filename || 'Attachment'}
         className={cn(
           'max-h-48 max-w-[280px] rounded-lg object-contain',
-          'border border-(--color-border)',
+          'border border-border',
         )}
         src={part.url}
       />

@@ -3,7 +3,6 @@
 import { Button } from '@/components/ui/Button'
 import { PanelSection } from '@/components/ui/PanelSection'
 import { useSdkSession } from '@/hooks/useSdkSession'
-import { useSessionsStore } from '@/stores/sessions'
 import { SdkSessionHeader } from './SdkSessionHeader'
 import { SdkUsageDisplay } from './SdkUsageDisplay'
 import { SdkAccountInfo } from './SdkAccountInfo'
@@ -25,14 +24,12 @@ import {
 
 interface SdkControlPanelProps {
   sessionId: string
+  isStreaming: boolean
   isOpen: boolean
   onToggle: () => void
 }
 
-export function SdkControlPanel({ sessionId, isOpen, onToggle }: SdkControlPanelProps) {
-  const { connections } = useSessionsStore()
-  const connection = connections[sessionId]
-  const isStreaming = connection?.isStreaming || false
+export function SdkControlPanel({ sessionId, isStreaming, isOpen, onToggle }: SdkControlPanelProps) {
 
   const {
     isSdkSession,
@@ -65,7 +62,7 @@ export function SdkControlPanel({ sessionId, isOpen, onToggle }: SdkControlPanel
   // Collapsed state - just show toggle button
   if (!isOpen) {
     return (
-      <div className="h-full flex flex-col border-l border-(--color-border) bg-(--color-bg-secondary)">
+      <div className="h-full flex flex-col border-l border-border bg-card">
         <Button
           variant="ghost"
           size="sm"
@@ -80,10 +77,10 @@ export function SdkControlPanel({ sessionId, isOpen, onToggle }: SdkControlPanel
   }
 
   return (
-    <div className="h-full w-[280px] flex flex-col border-l border-(--color-border) bg-(--color-bg-secondary)">
+    <div className="h-full w-[280px] flex flex-col border-l border-border bg-card">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-(--color-border)">
-        <h2 className="text-sm font-semibold text-(--color-text-primary)">SDK Controls</h2>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+        <h2 className="text-sm font-semibold text-foreground">SDK Controls</h2>
         <Button
           variant="ghost"
           size="sm"
@@ -160,7 +157,7 @@ export function SdkControlPanel({ sessionId, isOpen, onToggle }: SdkControlPanel
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-2 border-t border-(--color-border) text-2xs text-(--color-text-muted)">
+      <div className="px-3 py-2 border-t border-border text-2xs text-foreground/40">
         Claude SDK Session
       </div>
     </div>

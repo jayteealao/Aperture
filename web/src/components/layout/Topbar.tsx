@@ -1,7 +1,7 @@
 import { useLocation } from 'react-router'
 import { useAppStore } from '@/stores/app'
 import { Menu, Wifi, WifiOff } from 'lucide-react'
-import { Badge } from '@/components/ui/Badge'
+import { Badge } from '@/components/ui/badge'
 
 const pageTitles: Record<string, string> = {
   '/workspace': 'Workspace',
@@ -19,21 +19,21 @@ export function Topbar() {
   const title = pageTitles[location.pathname] || 'Aperture'
 
   return (
-    <header className="h-14 px-4 flex items-center justify-between border-b border-(--color-border) bg-(--color-bg-secondary)">
+    <header className="h-14 px-4 flex items-center justify-between border-b border-border bg-card">
       <div className="flex items-center gap-3">
         <button
           onClick={() => setSidebarOpen(true)}
-          className="p-2 rounded-lg hover:bg-(--color-surface) lg:hidden"
+          className="p-2 rounded-lg hover:bg-secondary lg:hidden"
           aria-label="Open menu"
         >
           <Menu size={20} />
         </button>
-        <h1 className="font-semibold text-(--color-text-primary)">{title}</h1>
+        <h1 className="font-semibold text-foreground">{title}</h1>
       </div>
 
       <div className="flex items-center gap-3">
         <div className="hidden sm:flex items-center gap-2">
-          <span className="text-xs font-mono text-(--color-text-muted) truncate max-w-[200px]">
+          <span className="text-xs font-mono text-foreground/40 truncate max-w-[200px]">
             {gatewayUrl || 'Not connected'}
           </span>
         </div>

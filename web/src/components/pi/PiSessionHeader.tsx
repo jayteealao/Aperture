@@ -3,7 +3,7 @@
  * Displays Pi session status, model, and basic controls
  */
 
-import { Badge } from '@/components/ui/Badge'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
 import { PiThinkingLevelSelector } from './PiThinkingLevelSelector'
 import { usePiSession } from '@/hooks/usePiSession'

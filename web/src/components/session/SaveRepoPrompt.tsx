@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/ui/Dialog'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
+import { InputField } from '@/components/ui/input-field'
 import { useToast } from '@/components/ui/Toast'
 import { GitBranch, Folder } from 'lucide-react'
 
@@ -52,32 +52,32 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
     <Dialog open={open} onClose={onClose} title="Save Repository?" size="md">
       <div className="space-y-4">
         {/* Info */}
-        <div className="flex items-start gap-3 p-3 rounded-lg bg-(--color-bg-tertiary)">
-          <Folder size={20} className="text-(--color-text-muted) shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 p-3 rounded-lg bg-muted">
+          <Folder size={20} className="text-foreground/40 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm text-(--color-text-primary)">
+            <p className="text-sm text-foreground">
               Your session is running in:
             </p>
-            <p className="text-xs font-mono text-(--color-text-muted) mt-1 break-all">
+            <p className="text-xs font-mono text-foreground/40 mt-1 break-all">
               {repoPath}
             </p>
           </div>
         </div>
 
-        <p className="text-sm text-(--color-text-secondary)">
+        <p className="text-sm text-muted-foreground">
           Would you like to save this repository for future sessions? Saved repositories appear
           in the dropdown when creating new sessions.
         </p>
 
         {/* Save form */}
         <div className="space-y-3">
-          <Input
+          <InputField
             label="Repository name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={defaultName}
           />
-          <Input
+          <InputField
             label="Description (optional)"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -86,7 +86,7 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-(--color-border)">
+        <div className="flex justify-end gap-3 pt-4 border-t border-border">
           <Button variant="ghost" onClick={handleSkip} disabled={saveMutation.isPending}>
             Skip
           </Button>

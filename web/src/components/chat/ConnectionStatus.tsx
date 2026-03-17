@@ -4,9 +4,9 @@ const statusColors: Record<string, string> = {
   connected: 'bg-success',
   connecting: 'bg-warning animate-pulse',
   reconnecting: 'bg-warning animate-pulse',
-  disconnected: 'bg-(--color-text-muted)',
+  disconnected: 'bg-foreground/40',
   error: 'bg-danger',
-  ended: 'bg-(--color-text-muted)',
+  ended: 'bg-foreground/40',
 }
 
 const statusLabels: Record<string, string> = {

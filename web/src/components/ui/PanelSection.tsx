@@ -30,16 +30,16 @@ export function PanelSection({
   children,
 }: PanelSectionProps) {
   return (
-    <Collapsible defaultOpen={defaultOpen} className="group border-b border-(--color-border)">
-      <CollapsibleTrigger className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-(--color-surface-hover) transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-        <span className="text-(--color-text-muted)" aria-hidden="true">
+    <Collapsible defaultOpen={defaultOpen} className="group border-b border-border">
+      <CollapsibleTrigger className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-secondary-hover transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+        <span className="text-foreground/40" aria-hidden="true">
           <Icon size={14} />
         </span>
-        <span className="flex-1 text-sm font-medium text-(--color-text-secondary)">{title}</span>
+        <span className="flex-1 text-sm font-medium text-muted-foreground">{title}</span>
         <ChevronDown
           size={14}
           aria-hidden="true"
-          className="text-(--color-text-muted) transition-transform group-data-[state=open]:rotate-180"
+          className="text-foreground/40 transition-transform group-data-[state=open]:rotate-180"
         />
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up px-3 py-3">

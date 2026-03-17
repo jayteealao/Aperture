@@ -6,8 +6,8 @@ import { useSessionsStore } from '@/stores/sessions'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
-import { Badge } from '@/components/ui/Badge'
-import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { SaveRepoPrompt } from '@/components/session/SaveRepoPrompt'
 import { SdkControlPanel } from '@/components/sdk'
 import { PiControlPanel } from '@/components/pi/PiControlPanel'
@@ -61,7 +61,7 @@ function WorkspaceChatView({ sessionId, isActive }: { sessionId: string; isActiv
   if (!session || initialMessages === null) {
     return (
       <div className={cn('flex-1 flex items-center justify-center', !isActive && 'hidden')}>
-        <div className="glass rounded-2xl px-4 py-3 text-sm text-(--color-text-secondary)">
+        <div className="glass rounded-2xl px-4 py-3 text-sm text-muted-foreground">
           Loading conversation...
         </div>
       </div>
@@ -114,7 +114,13 @@ function WorkspaceChatSessionReady({
       void persistMessages(nextMessages)
     },
     onError: (error) => {
-      console.error('[useChat] Chat error:', error)
+      if (import.meta.env.DEV) {
+        console.error('[useChat] Chat error:', error)
+      }
+      toast.error('Connection error', error instanceof Error ? error.message : 'Chat transport failed')
+      // Always clear streaming on transport error — the WS teardown message may
+      // not arrive if the connection dropped, leaving the UI stuck in "Responding…".
+      setStreaming(sessionId, false)
     },
   })
 
@@ -123,11 +129,9 @@ function WorkspaceChatSessionReady({
   }, [messages, persistMessages])
 
   /**
-   * 6.2 cleanup guard: WS message handlers (sdk-message-handler, pi-message-handler)
-   * own writing isStreaming=true to the store with the correct streamMessageId.
-   * This effect's sole job is to reset isStreaming=false if this component unmounts
-   * while a stream is in progress (e.g. session error, tab close) — a case the WS
-   * teardown message may not cover. Writing true here would clobber currentStreamMessageId.
+   * Cleanup guard: reset isStreaming=false if this component unmounts while a stream
+   * is in progress (e.g. session error, tab close) — a case the WS teardown message
+   * may not cover. The WS message handlers own writing isStreaming=true.
    */
   useEffect(() => {
     return () => { setStreaming(sessionId, false) }
@@ -190,14 +194,14 @@ function WorkspaceChatSessionReady({
 
   return (
     <div className={cn('flex h-full flex-col', !isActive && 'hidden')}>
-      <div className="px-4 py-3 border-b border-(--color-border) flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-3">
           <ConnectionStatus status={connection?.status || 'disconnected'} />
           <div>
-            <h3 className="font-mono text-sm text-(--color-text-primary)">
+            <h3 className="font-mono text-sm text-foreground">
               {session.id.slice(0, 12)}...
             </h3>
-            <p className="text-xs text-(--color-text-muted)">{session.agent}</p>
+            <p className="text-xs text-foreground/40">{session.agent}</p>
           </div>
         </div>
         {status === 'streaming' && (
@@ -226,7 +230,7 @@ function WorkspaceChatSessionReady({
               ))
             )}
             {status === 'submitted' && (
-              <div className="flex items-center gap-2 text-sm text-(--color-text-muted)">
+              <div className="flex items-center gap-2 text-sm text-foreground/40">
                 <Shimmer>Thinking...</Shimmer>
               </div>
             )}
@@ -236,7 +240,7 @@ function WorkspaceChatSessionReady({
       </ChatErrorBoundary>
 
       {pendingPermissions.length > 0 && (
-        <div className="px-4 py-3 border-t border-(--color-border) bg-warning/5">
+        <div className="px-4 py-3 border-t border-border bg-warning/5">
           <PermissionRequest
             onAddUserMessage={handleAddUserMessage}
             onRespond={(toolCallId, optionId, answers) => {
@@ -247,7 +251,7 @@ function WorkspaceChatSessionReady({
         </div>
       )}
 
-      <div className="px-4 py-4 border-t border-(--color-border) bg-(--color-bg-secondary)">
+      <div className="px-4 py-4 border-t border-border bg-card">
         <div className="max-w-3xl mx-auto">
           <PromptInput
             accept={IMAGE_LIMITS.ALLOWED_MIME_TYPES.join(',')}
@@ -283,7 +287,7 @@ function WorkspaceChatSessionReady({
             </PromptInputFooter>
           </PromptInput>
 
-          <div className="mt-2 flex items-center justify-between text-xs text-(--color-text-muted)">
+          <div className="mt-2 flex items-center justify-between text-xs text-foreground/40">
             <span>
               {isConnected
                 ? 'Connected via WebSocket'
@@ -316,8 +320,10 @@ export default function WorkspaceUseChat() {
 
     try {
       const { repoPath } = JSON.parse(pending)
-      setPendingSaveRepoPath(repoPath)
-      setShowSaveRepoPrompt(true)
+      if (typeof repoPath === 'string' && repoPath.length > 0) {
+        setPendingSaveRepoPath(repoPath)
+        setShowSaveRepoPrompt(true)
+      }
     } catch {
       // Ignore invalid session storage payloads.
     } finally {
@@ -376,9 +382,9 @@ export default function WorkspaceUseChat() {
       <div className="h-full flex items-center justify-center p-6">
         <Card variant="glass" padding="lg" className="max-w-md text-center">
           <div className="py-8">
-            <Terminal size={48} className="mx-auto text-(--color-text-muted) mb-4" />
-            <h3 className="text-lg font-semibold text-(--color-text-primary)">No active session</h3>
-            <p className="text-(--color-text-secondary) mb-4">
+            <Terminal size={48} className="mx-auto text-foreground/40 mb-4" />
+            <h3 className="text-lg font-semibold text-foreground">No active session</h3>
+            <p className="text-muted-foreground mb-4">
               Select a session from the sidebar or create a new one to start chatting
             </p>
             <Button
@@ -420,6 +426,7 @@ export default function WorkspaceUseChat() {
       {activeSession.agent === 'claude_sdk' && (
         <SdkControlPanel
           sessionId={activeSessionId!}
+          isStreaming={connections[activeSessionId!]?.isStreaming || false}
           isOpen={sdkPanelOpen}
           onToggle={toggleSdkPanel}
         />

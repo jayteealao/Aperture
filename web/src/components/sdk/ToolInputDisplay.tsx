@@ -1,7 +1,7 @@
 import { CodeHighlight } from '@/components/ui/CodeHighlight'
 import { getLanguageFromPath } from '@/utils/language'
 import { File, Search, Globe, Terminal, PenLine, Bot } from 'lucide-react'
-import { Badge } from '@/components/ui/Badge'
+import { Badge } from '@/components/ui/badge'
 
 interface ToolInputDisplayProps {
   name: string
@@ -41,7 +41,7 @@ function BashDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div>
       {description && (
-        <div className="flex items-center gap-2 mb-2 text-xs text-(--color-text-muted)">
+        <div className="flex items-center gap-2 mb-2 text-xs text-foreground/40">
           <Terminal size={12} />
           <span>{description}</span>
         </div>
@@ -60,8 +60,8 @@ function BashDisplay({ input }: { input: Record<string, unknown> }) {
 function FileDisplay({ path }: { path: string }) {
   return (
     <div className="flex items-center gap-2">
-      <File size={14} className="text-(--color-text-muted) shrink-0" />
-      <code className="text-[10px] font-mono text-(--color-text-secondary) truncate">
+      <File size={14} className="text-foreground/40 shrink-0" />
+      <code className="text-[10px] font-mono text-muted-foreground truncate">
         {path}
       </code>
     </div>
@@ -76,8 +76,8 @@ function WriteDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <File size={14} className="text-(--color-text-muted) shrink-0" />
-        <code className="text-[10px] font-mono text-(--color-text-secondary) truncate">
+        <File size={14} className="text-foreground/40 shrink-0" />
+        <code className="text-[10px] font-mono text-muted-foreground truncate">
           {filePath}
         </code>
       </div>
@@ -103,29 +103,29 @@ function EditDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <PenLine size={14} className="text-(--color-text-muted) shrink-0" />
-        <code className="text-[10px] font-mono text-(--color-text-secondary) truncate">
+        <PenLine size={14} className="text-foreground/40 shrink-0" />
+        <code className="text-[10px] font-mono text-muted-foreground truncate">
           {filePath}
         </code>
       </div>
       {(oldString || newString) && (
-        <div className="rounded-lg overflow-hidden border border-(--color-border)">
+        <div className="rounded-lg overflow-hidden border border-border">
           {oldString && (
-            <div className="bg-danger/10 border-b border-(--color-border)">
-              <div className="px-2 py-1 text-2xs font-medium text-danger border-b border-(--color-border)">
+            <div className="bg-danger/10 border-b border-border">
+              <div className="px-2 py-1 text-2xs font-medium text-danger border-b border-border">
                 − Remove
               </div>
-              <pre className="p-2 text-[10px] overflow-x-auto text-(--color-text-secondary)">
+              <pre className="p-2 text-[10px] overflow-x-auto text-muted-foreground">
                 {truncate(oldString, 150)}
               </pre>
             </div>
           )}
           {newString && (
             <div className="bg-success/10">
-              <div className="px-2 py-1 text-2xs font-medium text-success border-b border-(--color-border)">
+              <div className="px-2 py-1 text-2xs font-medium text-success border-b border-border">
                 + Add
               </div>
-              <pre className="p-2 text-[10px] overflow-x-auto text-(--color-text-secondary)">
+              <pre className="p-2 text-[10px] overflow-x-auto text-muted-foreground">
                 {truncate(newString, 150)}
               </pre>
             </div>
@@ -142,11 +142,11 @@ function SearchDisplay({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="flex items-center gap-2">
-      <Search size={14} className="text-(--color-text-muted) shrink-0" />
+      <Search size={14} className="text-foreground/40 shrink-0" />
       <div className="text-[10px] overflow-hidden">
         <code className="font-mono text-accent">{pattern}</code>
         {path && (
-          <span className="text-(--color-text-muted)"> in {path}</span>
+          <span className="text-foreground/40"> in {path}</span>
         )}
       </div>
     </div>
@@ -158,7 +158,7 @@ function WebFetchDisplay({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="flex items-center gap-2">
-      <Globe size={14} className="text-(--color-text-muted) shrink-0" />
+      <Globe size={14} className="text-foreground/40 shrink-0" />
       <code className="text-[10px] font-mono text-accent truncate">
         {url}
       </code>
@@ -171,8 +171,8 @@ function WebSearchDisplay({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="flex items-center gap-2">
-      <Search size={14} className="text-(--color-text-muted) shrink-0" />
-      <span className="text-[10px] text-(--color-text-secondary)">
+      <Search size={14} className="text-foreground/40 shrink-0" />
+      <span className="text-[10px] text-muted-foreground">
         Searching: <span className="text-accent font-medium">{query}</span>
       </span>
     </div>
@@ -185,14 +185,14 @@ function TaskDisplay({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <Bot size={14} className="text-(--color-text-muted) shrink-0" />
+      <Bot size={14} className="text-foreground/40 shrink-0" />
       {subagentType && (
         <Badge variant="default" size="sm" className="text-2xs">
           {subagentType}
         </Badge>
       )}
       {description && (
-        <span className="text-[10px] text-(--color-text-secondary)">{description}</span>
+        <span className="text-[10px] text-muted-foreground">{description}</span>
       )}
     </div>
   )

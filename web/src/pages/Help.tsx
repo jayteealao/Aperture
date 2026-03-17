@@ -1,4 +1,4 @@
-import { Card, CardHeader, CardContent } from '@/components/ui/Card'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import {
   MessageSquare,
   Terminal,
@@ -12,17 +12,17 @@ export default function Help() {
   return (
     <div className="h-full overflow-y-auto p-6">
       <div className="max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold text-(--color-text-primary) mb-2">Help & Documentation</h2>
-        <p className="text-(--color-text-secondary) mb-6">
+        <h2 className="text-2xl font-bold text-foreground mb-2">Help & Documentation</h2>
+        <p className="text-muted-foreground mb-6">
           Learn how to use Aperture effectively
         </p>
 
         {/* Quick Start */}
         <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader
-            title="Quick Start Guide"
-            subtitle="Get up and running in minutes"
-          />
+          <CardHeader>
+            <CardTitle>Quick Start Guide</CardTitle>
+            <CardDescription>Get up and running in minutes</CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <Step
@@ -51,10 +51,10 @@ export default function Help() {
 
         {/* Features */}
         <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader
-            title="Features"
-            subtitle="What Aperture can do"
-          />
+          <CardHeader>
+            <CardTitle>Features</CardTitle>
+            <CardDescription>What Aperture can do</CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2">
               <FeatureCard
@@ -83,10 +83,10 @@ export default function Help() {
 
         {/* Troubleshooting */}
         <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader
-            title="Troubleshooting"
-            subtitle="Common issues and solutions"
-          />
+          <CardHeader>
+            <CardTitle>Troubleshooting</CardTitle>
+            <CardDescription>Common issues and solutions</CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <FAQ
@@ -111,10 +111,10 @@ export default function Help() {
 
         {/* Links */}
         <Card variant="glass" padding="lg">
-          <CardHeader
-            title="Resources"
-            subtitle="External links and documentation"
-          />
+          <CardHeader>
+            <CardTitle>Resources</CardTitle>
+            <CardDescription>External links and documentation</CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="space-y-3">
               <ResourceLink
@@ -155,8 +155,8 @@ function Step({
         {number}
       </div>
       <div>
-        <h4 className="font-medium text-(--color-text-primary)">{title}</h4>
-        <p className="text-sm text-(--color-text-secondary)">{description}</p>
+        <h4 className="font-medium text-foreground">{title}</h4>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
     </div>
   )
@@ -172,12 +172,12 @@ function FeatureCard({
   description: string
 }) {
   return (
-    <div className="p-4 rounded-lg bg-(--color-surface)">
+    <div className="p-4 rounded-lg bg-secondary">
       <div className="flex items-center gap-3 mb-2">
         <span className="text-accent">{icon}</span>
-        <h4 className="font-medium text-(--color-text-primary)">{title}</h4>
+        <h4 className="font-medium text-foreground">{title}</h4>
       </div>
-      <p className="text-sm text-(--color-text-secondary)">{description}</p>
+      <p className="text-sm text-muted-foreground">{description}</p>
     </div>
   )
 }
@@ -185,14 +185,14 @@ function FeatureCard({
 function FAQ({ question, answer }: { question: string; answer: string }) {
   return (
     <details className="group">
-      <summary className="flex items-center justify-between cursor-pointer list-none p-3 rounded-lg hover:bg-(--color-surface)">
-        <span className="font-medium text-(--color-text-primary)">{question}</span>
+      <summary className="flex items-center justify-between cursor-pointer list-none p-3 rounded-lg hover:bg-secondary">
+        <span className="font-medium text-foreground">{question}</span>
         <ChevronRight
           size={18}
-          className="text-(--color-text-muted) transition-transform group-open:rotate-90"
+          className="text-foreground/40 transition-transform group-open:rotate-90"
         />
       </summary>
-      <p className="px-3 pb-3 text-sm text-(--color-text-secondary)">{answer}</p>
+      <p className="px-3 pb-3 text-sm text-muted-foreground">{answer}</p>
     </details>
   )
 }
@@ -211,15 +211,15 @@ function ResourceLink({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center justify-between p-3 rounded-lg hover:bg-(--color-surface) transition-colors group"
+      className="flex items-center justify-between p-3 rounded-lg hover:bg-secondary transition-colors group"
     >
       <div>
-        <h4 className="font-medium text-(--color-text-primary) group-hover:text-accent transition-colors">
+        <h4 className="font-medium text-foreground group-hover:text-accent transition-colors">
           {title}
         </h4>
-        <p className="text-sm text-(--color-text-secondary)">{description}</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
-      <ExternalLink size={18} className="text-(--color-text-muted)" />
+      <ExternalLink size={18} className="text-foreground/40" />
     </a>
   )
 }

@@ -4,9 +4,9 @@ import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
 import { useToast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
-import { Card, CardHeader, CardContent } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
+import { InputField } from '@/components/ui/input-field'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/Dialog'
 import {
   Moon,
@@ -50,21 +50,21 @@ export default function Settings() {
   return (
     <div className="h-full overflow-y-auto p-6">
       <div className="max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold text-(--color-text-primary) mb-6">Settings</h2>
+        <h2 className="text-2xl font-bold text-foreground mb-6">Settings</h2>
 
         {/* Appearance */}
         <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader
-            title="Appearance"
-            subtitle="Customize the look and feel"
-          />
+          <CardHeader>
+            <CardTitle>Appearance</CardTitle>
+            <CardDescription>Customize the look and feel</CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
                 <div>
-                  <p className="font-medium text-(--color-text-primary)">Theme</p>
-                  <p className="text-sm text-(--color-text-secondary)">
+                  <p className="font-medium text-foreground">Theme</p>
+                  <p className="text-sm text-muted-foreground">
                     {theme === 'dark' ? 'Nebula Glass (Dark)' : 'Pearl Glass (Light)'}
                   </p>
                 </div>
@@ -78,21 +78,23 @@ export default function Settings() {
 
         {/* Connection */}
         <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader
-            title="Connection"
-            subtitle="Gateway server configuration"
-            action={
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle>Connection</CardTitle>
+                <CardDescription>Gateway server configuration</CardDescription>
+              </div>
               <Badge variant={isConnected ? 'success' : 'danger'}>
                 {isConnected ? 'Connected' : 'Disconnected'}
               </Badge>
-            }
-          />
+            </div>
+          </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-start gap-3">
-                <Server size={20} className="mt-2.5 text-(--color-text-muted)" />
+                <Server size={20} className="mt-2.5 text-foreground/40" />
                 <div className="flex-1">
-                  <Input
+                  <InputField
                     label="Gateway URL"
                     value={editUrl}
                     onChange={(e) => setEditUrl(e.target.value)}
@@ -111,13 +113,13 @@ export default function Settings() {
                 </div>
               )}
 
-              <div className="pt-4 border-t border-(--color-border)">
+              <div className="pt-4 border-t border-border">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <RefreshCw size={20} className="text-(--color-text-muted)" />
+                    <RefreshCw size={20} className="text-foreground/40" />
                     <div>
-                      <p className="font-medium text-(--color-text-primary)">Reconnect</p>
-                      <p className="text-sm text-(--color-text-secondary)">
+                      <p className="font-medium text-foreground">Reconnect</p>
+                      <p className="text-sm text-muted-foreground">
                         Test connection and refresh session list
                       </p>
                     </div>
@@ -139,10 +141,10 @@ export default function Settings() {
 
         {/* Keyboard Shortcuts */}
         <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader
-            title="Keyboard Shortcuts"
-            subtitle="Quick actions for power users"
-          />
+          <CardHeader>
+            <CardTitle>Keyboard Shortcuts</CardTitle>
+            <CardDescription>Quick actions for power users</CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="space-y-3">
               <ShortcutRow keys={['Cmd', 'K']} description="Open command palette" />
@@ -155,18 +157,18 @@ export default function Settings() {
 
         {/* Data Management */}
         <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader
-            title="Data Management"
-            subtitle="Manage local data and storage"
-          />
+          <CardHeader>
+            <CardTitle>Data Management</CardTitle>
+            <CardDescription>Manage local data and storage</CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-(--color-surface)">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-secondary">
                 <div className="flex items-center gap-3">
-                  <Database size={20} className="text-(--color-text-muted)" />
+                  <Database size={20} className="text-foreground/40" />
                   <div>
-                    <p className="font-medium text-(--color-text-primary)">Local Sessions</p>
-                    <p className="text-sm text-(--color-text-secondary)">
+                    <p className="font-medium text-foreground">Local Sessions</p>
+                    <p className="text-sm text-muted-foreground">
                       {sessions.length} session{sessions.length !== 1 ? 's' : ''} stored locally
                     </p>
                   </div>
@@ -177,8 +179,8 @@ export default function Settings() {
                 <div className="flex items-center gap-3">
                   <Trash2 size={20} className="text-danger" />
                   <div>
-                    <p className="font-medium text-(--color-text-primary)">Clear All Data</p>
-                    <p className="text-sm text-(--color-text-secondary)">
+                    <p className="font-medium text-foreground">Clear All Data</p>
+                    <p className="text-sm text-muted-foreground">
                       Remove all local sessions, messages, and credentials
                     </p>
                   </div>
@@ -193,12 +195,12 @@ export default function Settings() {
 
         {/* About */}
         <Card variant="glass" padding="lg">
-          <CardHeader
-            title="About Aperture"
-            subtitle="AI Workspace for ACP Agents"
-          />
+          <CardHeader>
+            <CardTitle>About Aperture</CardTitle>
+            <CardDescription>AI Workspace for ACP Agents</CardDescription>
+          </CardHeader>
           <CardContent>
-            <div className="space-y-2 text-sm text-(--color-text-secondary)">
+            <div className="space-y-2 text-sm text-muted-foreground">
               <p>Version: 1.0.0</p>
               <p>
                 Aperture provides a beautiful, high-performance interface for interacting with
@@ -235,12 +237,12 @@ export default function Settings() {
 function ShortcutRow({ keys, description }: { keys: string[]; description: string }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-sm text-(--color-text-secondary)">{description}</span>
+      <span className="text-sm text-muted-foreground">{description}</span>
       <div className="flex items-center gap-1">
         {keys.map((key, i) => (
           <span key={i}>
-            {i > 0 && <span className="mx-1 text-(--color-text-muted)">+</span>}
-            <kbd className="px-2 py-1 text-xs font-mono bg-(--color-surface) border border-(--color-border) rounded-sm">
+            {i > 0 && <span className="mx-1 text-foreground/40">+</span>}
+            <kbd className="px-2 py-1 text-xs font-mono bg-secondary border border-border rounded-sm">
               {key}
             </kbd>
           </span>

@@ -3,8 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
-import { Textarea } from '@/components/ui/Textarea'
+import { Textarea } from '@/components/ui/textarea'
 
 function InputGroup({ className, ...props }: React.ComponentProps<'div'>) {
   return (
@@ -125,11 +124,18 @@ function InputGroupInput({
   className,
   ...props
 }: React.ComponentProps<'input'>) {
+  // Renders a bare <input> — NOT the Input compound component — so that InputGroup's
+  // direct-child CSS selectors (has-[>input], [&>input]) work correctly.
   return (
-    <Input
+    <input
       data-slot="input-group-control"
       className={cn(
-        'flex-1 rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent',
+        'flex-1 min-w-0 h-10 px-3 rounded-none font-mono text-sm',
+        'bg-transparent text-foreground',
+        'border-0 shadow-none',
+        'placeholder:text-foreground/40',
+        'focus:outline-hidden focus:ring-0',
+        'transition-all duration-200',
         className
       )}
       {...props}
@@ -142,10 +148,13 @@ function InputGroupTextarea({
   ...props
 }: React.ComponentProps<'textarea'>) {
   return (
+    // field-sizing:fixed overrides the `field-sizing-content` that the base Textarea
+    // carries from shadcn — InputGroup controls height via the parent container, not
+    // content-driven auto-grow.
     <Textarea
       data-slot="input-group-control"
       className={cn(
-        'flex-1 resize-none rounded-none border-0 bg-transparent py-3 shadow-none focus-visible:ring-0 dark:bg-transparent',
+        'flex-1 resize-none rounded-none border-0 bg-transparent py-3 shadow-none focus-visible:ring-0 [field-sizing:fixed] dark:bg-transparent',
         className
       )}
       {...props}
