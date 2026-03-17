@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from 'react'
 import { ChevronDown, type LucideIcon } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
@@ -8,7 +9,7 @@ interface PanelSectionProps {
   /** Lucide icon component — rendered at size 14 inside the trigger. */
   icon: LucideIcon
   defaultOpen?: boolean
-  children: React.ReactNode
+  children: ReactNode
 }
 
 /**
@@ -30,7 +31,7 @@ export function PanelSection({
 }: PanelSectionProps) {
   return (
     <Collapsible defaultOpen={defaultOpen} className="group border-b border-(--color-border)">
-      <CollapsibleTrigger className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-(--color-surface-hover) transition-colors">
+      <CollapsibleTrigger className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-(--color-surface-hover) transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
         <span className="text-(--color-text-muted)" aria-hidden="true">
           <Icon size={14} />
         </span>

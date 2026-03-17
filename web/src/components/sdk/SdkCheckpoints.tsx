@@ -137,7 +137,7 @@ export function SdkCheckpoints({
       <div className="space-y-0.5 [&_[data-slot=separator]]:hidden">
         {checkpoints.map((checkpoint, index) => (
           <Checkpoint key={checkpoint}>
-            <span className="shrink-0 text-muted-foreground" aria-hidden="true">
+            <span className="shrink-0 text-(--color-text-muted)" aria-hidden="true">
               <History size={12} />
             </span>
             <span className="flex-1 truncate text-xs font-mono">

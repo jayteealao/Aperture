@@ -16,7 +16,7 @@ vi.mock('idb-keyval', () => ({
   keys: vi.fn(() => Promise.resolve([...store.keys()])),
 }))
 
-import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval'
+import { set as idbSet, del as idbDel } from 'idb-keyval'
 import {
   debouncedPersist,
   flushPersist,
