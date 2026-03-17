@@ -10,7 +10,8 @@ import { InputField } from '@/components/ui/input-field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, ConfirmDialog } from '@/components/ui/Dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { SkeletonCard } from '@/components/ui'
 import { Spinner } from '@/components/ui/Spinner'
 import { RepoSelector, type RepoSelection } from '@/components/session/RepoSelector'
@@ -436,7 +437,11 @@ function NewSessionDialog({
   const canCreate = repoSelection && (authMode !== 'api_key' || apiKey)
 
   return (
-    <Dialog open={open} onClose={onClose} title="Create New Session" size="lg">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle>Create New Session</DialogTitle>
+        </DialogHeader>
       <div className="space-y-4">
         {/* Agent Type */}
         <div className="w-full flex flex-col gap-1.5">
@@ -521,6 +526,7 @@ function NewSessionDialog({
           </Button>
         </div>
       </div>
+      </DialogContent>
     </Dialog>
   )
 }

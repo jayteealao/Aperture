@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { InputField } from '@/components/ui/input-field'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ConfirmDialog } from '@/components/ui/Dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Moon,
   Sun,

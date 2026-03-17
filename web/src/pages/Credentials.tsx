@@ -7,7 +7,8 @@ import { InputField } from '@/components/ui/input-field'
 import { FormSelect } from '@/components/ui/form-select'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, ConfirmDialog } from '@/components/ui/Dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { SkeletonCard } from '@/components/ui'
 import type { Credential, ProviderKey } from '@/api/types'
 import { Plus, Trash2, Key, Shield, Clock } from 'lucide-react'
@@ -265,7 +266,11 @@ function AddCredentialDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Add Credential" size="md">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent size="md">
+        <DialogHeader>
+          <DialogTitle>Add Credential</DialogTitle>
+        </DialogHeader>
       <div className="space-y-4">
         <FormSelect
           label="Provider"
@@ -305,6 +310,7 @@ function AddCredentialDialog({
           </Button>
         </div>
       </div>
+      </DialogContent>
     </Dialog>
   )
 }

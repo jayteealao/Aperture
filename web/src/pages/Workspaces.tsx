@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { InputField } from '@/components/ui/input-field'
 import { TextareaField } from '@/components/ui/textarea-field'
-import { Dialog } from '@/components/ui/Dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/Spinner'
 import type { WorkspaceRecord, CheckoutRecord, DiscoveredRepo } from '@/api/types'
@@ -499,7 +499,11 @@ function CreateWorkspaceDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Create Workspace" size="lg">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle>Create Workspace</DialogTitle>
+        </DialogHeader>
       <div className="space-y-4">
         {/* Mode selector */}
         <div className="flex gap-2 p-1 bg-muted rounded-lg">
@@ -712,6 +716,7 @@ function CreateWorkspaceDialog({
           </div>
         </form>
       </div>
+      </DialogContent>
     </Dialog>
   )
 }

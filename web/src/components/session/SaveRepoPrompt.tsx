@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
-import { Dialog } from '@/components/ui/Dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/Button'
 import { InputField } from '@/components/ui/input-field'
 import { useToast } from '@/components/ui/Toast'
@@ -49,7 +49,11 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Save Repository?" size="md">
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent size="md">
+        <DialogHeader>
+          <DialogTitle>Save Repository?</DialogTitle>
+        </DialogHeader>
       <div className="space-y-4">
         {/* Info */}
         <div className="flex items-start gap-3 p-3 rounded-lg bg-muted">
@@ -100,6 +104,7 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
           </Button>
         </div>
       </div>
+      </DialogContent>
     </Dialog>
   )
 }
