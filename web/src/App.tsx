@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router'
 import { useAppStore } from './stores/app'
 import { Shell } from './components/layout/Shell'
 import { Spinner } from './components/ui/Spinner'
+import { getSingletonHighlighter } from './lib/shiki.bundle'
 
 // Lazy load pages for code splitting
 const Onboarding = lazy(() => import('./pages/Onboarding'))
@@ -18,7 +19,7 @@ function LoadingFallback() {
     <div className="flex items-center justify-center min-h-screen bg-gradient-mesh">
       <div className="glass-card p-8 text-center animate-in">
         <Spinner size="lg" />
-        <p className="mt-4 text-sm text-(--color-text-secondary)">Loading...</p>
+        <p className="mt-4 text-sm text-muted-foreground">Loading...</p>
       </div>
     </div>
   )
@@ -48,6 +49,10 @@ export default function App() {
     if (!isConnected && location.pathname !== '/onboarding') {
       navigate('/onboarding', { replace: true })
     }
+
+    // Pre-warm the Shiki singleton so the highlighter engine is ready before
+    // the user sees their first code block, preventing FOUC / shimmer flash.
+    void getSingletonHighlighter({ langs: [], themes: [] })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

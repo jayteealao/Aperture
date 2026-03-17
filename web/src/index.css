@@ -32,27 +32,6 @@
   --gradient-to: #e0e7ff;
   --radius: 0.75rem;
 
-  /* Legacy HUD variables preserved during the phase 0 migration. */
-  --color-bg-primary: var(--background);
-  --color-bg-secondary: var(--card);
-  --color-bg-tertiary: var(--muted);
-  --color-surface: var(--secondary);
-  --color-surface-hover: var(--secondary-hover);
-  --color-surface-active: var(--secondary-active);
-  --color-border: var(--border);
-  --color-border-strong: var(--ring);
-  --color-text-primary: var(--foreground);
-  --color-text-secondary: var(--muted-foreground);
-  --color-text-muted: rgba(0, 0, 0, 0.4);
-  --color-accent: var(--primary);
-  --color-accent-hover: var(--primary-hover);
-  --color-accent-secondary: var(--accent);
-  --color-nebula-bg-primary: var(--primary-foreground);
-  --color-danger: var(--destructive);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-gradient-from: var(--gradient-from);
-  --color-gradient-to: var(--gradient-to);
 }
 
 .dark {
@@ -82,27 +61,6 @@
   --warning: #f59e0b;
   --gradient-from: #0f172a;
   --gradient-to: #1e1b4b;
-
-  --color-bg-primary: var(--background);
-  --color-bg-secondary: var(--card);
-  --color-bg-tertiary: var(--muted);
-  --color-surface: var(--secondary);
-  --color-surface-hover: var(--secondary-hover);
-  --color-surface-active: var(--secondary-active);
-  --color-border: var(--border);
-  --color-border-strong: var(--ring);
-  --color-text-primary: var(--foreground);
-  --color-text-secondary: var(--muted-foreground);
-  --color-text-muted: rgba(255, 255, 255, 0.4);
-  --color-accent: var(--primary);
-  --color-accent-hover: var(--primary-hover);
-  --color-accent-secondary: var(--accent);
-  --color-nebula-bg-primary: var(--primary-foreground);
-  --color-danger: var(--destructive);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-gradient-from: var(--gradient-from);
-  --color-gradient-to: var(--gradient-to);
 }
 
 @theme inline {
@@ -283,7 +241,7 @@
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-text-muted);
+    background: color-mix(in srgb, var(--foreground) 40%, transparent);
   }
 }
 
@@ -340,7 +298,7 @@
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: var(--color-text-muted);
+    background: color-mix(in srgb, var(--foreground) 40%, transparent);
   }
 }
 
