@@ -108,7 +108,7 @@ class ApertureClient {
   }
 
   async getSession(sessionId: string): Promise<SessionStatus> {
-    return this.request<SessionStatus>(`/v1/sessions/${sessionId}`)
+    return this.request<SessionStatus>(`/v1/sessions/${encodeURIComponent(sessionId)}`)
   }
 
   async listSessions(): Promise<ListSessionsResponse> {
@@ -116,7 +116,7 @@ class ApertureClient {
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    return this.request<void>(`/v1/sessions/${sessionId}`, {
+    return this.request<void>(`/v1/sessions/${encodeURIComponent(sessionId)}`, {
       method: 'DELETE',
     })
   }
@@ -127,12 +127,12 @@ class ApertureClient {
     offset = 0
   ): Promise<MessagesResponse> {
     return this.request<MessagesResponse>(
-      `/v1/sessions/${sessionId}/messages?limit=${limit}&offset=${offset}`
+      `/v1/sessions/${encodeURIComponent(sessionId)}/messages?limit=${limit}&offset=${offset}`
     )
   }
 
   async sendRpc(sessionId: string, message: JsonRpcMessage): Promise<unknown> {
-    return this.request<unknown>(`/v1/sessions/${sessionId}/rpc`, {
+    return this.request<unknown>(`/v1/sessions/${encodeURIComponent(sessionId)}/rpc`, {
       method: 'POST',
       body: JSON.stringify({ message }),
     })
@@ -145,7 +145,7 @@ class ApertureClient {
 
   // Connect to a session (restores SDK session if needed)
   async connectSession(sessionId: string): Promise<ConnectSessionResponse> {
-    return this.request<ConnectSessionResponse>(`/v1/sessions/${sessionId}/connect`, {
+    return this.request<ConnectSessionResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/connect`, {
       method: 'POST',
     })
   }
@@ -163,7 +163,7 @@ class ApertureClient {
   }
 
   async deleteCredential(id: string): Promise<void> {
-    return this.request<void>(`/v1/credentials/${id}`, {
+    return this.request<void>(`/v1/credentials/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     })
   }
@@ -171,7 +171,7 @@ class ApertureClient {
   // WebSocket URL helper
   getWebSocketUrl(sessionId: string): string {
     const wsUrl = this.baseUrl.replace(/^http/, 'ws')
-    return `${wsUrl}/v1/sessions/${sessionId}/ws?token=${encodeURIComponent(this.token)}`
+    return `${wsUrl}/v1/sessions/${encodeURIComponent(sessionId)}/ws?token=${encodeURIComponent(this.token)}`
   }
 
   // Workspaces
@@ -187,21 +187,21 @@ class ApertureClient {
   }
 
   async getWorkspace(id: string): Promise<WorkspaceRecord> {
-    return this.request<WorkspaceRecord>(`/v1/workspaces/${id}`)
+    return this.request<WorkspaceRecord>(`/v1/workspaces/${encodeURIComponent(id)}`)
   }
 
   async deleteWorkspace(id: string): Promise<void> {
-    return this.request<void>(`/v1/workspaces/${id}`, {
+    return this.request<void>(`/v1/workspaces/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     })
   }
 
   async listWorkspaceCheckouts(workspaceId: string): Promise<ListWorkspaceCheckoutsResponse> {
-    return this.request<ListWorkspaceCheckoutsResponse>(`/v1/workspaces/${workspaceId}/checkouts`)
+    return this.request<ListWorkspaceCheckoutsResponse>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/checkouts`)
   }
 
   async deleteWorkspaceCheckout(workspaceId: string, repoId: string): Promise<void> {
-    return this.request<void>(`/v1/workspaces/${workspaceId}/checkouts/${repoId}`, {
+    return this.request<void>(`/v1/workspaces/${encodeURIComponent(workspaceId)}/checkouts/${encodeURIComponent(repoId)}`, {
       method: 'DELETE',
     })
   }
