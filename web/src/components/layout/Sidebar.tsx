@@ -153,7 +153,10 @@ export function Sidebar({ className }: SidebarProps) {
                     <span className="truncate font-mono text-xs flex-1 text-left">
                       {session.id.slice(0, 8)}
                     </span>
-                    {hasUnread && (
+                    {conn?.isStreaming && (
+                      <span className="w-2 h-2 rounded-full bg-success animate-[pulse_0.75s_ease-in-out_infinite]" title="Streaming" />
+                    )}
+                    {hasUnread && !conn?.isStreaming && (
                       <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
                     )}
                   </button>
