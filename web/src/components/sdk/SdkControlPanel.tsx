@@ -1,8 +1,7 @@
 // SDK Control Panel - Main collapsible right panel for SDK session controls
 
-import { useState, useCallback } from 'react'
-import { cn } from '@/utils/cn'
 import { Button } from '@/components/ui/Button'
+import { PanelSection } from '@/components/ui/PanelSection'
 import { useSdkSession } from '@/hooks/useSdkSession'
 import { useSessionsStore } from '@/stores/sessions'
 import { SdkSessionHeader } from './SdkSessionHeader'
@@ -15,8 +14,6 @@ import { SdkCommandsList } from './SdkCommandsList'
 import {
   PanelRightClose,
   PanelRight,
-  ChevronDown,
-  ChevronRight,
   Settings2,
   Activity,
   User,
@@ -32,29 +29,7 @@ interface SdkControlPanelProps {
   onToggle: () => void
 }
 
-type SectionId = 'controls' | 'usage' | 'account' | 'config' | 'mcp' | 'checkpoints' | 'commands'
-
-interface Section {
-  id: SectionId
-  title: string
-  icon: React.ReactNode
-}
-
-const SECTIONS: Section[] = [
-  { id: 'controls', title: 'Session', icon: <Settings2 size={14} /> },
-  { id: 'usage', title: 'Usage', icon: <Activity size={14} /> },
-  { id: 'account', title: 'Account', icon: <User size={14} /> },
-  { id: 'config', title: 'Configuration', icon: <Sliders size={14} /> },
-  { id: 'mcp', title: 'MCP Servers', icon: <Server size={14} /> },
-  { id: 'checkpoints', title: 'Checkpoints', icon: <History size={14} /> },
-  { id: 'commands', title: 'Commands', icon: <Terminal size={14} /> },
-]
-
 export function SdkControlPanel({ sessionId, isOpen, onToggle }: SdkControlPanelProps) {
-  const [expandedSections, setExpandedSections] = useState<Set<SectionId>>(
-    new Set(['controls', 'usage'])
-  )
-
   const { connections } = useSessionsStore()
   const connection = connections[sessionId]
   const isStreaming = connection?.isStreaming || false
@@ -81,18 +56,6 @@ export function SdkControlPanel({ sessionId, isOpen, onToggle }: SdkControlPanel
     rewindFiles,
     clearRewindResult,
   } = useSdkSession(sessionId)
-
-  const toggleSection = useCallback((sectionId: SectionId) => {
-    setExpandedSections((prev) => {
-      const next = new Set(prev)
-      if (next.has(sectionId)) {
-        next.delete(sectionId)
-      } else {
-        next.add(sectionId)
-      }
-      return next
-    })
-  }, [])
 
   // Don't render for non-SDK sessions
   if (!isSdkSession) {
@@ -134,109 +97,72 @@ export function SdkControlPanel({ sessionId, isOpen, onToggle }: SdkControlPanel
 
       {/* Sections */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
-        {SECTIONS.map((section) => (
-          <AccordionSection
-            key={section.id}
-            title={section.title}
-            icon={section.icon}
-            isExpanded={expandedSections.has(section.id)}
-            onToggle={() => toggleSection(section.id)}
-          >
-            {section.id === 'controls' && (
-              <SdkSessionHeader
-                config={config}
-                models={models}
-                loading={loading}
-                errors={errors}
-                isStreaming={isStreaming}
-                onModelChange={setModel}
-                onPermissionModeChange={setPermissionMode}
-                onInterrupt={interrupt}
-              />
-            )}
-            {section.id === 'usage' && <SdkUsageDisplay usage={usage} />}
-            {section.id === 'account' && (
-              <SdkAccountInfo
-                accountInfo={accountInfo}
-                loading={loading.accountInfo || false}
-                error={errors.accountInfo}
-              />
-            )}
-            {section.id === 'config' && (
-              <SdkConfigControls
-                config={config}
-                onThinkingTokensChange={setThinkingTokens}
-                onConfigUpdate={updateConfig}
-              />
-            )}
-            {section.id === 'mcp' && (
-              <SdkMcpStatus
-                mcpStatus={mcpStatus}
-                loading={loading.mcpStatus || false}
-                error={errors.mcpStatus}
-                onRefresh={getMcpStatus}
-              />
-            )}
-            {section.id === 'checkpoints' && (
-              <SdkCheckpoints
-                checkpoints={checkpoints}
-                loading={loading.checkpoints || false}
-                rewindResult={rewindResult}
-                onRewind={rewindFiles}
-                onClearResult={clearRewindResult}
-              />
-            )}
-            {section.id === 'commands' && (
-              <SdkCommandsList
-                commands={commands}
-                loading={loading.commands || false}
-                error={errors.commands}
-                onRefresh={getCommands}
-              />
-            )}
-          </AccordionSection>
-        ))}
+        <PanelSection title="Session" icon={Settings2} defaultOpen>
+          <SdkSessionHeader
+            config={config}
+            models={models}
+            loading={loading}
+            errors={errors}
+            isStreaming={isStreaming}
+            onModelChange={setModel}
+            onPermissionModeChange={setPermissionMode}
+            onInterrupt={interrupt}
+          />
+        </PanelSection>
+
+        <PanelSection title="Usage" icon={Activity} defaultOpen>
+          <SdkUsageDisplay usage={usage} />
+        </PanelSection>
+
+        <PanelSection title="Account" icon={User}>
+          <SdkAccountInfo
+            accountInfo={accountInfo}
+            loading={loading.accountInfo || false}
+            error={errors.accountInfo}
+          />
+        </PanelSection>
+
+        <PanelSection title="Configuration" icon={Sliders}>
+          <SdkConfigControls
+            config={config}
+            onThinkingTokensChange={setThinkingTokens}
+            onConfigUpdate={updateConfig}
+          />
+        </PanelSection>
+
+        <PanelSection title="MCP Servers" icon={Server}>
+          <SdkMcpStatus
+            mcpStatus={mcpStatus}
+            loading={loading.mcpStatus || false}
+            error={errors.mcpStatus}
+            onRefresh={getMcpStatus}
+          />
+        </PanelSection>
+
+        <PanelSection title="Checkpoints" icon={History}>
+          <SdkCheckpoints
+            checkpoints={checkpoints}
+            loading={loading.checkpoints || false}
+            rewindResult={rewindResult}
+            onRewind={rewindFiles}
+            onClearResult={clearRewindResult}
+          />
+        </PanelSection>
+
+        <PanelSection title="Commands" icon={Terminal}>
+          <SdkCommandsList
+            commands={commands}
+            loading={loading.commands || false}
+            error={errors.commands}
+            onRefresh={getCommands}
+          />
+        </PanelSection>
       </div>
 
       {/* Footer */}
       <div className="px-3 py-2 border-t border-(--color-border) text-2xs text-(--color-text-muted)">
         Claude SDK Session
       </div>
-    </div>
-  )
-}
-
-function AccordionSection({
-  title,
-  icon,
-  isExpanded,
-  onToggle,
-  children,
-}: {
-  title: string
-  icon: React.ReactNode
-  isExpanded: boolean
-  onToggle: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <div className="border-b border-(--color-border)">
-      <button
-        onClick={onToggle}
-        className={cn(
-          'w-full flex items-center gap-2 px-3 py-2 text-left',
-          'hover:bg-(--color-surface-hover) transition-colors'
-        )}
-      >
-        {isExpanded ? (
-          <ChevronDown size={14} className="text-(--color-text-muted)" />
-        ) : (
-          <ChevronRight size={14} className="text-(--color-text-muted)" />
-        )}
-        <span className="text-(--color-text-muted)">{icon}</span>
-        <span className="text-sm font-medium text-(--color-text-secondary)">{title}</span>
-      </button>
-      {isExpanded && <div className="px-3 pb-3">{children}</div>}
     </div>
   )
 }

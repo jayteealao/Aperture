@@ -1,18 +1,16 @@
 // Pi SDK Control Panel - Collapsible right panel matching SDK panel design
 
-import { useState, useCallback } from 'react'
-import { cn } from '@/utils/cn'
+import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { Spinner } from '@/components/ui/Spinner'
+import { PanelSection } from '@/components/ui/PanelSection'
 import { usePiSession } from '@/hooks/usePiSession'
 import type { PiSessionStats, PiModelInfo, PiForkableEntry } from '@/api/pi-types'
 import {
   PanelRightClose,
   PanelRight,
-  ChevronDown,
-  ChevronRight,
   Settings2,
   Activity,
   Cpu,
@@ -28,26 +26,7 @@ interface PiControlPanelProps {
   onToggle: () => void
 }
 
-type SectionId = 'session' | 'streaming' | 'usage' | 'models' | 'forkable'
-
-interface Section {
-  id: SectionId
-  title: string
-  icon: React.ReactNode
-}
-
-const SECTIONS: Section[] = [
-  { id: 'session', title: 'Session', icon: <Settings2 size={14} /> },
-  { id: 'streaming', title: 'Streaming', icon: <Radio size={14} /> },
-  { id: 'usage', title: 'Usage', icon: <Activity size={14} /> },
-  { id: 'models', title: 'Models', icon: <Cpu size={14} /> },
-  { id: 'forkable', title: 'Forkable', icon: <GitFork size={14} /> },
-]
-
 export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiControlPanelProps) {
-  const [expandedSections, setExpandedSections] = useState<Set<SectionId>>(
-    new Set(['session', 'usage'])
-  )
   const [steerContent, setSteerContent] = useState('')
   const [followUpContent, setFollowUpContent] = useState('')
   const [compactInstructions, setCompactInstructions] = useState('')
@@ -71,18 +50,6 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
     steer,
     followUp,
   } = usePiSession(sessionId)
-
-  const toggleSection = useCallback((sectionId: SectionId) => {
-    setExpandedSections((prev) => {
-      const next = new Set(prev)
-      if (next.has(sectionId)) {
-        next.delete(sectionId)
-      } else {
-        next.add(sectionId)
-      }
-      return next
-    })
-  }, [])
 
   if (!isPiSession) {
     return null
@@ -142,107 +109,64 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
 
       {/* Sections */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
-        {SECTIONS.map((section) => (
-          <AccordionSection
-            key={section.id}
-            title={section.title}
-            icon={section.icon}
-            isExpanded={expandedSections.has(section.id)}
-            onToggle={() => toggleSection(section.id)}
-          >
-            {section.id === 'session' && (
-              <SessionSection
-                thinkingLevel={thinkingLevel}
-                isStreaming={isStreaming}
-                compactInstructions={compactInstructions}
-                onCompactInstructionsChange={setCompactInstructions}
-                onCompact={handleCompact}
-                onNewSession={newSession}
-                onCycleModel={cycleModel}
-                onCycleThinking={cycleThinking}
-              />
-            )}
-            {section.id === 'streaming' && (
-              <StreamingSection
-                isStreaming={isStreaming}
-                steerContent={steerContent}
-                followUpContent={followUpContent}
-                onSteerContentChange={setSteerContent}
-                onFollowUpContentChange={setFollowUpContent}
-                onSteer={handleSteer}
-                onFollowUp={handleFollowUp}
-              />
-            )}
-            {section.id === 'usage' && (
-              <UsageSection
-                stats={stats}
-                loading={isLoading.stats || false}
-                error={errors.stats}
-                onRefresh={refreshStats}
-              />
-            )}
-            {section.id === 'models' && (
-              <ModelsSection
-                models={models}
-                loading={isLoading.models || false}
-                error={errors.models}
-                onRefresh={refreshModels}
-              />
-            )}
-            {section.id === 'forkable' && (
-              <ForkableSection
-                entries={forkableEntries}
-                loading={isLoading.forkable || false}
-                isStreaming={isStreaming}
-                onFork={fork}
-                onRefresh={refreshForkable}
-              />
-            )}
-          </AccordionSection>
-        ))}
+        <PanelSection title="Session" icon={Settings2} defaultOpen>
+          <SessionSection
+            thinkingLevel={thinkingLevel}
+            isStreaming={isStreaming}
+            compactInstructions={compactInstructions}
+            onCompactInstructionsChange={setCompactInstructions}
+            onCompact={handleCompact}
+            onNewSession={newSession}
+            onCycleModel={cycleModel}
+            onCycleThinking={cycleThinking}
+          />
+        </PanelSection>
+
+        <PanelSection title="Streaming" icon={Radio}>
+          <StreamingSection
+            isStreaming={isStreaming}
+            steerContent={steerContent}
+            followUpContent={followUpContent}
+            onSteerContentChange={setSteerContent}
+            onFollowUpContentChange={setFollowUpContent}
+            onSteer={handleSteer}
+            onFollowUp={handleFollowUp}
+          />
+        </PanelSection>
+
+        <PanelSection title="Usage" icon={Activity} defaultOpen>
+          <UsageSection
+            stats={stats}
+            loading={isLoading.stats || false}
+            error={errors.stats}
+            onRefresh={refreshStats}
+          />
+        </PanelSection>
+
+        <PanelSection title="Models" icon={Cpu}>
+          <ModelsSection
+            models={models}
+            loading={isLoading.models || false}
+            error={errors.models}
+            onRefresh={refreshModels}
+          />
+        </PanelSection>
+
+        <PanelSection title="Forkable" icon={GitFork}>
+          <ForkableSection
+            entries={forkableEntries}
+            loading={isLoading.forkable || false}
+            isStreaming={isStreaming}
+            onFork={fork}
+            onRefresh={refreshForkable}
+          />
+        </PanelSection>
       </div>
 
       {/* Footer */}
       <div className="px-3 py-2 border-t border-(--color-border) text-2xs text-(--color-text-muted)">
         Pi SDK Session
       </div>
-    </div>
-  )
-}
-
-// --- Accordion ---
-
-function AccordionSection({
-  title,
-  icon,
-  isExpanded,
-  onToggle,
-  children,
-}: {
-  title: string
-  icon: React.ReactNode
-  isExpanded: boolean
-  onToggle: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <div className="border-b border-(--color-border)">
-      <button
-        onClick={onToggle}
-        className={cn(
-          'w-full flex items-center gap-2 px-3 py-2 text-left',
-          'hover:bg-(--color-surface-hover) transition-colors'
-        )}
-      >
-        {isExpanded ? (
-          <ChevronDown size={14} className="text-(--color-text-muted)" />
-        ) : (
-          <ChevronRight size={14} className="text-(--color-text-muted)" />
-        )}
-        <span className="text-(--color-text-muted)">{icon}</span>
-        <span className="text-sm font-medium text-(--color-text-secondary)">{title}</span>
-      </button>
-      {isExpanded && <div className="px-3 pb-3">{children}</div>}
     </div>
   )
 }

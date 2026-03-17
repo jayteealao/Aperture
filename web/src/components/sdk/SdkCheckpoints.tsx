@@ -2,9 +2,13 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
+import {
+  Checkpoint,
+  CheckpointIcon,
+  CheckpointTrigger,
+} from '@/components/ai-elements/checkpoint'
 import { History, RotateCcw, Eye, AlertTriangle, X, FileText } from 'lucide-react'
 import type { RewindFilesResult } from '@/api/types'
 
@@ -130,29 +134,20 @@ export function SdkCheckpoints({
       )}
 
       {/* Checkpoint List */}
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {checkpoints.map((checkpoint, index) => (
-          <div
-            key={checkpoint}
-            className="flex items-center justify-between p-2 bg-(--color-surface) rounded-lg group"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Badge variant="outline" size="sm">
-                #{checkpoints.length - index}
-              </Badge>
-              <span className="text-xs text-(--color-text-muted) truncate font-mono">
-                {checkpoint.slice(0, 12)}...
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
+          <Checkpoint key={checkpoint}>
+            <CheckpointIcon />
+            <span className="flex-1 truncate text-xs font-mono">
+              #{checkpoints.length - index} — {checkpoint.slice(0, 12)}...
+            </span>
+            <CheckpointTrigger
               onClick={() => handlePreview(checkpoint)}
-              className="h-6 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+              tooltip="Preview changes"
             >
               <Eye size={12} />
-            </Button>
-          </div>
+            </CheckpointTrigger>
+          </Checkpoint>
         ))}
       </div>
     </div>
