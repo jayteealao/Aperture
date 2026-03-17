@@ -1,6 +1,7 @@
 export * from './Button'
 export * from './input'
 export * from './input-field'
+export * from './input-group'
 export * from './form-select'
 export * from './select'
 export * from './textarea'

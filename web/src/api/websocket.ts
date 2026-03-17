@@ -84,7 +84,9 @@ class WebSocketManager {
           const data = JSON.parse(event.data) as JsonRpcMessage
           conn.messageHandler(sessionId, data)
         } catch (error) {
-          console.error('[WS] Failed to parse message:', error)
+          if (import.meta.env.DEV) {
+            console.error('[WS] Failed to parse message:', error)
+          }
         }
       }
 
@@ -196,7 +198,9 @@ class WebSocketManager {
       conn.ws.send(JSON.stringify(message))
       return true
     } catch (error) {
-      console.error('[WS] Failed to send message:', error)
+      if (import.meta.env.DEV) {
+        console.error('[WS] Failed to send message:', error)
+      }
       return false
     }
   }
@@ -253,7 +257,9 @@ class WebSocketManager {
       try {
         handler(chunk)
       } catch (error) {
-        console.error('[WS] Failed to emit UI chunk:', error)
+        if (import.meta.env.DEV) {
+          console.error('[WS] Failed to emit UI chunk:', error)
+        }
       }
     }
   }

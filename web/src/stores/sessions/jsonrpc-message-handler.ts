@@ -129,9 +129,9 @@ function handleSessionUpdate(
     // SDK and Pi sessions receive this via their own message handlers.
     if (!get().connections[sessionId]?.isStreaming) {
       get().setStreaming(sessionId, true)
-    }
-    if (sessionId !== activeSessionId) {
-      get().incrementUnread(sessionId)
+      if (sessionId !== activeSessionId) {
+        get().incrementUnread(sessionId)
+      }
     }
   } else if (updateType === 'prompt_complete' || updateType === 'prompt_error') {
     get().setStreaming(sessionId, false)

@@ -43,6 +43,9 @@ export function handlePiWebSocketMessage(
           console.error('[Pi WS] Error:', msgEvent.error)
         }
         get().setStreaming(sessionId, false)
+        const rawError = typeof msgEvent.error === 'string' ? msgEvent.error : null
+        const safeError = rawError !== null && rawError.length <= 200 ? rawError : 'Session error'
+        get().updateConnection(sessionId, { status: 'error', error: safeError })
       }
       break
     }
