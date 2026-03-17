@@ -43,7 +43,7 @@ export function SdkCheckpoints({
         <History size={24} className="mx-auto text-(--color-text-muted) mb-2" />
         <p className="text-xs text-(--color-text-muted)">No checkpoints available</p>
         <p className="text-2xs text-(--color-text-muted) mt-1">
-          Enable file checkpointing to rewind changes
+          Enable file checkpointing in the Configuration section to rewind changes
         </p>
       </div>
     )
@@ -134,10 +134,13 @@ export function SdkCheckpoints({
       )}
 
       {/* Checkpoint List */}
-      <div className="space-y-0.5">
+      {/* [&_hr]:hidden — Checkpoint always renders a trailing <Separator /> designed
+          for conversation timelines; suppress it here since rows are already separated
+          by the space-y-0.5 gap and a per-row hr would double-border the last item. */}
+      <div className="space-y-0.5 [&_hr]:hidden">
         {checkpoints.map((checkpoint, index) => (
           <Checkpoint key={checkpoint}>
-            <CheckpointIcon />
+            <CheckpointIcon><History size={12} /></CheckpointIcon>
             <span className="flex-1 truncate text-xs font-mono">
               #{checkpoints.length - index} — {checkpoint.slice(0, 12)}...
             </span>

@@ -152,7 +152,7 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
           />
         </PanelSection>
 
-        <PanelSection title="Forkable" icon={GitFork}>
+        <PanelSection title="Forkable Messages" icon={GitFork}>
           <ForkableSection
             entries={forkableEntries}
             loading={isLoading.forkable || false}
@@ -195,10 +195,10 @@ function SessionSection({
   return (
     <div className="space-y-2">
       <div className="flex gap-1.5">
-        <Button onClick={onCycleModel} size="sm" variant="outline" className="flex-1 text-xs" disabled={isStreaming}>
+        <Button onClick={onCycleModel} size="sm" variant="outline" className="flex-1 text-xs" disabled={isStreaming} title="Switch to the next available Pi model">
           Cycle Model
         </Button>
-        <Button onClick={onCycleThinking} size="sm" variant="outline" className="flex-1 text-xs" disabled={isStreaming}>
+        <Button onClick={onCycleThinking} size="sm" variant="outline" className="flex-1 text-xs" disabled={isStreaming} title="Cycle through thinking intensity levels (auto → low → medium → high → max → none)">
           Thinking: {thinkingLevel}
         </Button>
       </div>
@@ -210,7 +210,7 @@ function SessionSection({
           className="flex-1 text-xs"
           disabled={isStreaming}
         />
-        <Button onClick={onCompact} size="sm" variant="secondary" disabled={isStreaming}>
+        <Button onClick={onCompact} size="sm" variant="secondary" disabled={isStreaming} title="Summarise the conversation to reduce context length">
           Compact
         </Button>
       </div>
@@ -256,7 +256,7 @@ function StreamingSection({
           onKeyDown={(e) => e.key === 'Enter' && onSteer()}
           className="flex-1 text-xs"
         />
-        <Button onClick={onSteer} size="sm" variant="secondary">
+        <Button onClick={onSteer} size="sm" variant="secondary" title="Interrupt the current stream with new direction">
           Steer
         </Button>
       </div>
@@ -268,7 +268,7 @@ function StreamingSection({
           onKeyDown={(e) => e.key === 'Enter' && onFollowUp()}
           className="flex-1 text-xs"
         />
-        <Button onClick={onFollowUp} size="sm" variant="secondary">
+        <Button onClick={onFollowUp} size="sm" variant="secondary" title="Queue a follow-up message to send after the current stream finishes">
           Queue
         </Button>
       </div>
@@ -386,14 +386,14 @@ function ForkableSection({
               >
                 {entry.content.slice(0, 50)}...
               </span>
-              <Button onClick={() => onFork(entry.id)} size="sm" variant="outline" disabled={isStreaming} className="text-xs h-6 px-2">
+              <Button onClick={() => onFork(entry.id)} size="sm" variant="outline" disabled={isStreaming} className="text-xs h-6 px-2" title="Fork a new session branching from this message">
                 Fork
               </Button>
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-xs text-(--color-text-muted)">No forkable messages yet.</p>
+        <p className="text-xs text-(--color-text-muted)">No branch points yet. Branch-capable messages will appear here during a session.</p>
       )}
     </div>
   )
