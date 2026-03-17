@@ -152,7 +152,7 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
           />
         </PanelSection>
 
-        <PanelSection title="Forkable Messages" icon={GitFork}>
+        <PanelSection title="Branch Points" icon={GitFork}>
           <ForkableSection
             entries={forkableEntries}
             loading={isLoading.forkable || false}
@@ -198,7 +198,7 @@ function SessionSection({
         <Button onClick={onCycleModel} size="sm" variant="outline" className="flex-1 text-xs" disabled={isStreaming} title="Switch to the next available Pi model">
           Cycle Model
         </Button>
-        <Button onClick={onCycleThinking} size="sm" variant="outline" className="flex-1 text-xs" disabled={isStreaming} title="Cycle through thinking intensity levels (auto → low → medium → high → max → none)">
+        <Button onClick={onCycleThinking} size="sm" variant="outline" className="flex-1 text-xs" disabled={isStreaming} title={`Cycle thinking intensity — current: ${thinkingLevel}`}>
           Thinking: {thinkingLevel}
         </Button>
       </div>
@@ -210,11 +210,11 @@ function SessionSection({
           className="flex-1 text-xs"
           disabled={isStreaming}
         />
-        <Button onClick={onCompact} size="sm" variant="secondary" disabled={isStreaming} title="Summarise the conversation to reduce context length">
+        <Button onClick={onCompact} size="sm" variant="secondary" disabled={isStreaming} title="Summarize the conversation to reduce context length">
           Compact
         </Button>
       </div>
-      <Button onClick={onNewSession} variant="outline" size="sm" disabled={isStreaming} className="w-full text-xs">
+      <Button onClick={onNewSession} variant="outline" size="sm" disabled={isStreaming} className="w-full text-xs" title="Start a fresh Pi session">
         New Session
       </Button>
     </div>
@@ -384,7 +384,7 @@ function ForkableSection({
                 className="flex-1 truncate text-(--color-text-muted)"
                 title={entry.content}
               >
-                {entry.content.slice(0, 50)}...
+                {entry.content.length > 50 ? `${entry.content.slice(0, 50)}…` : entry.content}
               </span>
               <Button onClick={() => onFork(entry.id)} size="sm" variant="outline" disabled={isStreaming} className="text-xs h-6 px-2" title="Fork a new session branching from this message">
                 Fork
@@ -393,7 +393,7 @@ function ForkableSection({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-(--color-text-muted)">No branch points yet. Branch-capable messages will appear here during a session.</p>
+        <p className="text-xs text-(--color-text-muted)">No branch points yet. Messages you can fork a new session from will appear here.</p>
       )}
     </div>
   )

@@ -4,11 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
-import {
-  Checkpoint,
-  CheckpointIcon,
-  CheckpointTrigger,
-} from '@/components/ai-elements/checkpoint'
+import { Checkpoint, CheckpointTrigger } from '@/components/ai-elements/checkpoint'
 import { History, RotateCcw, Eye, AlertTriangle, X, FileText } from 'lucide-react'
 import type { RewindFilesResult } from '@/api/types'
 
@@ -43,7 +39,7 @@ export function SdkCheckpoints({
         <History size={24} className="mx-auto text-(--color-text-muted) mb-2" />
         <p className="text-xs text-(--color-text-muted)">No checkpoints available</p>
         <p className="text-2xs text-(--color-text-muted) mt-1">
-          Enable file checkpointing in the Configuration section to rewind changes
+          File checkpointing must be enabled in session configuration to use rewind
         </p>
       </div>
     )
@@ -125,6 +121,7 @@ export function SdkCheckpoints({
                 size="sm"
                 onClick={onClearResult}
                 className="h-6 px-2"
+                aria-label="Dismiss preview"
               >
                 <X size={12} />
               </Button>
@@ -134,19 +131,22 @@ export function SdkCheckpoints({
       )}
 
       {/* Checkpoint List */}
-      {/* [&_hr]:hidden — Checkpoint always renders a trailing <Separator /> designed
-          for conversation timelines; suppress it here since rows are already separated
-          by the space-y-0.5 gap and a per-row hr would double-border the last item. */}
-      <div className="space-y-0.5 [&_hr]:hidden">
+      {/* Checkpoint always appends a <Separator /> (designed for conversation timelines).
+          Target data-slot="separator" set by the project's separator wrapper — Radix
+          renders a <div>, not <hr>, so [&_hr]:hidden would silently match nothing. */}
+      <div className="space-y-0.5 [&_[data-slot=separator]]:hidden">
         {checkpoints.map((checkpoint, index) => (
           <Checkpoint key={checkpoint}>
-            <CheckpointIcon><History size={12} /></CheckpointIcon>
+            <span className="shrink-0 text-muted-foreground" aria-hidden="true">
+              <History size={12} />
+            </span>
             <span className="flex-1 truncate text-xs font-mono">
-              #{checkpoints.length - index} — {checkpoint.slice(0, 12)}...
+              #{checkpoints.length - index} — {checkpoint.slice(0, 12)}
             </span>
             <CheckpointTrigger
               onClick={() => handlePreview(checkpoint)}
-              tooltip="Preview changes"
+              tooltip="Preview what this rewind would change — no files modified yet"
+              aria-label={`Preview checkpoint #${checkpoints.length - index}`}
             >
               <Eye size={12} />
             </CheckpointTrigger>
