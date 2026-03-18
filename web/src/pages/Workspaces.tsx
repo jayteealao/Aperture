@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { InputField } from '@/components/ui/input-field'
 import { TextareaField } from '@/components/ui/textarea-field'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/Spinner'
 import type { WorkspaceRecord, CheckoutRecord, DiscoveredRepo } from '@/api/types'
@@ -38,6 +39,10 @@ export default function Workspaces() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [deleteWorkspaceTarget, setDeleteWorkspaceTarget] = useState<WorkspaceWithData | null>(null)
+  const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false)
+  const [deleteCheckoutTarget, setDeleteCheckoutTarget] = useState<{ workspace: WorkspaceWithData; checkout: CheckoutRecord } | null>(null)
+  const [isDeletingCheckout, setIsDeletingCheckout] = useState(false)
 
   const loadWorkspaces = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -88,45 +93,39 @@ export default function Workspaces() {
     return () => clearInterval(interval)
   }, [loadWorkspaces])
 
-  const handleDeleteWorkspace = async (workspace: WorkspaceWithData) => {
-    if (
-      !confirm(
-        `Are you sure you want to delete workspace "${workspace.name}"?\n\nThis will remove all checkouts and their clone directories.`
-      )
-    ) {
-      return
-    }
-
+  const doDeleteWorkspace = async () => {
+    if (!deleteWorkspaceTarget) return
+    setIsDeletingWorkspace(true)
     try {
-      await api.deleteWorkspace(workspace.id)
-      toast.success(`Workspace "${workspace.name}" deleted`)
+      await api.deleteWorkspace(deleteWorkspaceTarget.id)
+      toast.success(`Workspace "${deleteWorkspaceTarget.name}" deleted`)
+      setDeleteWorkspaceTarget(null)
       loadWorkspaces(true)
     } catch (error) {
       toast.error(
         'Failed to delete workspace',
         error instanceof Error ? error.message : 'Unknown error'
       )
+    } finally {
+      setIsDeletingWorkspace(false)
     }
   }
 
-  const handleDeleteCheckout = async (workspace: WorkspaceWithData, checkout: CheckoutRecord) => {
-    if (
-      !confirm(
-        `Are you sure you want to remove checkout "${checkout.name}"?\n\nThis will delete the clone directory.`
-      )
-    ) {
-      return
-    }
-
+  const doDeleteCheckout = async () => {
+    if (!deleteCheckoutTarget) return
+    setIsDeletingCheckout(true)
     try {
-      await api.deleteWorkspaceCheckout(workspace.id, checkout.id)
+      await api.deleteWorkspaceCheckout(deleteCheckoutTarget.workspace.id, deleteCheckoutTarget.checkout.id)
       toast.success('Checkout removed')
+      setDeleteCheckoutTarget(null)
       loadWorkspaces(true)
     } catch (error) {
       toast.error(
         'Failed to remove checkout',
         error instanceof Error ? error.message : 'Unknown error'
       )
+    } finally {
+      setIsDeletingCheckout(false)
     }
   }
 
@@ -205,8 +204,8 @@ export default function Workspaces() {
               <WorkspaceCard
                 key={workspace.id}
                 workspace={workspace}
-                onDelete={() => handleDeleteWorkspace(workspace)}
-                onDeleteCheckout={(checkout) => handleDeleteCheckout(workspace, checkout)}
+                onDelete={() => setDeleteWorkspaceTarget(workspace)}
+                onDeleteCheckout={(checkout) => setDeleteCheckoutTarget({ workspace, checkout })}
                 onRefresh={() => loadWorkspaces(true)}
                 onNewSession={() => navigate(`/sessions/new?workspaceId=${workspace.id}`)}
               />
@@ -215,17 +214,39 @@ export default function Workspaces() {
         )}
       </div>
 
-      {/* Create Dialog */}
-      {showCreateDialog && (
-        <CreateWorkspaceDialog
-          open={showCreateDialog}
-          onClose={() => setShowCreateDialog(false)}
-          onSuccess={() => {
-            setShowCreateDialog(false)
-            loadWorkspaces(true)
-          }}
-        />
-      )}
+      {/* Create Dialog — always mounted so Radix exit animations play */}
+      <CreateWorkspaceDialog
+        open={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        onSuccess={() => {
+          setShowCreateDialog(false)
+          loadWorkspaces(true)
+        }}
+      />
+
+      {/* Delete Workspace Confirmation */}
+      <ConfirmDialog
+        open={!!deleteWorkspaceTarget}
+        onClose={() => setDeleteWorkspaceTarget(null)}
+        onConfirm={doDeleteWorkspace}
+        title="Delete Workspace"
+        description={`Are you sure you want to delete workspace "${deleteWorkspaceTarget?.name}"? This will remove all checkouts and their clone directories.`}
+        confirmText="Delete"
+        variant="danger"
+        loading={isDeletingWorkspace}
+      />
+
+      {/* Delete Checkout Confirmation */}
+      <ConfirmDialog
+        open={!!deleteCheckoutTarget}
+        onClose={() => setDeleteCheckoutTarget(null)}
+        onConfirm={doDeleteCheckout}
+        title="Remove Checkout"
+        description={`Are you sure you want to remove checkout "${deleteCheckoutTarget?.checkout.name}"? This will delete the clone directory.`}
+        confirmText="Remove"
+        variant="danger"
+        loading={isDeletingCheckout}
+      />
     </div>
   )
 }
@@ -409,7 +430,7 @@ function CreateWorkspaceDialog({
   const [cloneUrl, setCloneUrl] = useState('')
   const [targetDirectory, setTargetDirectory] = useState('')
 
-  const resetState = () => {
+  const resetState = useCallback(() => {
     setName('')
     setRepoRoot('')
     setDescription('')
@@ -418,7 +439,12 @@ function CreateWorkspaceDialog({
     setSelectedRepo(null)
     setCloneUrl('')
     setTargetDirectory('')
-  }
+  }, [])
+
+  // Reset form state when the dialog closes
+  useEffect(() => {
+    if (!open) resetState()
+  }, [open, resetState])
 
   const handleScan = async () => {
     if (!scanPath.trim()) {

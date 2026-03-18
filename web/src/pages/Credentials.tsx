@@ -47,6 +47,7 @@ export default function Credentials() {
     mutationFn: (id: string) => api.deleteCredential(id),
     onSuccess: () => {
       toast.success('Credential deleted')
+      setDeleteCredentialId(null)
       queryClient.invalidateQueries({ queryKey: ['credentials'] })
     },
     onError: (error) => {
@@ -167,7 +168,6 @@ export default function Credentials() {
           onConfirm={() => {
             if (deleteCredentialId) {
               deleteMutation.mutate(deleteCredentialId)
-              setDeleteCredentialId(null)
             }
           }}
           title="Delete Credential"

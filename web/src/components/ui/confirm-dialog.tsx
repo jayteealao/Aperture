@@ -26,7 +26,12 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent size="sm" hideClose>
+      <DialogContent
+        size="sm"
+        hideClose
+        onInteractOutside={(e) => { if (loading) e.preventDefault() }}
+        onEscapeKeyDown={(e) => { if (loading) e.preventDefault() }}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

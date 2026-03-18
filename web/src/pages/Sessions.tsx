@@ -90,6 +90,7 @@ export default function Sessions() {
     },
     onSuccess: () => {
       toast.success('Session deleted')
+      setDeleteSessionId(null)
       queryClient.invalidateQueries({ queryKey: ['sessions'] })
     },
     onError: (error) => {
@@ -218,7 +219,6 @@ export default function Sessions() {
           onConfirm={() => {
             if (deleteSessionId) {
               deleteMutation.mutate(deleteSessionId)
-              setDeleteSessionId(null)
             }
           }}
           title="Delete Session"

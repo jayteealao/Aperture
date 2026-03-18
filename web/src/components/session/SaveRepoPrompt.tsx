@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -21,6 +21,11 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
   const defaultName = repoPath.split(/[/\\]/).pop() || 'repository'
   const [name, setName] = useState(defaultName)
   const [description, setDescription] = useState('')
+
+  // Sync name when repoPath changes (e.g. dialog reused across different paths)
+  useEffect(() => {
+    setName(repoPath.split(/[/\\]/).pop() || 'repository')
+  }, [repoPath])
 
   const saveMutation = useMutation({
     mutationFn: async () => {

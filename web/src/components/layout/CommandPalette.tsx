@@ -201,12 +201,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm animate-fade-in"
+        className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
       />
 
       {/* Palette */}
-      <div className="fixed inset-x-4 top-[20%] z-50 mx-auto max-w-lg animate-slide-down">
+      <div className="fixed inset-x-4 top-[20%] z-[60] mx-auto max-w-lg animate-slide-down">
         <div className="glass-strong rounded-2xl shadow-2xl overflow-hidden">
           {/* Search input */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
