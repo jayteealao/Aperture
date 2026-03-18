@@ -271,45 +271,45 @@ function AddCredentialDialog({
         <DialogHeader>
           <DialogTitle>Add Credential</DialogTitle>
         </DialogHeader>
-      <div className="space-y-4">
-        <FormSelect
-          label="Provider"
-          options={providerOptions}
-          value={provider}
-          onChange={(e) => setProvider(e.target.value as ProviderKey)}
-        />
+        <div className="space-y-4">
+          <FormSelect
+            label="Provider"
+            options={providerOptions}
+            value={provider}
+            onChange={(e) => setProvider(e.target.value as ProviderKey)}
+          />
 
-        <InputField
-          label="Label"
-          placeholder="e.g., Personal API Key"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          hint="A friendly name to identify this credential"
-        />
+          <InputField
+            label="Label"
+            placeholder="e.g., Personal API Key"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            hint="A friendly name to identify this credential"
+          />
 
-        <InputField
-          label="API Key"
-          type="password"
-          placeholder="sk-..."
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          hint="This key will be stored securely on the gateway"
-        />
+          <InputField
+            label="API Key"
+            type="password"
+            placeholder="sk-..."
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            hint="This key will be stored securely on the gateway"
+          />
 
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="ghost" onClick={onClose} disabled={isAdding}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleAdd}
-            loading={isAdding}
-            disabled={!label || !apiKey}
-          >
-            Add Credential
-          </Button>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="ghost" onClick={onClose} disabled={isAdding}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleAdd}
+              loading={isAdding}
+              disabled={!label || !apiKey}
+            >
+              Add Credential
+            </Button>
+          </div>
         </div>
-      </div>
       </DialogContent>
     </Dialog>
   )

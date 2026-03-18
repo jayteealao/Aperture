@@ -54,56 +54,56 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
         <DialogHeader>
           <DialogTitle>Save Repository?</DialogTitle>
         </DialogHeader>
-      <div className="space-y-4">
-        {/* Info */}
-        <div className="flex items-start gap-3 p-3 rounded-lg bg-muted">
-          <Folder size={20} className="text-foreground/40 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm text-foreground">
-              Your session is running in:
-            </p>
-            <p className="text-xs font-mono text-foreground/40 mt-1 break-all">
-              {repoPath}
-            </p>
+        <div className="space-y-4">
+          {/* Info */}
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-muted">
+            <Folder size={20} className="text-foreground/40 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-foreground">
+                Your session is running in:
+              </p>
+              <p className="text-xs font-mono text-foreground/40 mt-1 break-all">
+                {repoPath}
+              </p>
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Would you like to save this repository for future sessions? Saved repositories appear
+            in the dropdown when creating new sessions.
+          </p>
+
+          {/* Save form */}
+          <div className="space-y-3">
+            <InputField
+              label="Repository name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={defaultName}
+            />
+            <InputField
+              label="Description (optional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="A brief description of this repository"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <Button variant="ghost" onClick={handleSkip} disabled={saveMutation.isPending}>
+              Skip
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              loading={saveMutation.isPending}
+              leftIcon={<GitBranch size={16} />}
+            >
+              Save Repository
+            </Button>
           </div>
         </div>
-
-        <p className="text-sm text-muted-foreground">
-          Would you like to save this repository for future sessions? Saved repositories appear
-          in the dropdown when creating new sessions.
-        </p>
-
-        {/* Save form */}
-        <div className="space-y-3">
-          <InputField
-            label="Repository name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={defaultName}
-          />
-          <InputField
-            label="Description (optional)"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="A brief description of this repository"
-          />
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-border">
-          <Button variant="ghost" onClick={handleSkip} disabled={saveMutation.isPending}>
-            Skip
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleSave}
-            loading={saveMutation.isPending}
-            leftIcon={<GitBranch size={16} />}
-          >
-            Save Repository
-          </Button>
-        </div>
-      </div>
       </DialogContent>
     </Dialog>
   )

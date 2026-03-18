@@ -442,90 +442,90 @@ function NewSessionDialog({
         <DialogHeader>
           <DialogTitle>Create New Session</DialogTitle>
         </DialogHeader>
-      <div className="space-y-4">
-        {/* Agent Type */}
-        <div className="w-full flex flex-col gap-1.5">
-          <label className="block text-sm font-medium text-muted-foreground">Agent</label>
-          <Select value={agentType} onValueChange={(value) => setAgentType(value as AgentType)}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select agent..." />
-            </SelectTrigger>
-            <SelectContent>
-              {agentOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Repository Selection */}
-        <RepoSelector
-          label="Repository"
-          value={repoSelection}
-          onChange={setRepoSelection}
-          error={!repoSelection ? undefined : undefined}
-        />
-
-        {/* Info box about repo requirement */}
-        {!repoSelection && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
-            <AlertCircle size={16} className="text-accent shrink-0 mt-0.5" />
-            <div className="text-xs text-muted-foreground">
-              <p>
-                Sessions require a git repository. Select from your saved repos, browse for a local repo,
-                clone from a URL, or initialize a new one.
-              </p>
-            </div>
+        <div className="space-y-4">
+          {/* Agent Type */}
+          <div className="w-full flex flex-col gap-1.5">
+            <label className="block text-sm font-medium text-muted-foreground">Agent</label>
+            <Select value={agentType} onValueChange={(value) => setAgentType(value as AgentType)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select agent..." />
+              </SelectTrigger>
+              <SelectContent>
+                {agentOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        )}
 
-        <div className="w-full flex flex-col gap-1.5">
-          <label className="block text-sm font-medium text-muted-foreground">Authentication</label>
-          <Select value={authMode} onValueChange={(value) => setAuthMode(value as AuthMode)}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select auth mode..." />
-            </SelectTrigger>
-            <SelectContent>
-              {authOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {authMode === 'api_key' && (
-          <InputField
-            label="API Key"
-            type="password"
-            placeholder="Enter your API key"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            hint="Your key is sent securely to the gateway"
+          {/* Repository Selection */}
+          <RepoSelector
+            label="Repository"
+            value={repoSelection}
+            onChange={setRepoSelection}
+            error={!repoSelection ? undefined : undefined}
           />
-        )}
 
-        {/* Creation progress */}
-        {creationStep && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
-            <Spinner size="sm" />
-            <span className="text-sm text-muted-foreground">{creationStep}</span>
+          {/* Info box about repo requirement */}
+          {!repoSelection && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/10 border border-accent/20">
+              <AlertCircle size={16} className="text-accent shrink-0 mt-0.5" />
+              <div className="text-xs text-muted-foreground">
+                <p>
+                  Sessions require a git repository. Select from your saved repos, browse for a local repo,
+                  clone from a URL, or initialize a new one.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="w-full flex flex-col gap-1.5">
+            <label className="block text-sm font-medium text-muted-foreground">Authentication</label>
+            <Select value={authMode} onValueChange={(value) => setAuthMode(value as AuthMode)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select auth mode..." />
+              </SelectTrigger>
+              <SelectContent>
+                {authOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        )}
 
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="ghost" onClick={onClose} disabled={isCreating}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleCreate}
-            loading={isCreating}
-            disabled={!canCreate}
-          >
-            Create Session
-          </Button>
+          {authMode === 'api_key' && (
+            <InputField
+              label="API Key"
+              type="password"
+              placeholder="Enter your API key"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              hint="Your key is sent securely to the gateway"
+            />
+          )}
+
+          {/* Creation progress */}
+          {creationStep && (
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
+              <Spinner size="sm" />
+              <span className="text-sm text-muted-foreground">{creationStep}</span>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="ghost" onClick={onClose} disabled={isCreating}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleCreate}
+              loading={isCreating}
+              disabled={!canCreate}
+            >
+              Create Session
+            </Button>
+          </div>
         </div>
-      </div>
       </DialogContent>
     </Dialog>
   )
