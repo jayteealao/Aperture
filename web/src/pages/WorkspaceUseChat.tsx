@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router'
 import { cn } from '@/utils/cn'
 import { useSessionsStore } from '@/stores/sessions'
 import { useAppStore } from '@/stores/app'
-import { useToast } from '@/components/ui/Toast'
+import { toast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -101,7 +101,6 @@ function WorkspaceChatSessionReady({
   persistMessages: (messages: ApertureUIMessage[]) => Promise<void>
   sendPermissionResponse: (sessionId: string, toolCallId: string, optionId: string | null, answers?: Record<string, string>) => void
 }) {
-  const toast = useToast()
   // Selected directly here — not prop-drilled — since useChat owns the status
   const setStreaming = useSessionsStore((state) => state.setStreaming)
   const transport = useMemo(() => new ApertureWebSocketTransport(sessionId), [sessionId])
@@ -175,7 +174,7 @@ function WorkspaceChatSessionReady({
         notifyError: toast.error,
       })
     },
-    [connection, sendMessage, toast]
+    [connection, sendMessage]
   )
 
   /** Show a toast when PromptInput rejects a file (wrong type, too large, too many). */
@@ -183,7 +182,7 @@ function WorkspaceChatSessionReady({
     (err: { code: string; message: string }) => {
       toast.error('Attachment not added', err.message)
     },
-    [toast]
+    []
   )
 
   const isConnected = connection?.status === 'connected'

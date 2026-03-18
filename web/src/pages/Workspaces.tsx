@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { api } from '@/api/client'
-import { useToast } from '@/components/ui/Toast'
+import { toast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -32,9 +32,6 @@ interface WorkspaceWithData extends WorkspaceRecord {
 
 export default function Workspaces() {
   const navigate = useNavigate()
-  const toast = useToast()
-  const toastRef = useRef<typeof toast>(toast)
-  toastRef.current = toast
   const [workspaces, setWorkspaces] = useState<WorkspaceWithData[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -72,7 +69,7 @@ export default function Workspaces() {
 
       setWorkspaces(workspacesWithData)
     } catch (error) {
-      toastRef.current.error(
+      toast.error(
         'Failed to load workspaces',
         error instanceof Error ? error.message : 'Unknown error'
       )
@@ -413,7 +410,6 @@ function CreateWorkspaceDialog({
   onClose: () => void
   onSuccess: () => void
 }) {
-  const toast = useToast()
   const [mode, setMode] = useState<CreateMode>('manual')
   const [name, setName] = useState('')
   const [repoRoot, setRepoRoot] = useState('')

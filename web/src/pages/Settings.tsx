@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
-import { useToast } from '@/components/ui/Toast'
+import { toast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/Button'
 import { InputField } from '@/components/ui/input-field'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -19,7 +19,6 @@ import {
 
 export default function Settings() {
   const navigate = useNavigate()
-  const toast = useToast()
   const { theme, toggleTheme, gatewayUrl, setGatewayUrl, clearStorage, isConnected } = useAppStore()
   const { sessions, clearAll } = useSessionsStore()
 

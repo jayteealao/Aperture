@@ -3,7 +3,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useSessionsStore } from '@/stores/sessions'
-import { useToast } from '@/components/ui/Toast'
+import { toast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/input'
 import { InputField } from '@/components/ui/input-field'
@@ -32,7 +32,6 @@ export default function Sessions() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
-  const toast = useToast()
 
   const {
     sessions,
@@ -313,7 +312,6 @@ function NewSessionDialog({
   onCreated: (session: Session, shouldPromptSave?: boolean, repoPath?: string) => void
   preselectedWorkspaceId?: string | null
 }) {
-  const toast = useToast()
   const queryClient = useQueryClient()
   const { addSession } = useSessionsStore()
 

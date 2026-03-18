@@ -4,7 +4,7 @@ import { api } from '@/api/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/Button'
 import { InputField } from '@/components/ui/input-field'
-import { useToast } from '@/components/ui/Toast'
+import { toast } from '@/components/ui/toast'
 import { GitBranch, Folder } from 'lucide-react'
 
 interface SaveRepoPromptProps {
@@ -14,7 +14,6 @@ interface SaveRepoPromptProps {
 }
 
 export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps) {
-  const toast = useToast()
   const queryClient = useQueryClient()
 
   // Extract default name from path

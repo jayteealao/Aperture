@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { CommandPalette } from './CommandPalette'
-import { ToastProvider } from '@/components/ui/Toast'
+import { Toaster } from '@/components/ui/Toaster'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
 import { api } from '@/api/client'
@@ -53,20 +53,19 @@ export function Shell() {
   }, [commandPaletteOpen, setCommandPaletteOpen])
 
   return (
-    <ToastProvider>
-      <div className="h-screen flex bg-gradient-mesh overflow-hidden">
-        <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <Topbar />
-          <main className="flex-1 overflow-hidden">
-            <Outlet />
-          </main>
-        </div>
-        <CommandPalette
-          open={commandPaletteOpen}
-          onClose={() => setCommandPaletteOpen(false)}
-        />
+    <div className="h-screen flex bg-gradient-mesh overflow-hidden">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0">
+        <Topbar />
+        <main className="flex-1 overflow-hidden">
+          <Outlet />
+        </main>
       </div>
-    </ToastProvider>
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+      />
+      <Toaster />
+    </div>
   )
 }

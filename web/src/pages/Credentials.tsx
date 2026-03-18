@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
-import { useToast } from '@/components/ui/Toast'
+import { toast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/Button'
 import { InputField } from '@/components/ui/input-field'
 import { FormSelect } from '@/components/ui/form-select'
@@ -31,7 +31,6 @@ const providerLabels: Record<ProviderKey, string> = {
 
 export default function Credentials() {
   const queryClient = useQueryClient()
-  const toast = useToast()
 
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [deleteCredentialId, setDeleteCredentialId] = useState<string | null>(null)
@@ -232,7 +231,6 @@ function AddCredentialDialog({
   onClose: () => void
   onAdded: () => void
 }) {
-  const toast = useToast()
   const [provider, setProvider] = useState<ProviderKey>('anthropic')
   const [label, setLabel] = useState('')
   const [apiKey, setApiKey] = useState('')
