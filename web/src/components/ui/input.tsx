@@ -38,7 +38,7 @@ export function Input({
   // Fast path: no icons or password toggle — render bare <input> with no wrapper div.
   // This preserves InputGroup's direct-child CSS selectors (has-[>input], [&>input]).
   if (!leftIcon && !rightIcon && !isPassword) {
-    return <input ref={ref} type={type} className={inputClasses} {...props} />
+    return <input ref={ref} type={type} aria-invalid={error || undefined} className={inputClasses} {...props} />
   }
 
   return (
@@ -51,6 +51,7 @@ export function Input({
       <input
         ref={ref}
         type={isPassword && showPassword ? 'text' : type}
+        aria-invalid={error || undefined}
         className={inputClasses}
         {...props}
       />
