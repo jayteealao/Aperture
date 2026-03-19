@@ -31,7 +31,7 @@ export function Input({
     'transition-all duration-200',
     leftIcon && 'pl-10',
     (rightIcon || isPassword) && 'pr-10',
-    error && 'border-danger focus:ring-danger',
+    error && 'border-destructive focus:ring-destructive/50',
     className
   )
 

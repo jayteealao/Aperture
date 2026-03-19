@@ -44,7 +44,7 @@ export function FormSelect({
             'focus:outline-hidden focus:ring-2 focus:ring-accent focus:border-transparent',
             'transition-all duration-200 cursor-pointer',
             'scheme-dark',
-            error && 'border-danger focus:ring-danger',
+            error && 'border-destructive focus:ring-destructive/50',
             className
           )}
           {...props}
@@ -65,7 +65,7 @@ export function FormSelect({
           className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 pointer-events-none"
         />
       </div>
-      {error && <p className="mt-1 text-sm text-danger">{error}</p>}
+      {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
       {hint && !error && (
         <p className="mt-1 text-sm text-foreground/40">{hint}</p>
       )}

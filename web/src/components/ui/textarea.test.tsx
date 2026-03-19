@@ -84,7 +84,7 @@ describe('TextareaField', () => {
 
   it('applies error border class when error is provided', () => {
     render(<TextareaField label="Bio" error="Too long" data-testid="ta" />)
-    expect(screen.getByTestId('ta').className).toContain('border-danger')
+    expect(screen.getByTestId('ta').className).toContain('border-destructive')
   })
 
   it('renders the hint message and wires aria-describedby to it', () => {

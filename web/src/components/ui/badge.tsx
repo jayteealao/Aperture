@@ -14,7 +14,7 @@ const badgeVariants = cva(
         accent: 'border-transparent bg-accent/10 text-accent',
         success: 'border-transparent bg-success/10 text-success',
         warning: 'border-transparent bg-warning/10 text-warning',
-        danger: 'border-transparent bg-danger/10 text-danger',
+        danger: 'border-transparent bg-destructive/10 text-destructive',
       },
       size: {
         default: 'px-2.5 py-0.5 text-xs',

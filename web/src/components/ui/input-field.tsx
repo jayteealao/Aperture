@@ -35,7 +35,7 @@ export function InputField({
         aria-describedby={errorId ?? hintId}
         {...props}
       />
-      {error && <p id={errorId} className="mt-1 text-sm text-danger">{error}</p>}
+      {error && <p id={errorId} className="mt-1 text-sm text-destructive">{error}</p>}
       {hint && !error && (
         <p id={hintId} className="mt-1 text-sm text-foreground/40">{hint}</p>
       )}

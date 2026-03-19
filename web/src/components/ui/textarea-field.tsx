@@ -74,7 +74,7 @@ export function TextareaField({
         id={textareaId}
         className={cn(
           autoGrow && 'field-sizing-content',
-          error && 'border-danger focus-visible:ring-danger',
+          error && 'border-destructive focus-visible:ring-destructive',
           className
         )}
         style={{ maxHeight: autoGrow ? maxHeight : undefined }}

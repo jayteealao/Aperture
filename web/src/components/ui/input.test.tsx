@@ -31,12 +31,12 @@ describe('Input', () => {
   it('applies error classes when error=true', () => {
     render(<Input error data-testid="inp" />)
     const input = screen.getByTestId('inp')
-    expect(input.className).toContain('border-danger')
+    expect(input.className).toContain('border-destructive')
   })
 
   it('does not apply error classes when error is absent', () => {
     render(<Input data-testid="inp" />)
-    expect(screen.getByTestId('inp').className).not.toContain('border-danger')
+    expect(screen.getByTestId('inp').className).not.toContain('border-destructive')
   })
 
   it('toggles password visibility on eye-button click', () => {
@@ -109,6 +109,6 @@ describe('InputField', () => {
   it('passes error boolean to Input for border styling', () => {
     render(<InputField label="Field" error="Bad value" data-testid="inp" />)
     const input = screen.getByTestId('inp')
-    expect(input.className).toContain('border-danger')
+    expect(input.className).toContain('border-destructive')
   })
 })
