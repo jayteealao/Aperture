@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from './dialog'
-import { Button } from './Button'
+import { Button } from './button'
 
 export interface ConfirmDialogProps {
   open: boolean
@@ -43,7 +43,7 @@ export function ConfirmDialog({
             </Button>
           </DialogClose>
           <Button
-            variant={variant === 'danger' ? 'danger' : variant === 'warning' ? 'secondary' : 'primary'}
+            variant={variant === 'danger' ? 'destructive' : variant === 'warning' ? 'secondary' : 'default'}
             onClick={onConfirm}
             loading={loading}
           >

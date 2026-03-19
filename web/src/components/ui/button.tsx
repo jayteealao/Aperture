@@ -42,12 +42,9 @@ export const buttonVariants = cva(
   }
 )
 
-type ButtonVariant = NonNullable<VariantProps<typeof buttonVariants>['variant']> | 'primary' | 'danger'
-type ButtonSize = NonNullable<VariantProps<typeof buttonVariants>['size']> | 'md'
-
 export interface ButtonProps extends Omit<React.ComponentProps<'button'>, 'ref'> {
-  variant?: ButtonVariant
-  size?: ButtonSize
+  variant?: VariantProps<typeof buttonVariants>['variant']
+  size?: VariantProps<typeof buttonVariants>['size']
   loading?: boolean
   leftIcon?: ReactNode
   rightIcon?: ReactNode
@@ -68,8 +65,6 @@ export function Button({
   ...props
 }: ButtonProps & { ref?: Ref<HTMLButtonElement> }) {
   const Comp = asChild ? Slot.Root : 'button'
-  const resolvedVariant = variant === 'primary' ? 'default' : variant === 'danger' ? 'destructive' : variant
-  const resolvedSize = size === 'md' ? 'default' : size
   const resolvedChildren = (
     <>
       {loading ? (
@@ -86,10 +81,10 @@ export function Button({
     <Comp
       ref={ref}
       data-slot="button"
-      data-variant={resolvedVariant}
-      data-size={resolvedSize}
+      data-variant={variant}
+      data-size={size}
       className={cn(
-        buttonVariants({ variant: resolvedVariant, size: resolvedSize }),
+        buttonVariants({ variant, size }),
         !asChild && 'active:scale-[0.98]',
         className
       )}
