@@ -1,7 +1,7 @@
 // SDK Session Header - Model selector, permission mode, interrupt button
 
 import { FormSelect } from '@/components/ui/form-select'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/Spinner'
 import { StopCircle } from 'lucide-react'
 import type { PermissionMode, ModelInfo, SdkSessionConfig } from '@/api/types'
@@ -84,7 +84,7 @@ export function SdkSessionHeader({
       {/* Interrupt Button */}
       {isStreaming && (
         <Button
-          variant="danger"
+          variant="destructive"
           size="sm"
           onClick={onInterrupt}
           leftIcon={<StopCircle size={16} />}

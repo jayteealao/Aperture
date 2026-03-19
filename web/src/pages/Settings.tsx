@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { InputField } from '@/components/ui/input-field'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -106,7 +106,7 @@ export default function Settings() {
                   <Button variant="ghost" size="sm" onClick={() => setEditUrl(gatewayUrl)}>
                     Cancel
                   </Button>
-                  <Button variant="primary" size="sm" onClick={handleSaveUrl}>
+                  <Button variant="default" size="sm" onClick={handleSaveUrl}>
                     Save URL
                   </Button>
                 </div>
@@ -184,7 +184,7 @@ export default function Settings() {
                     </p>
                   </div>
                 </div>
-                <Button variant="danger" onClick={() => setShowClearDialog(true)}>
+                <Button variant="destructive" onClick={() => setShowClearDialog(true)}>
                   Clear Data
                 </Button>
               </div>

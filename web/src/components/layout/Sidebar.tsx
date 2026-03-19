@@ -15,7 +15,7 @@ import {
   Command,
   GitBranch,
 } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 
 interface SidebarProps {
   className?: string
@@ -79,7 +79,7 @@ export function Sidebar({ className }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto p-2">
           {/* New Session button */}
           <Button
-            variant="primary"
+            variant="default"
             className="w-full mb-3 justify-start"
             onClick={() => {
               navigate('/sessions/new')

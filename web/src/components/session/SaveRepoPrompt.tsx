@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { InputField } from '@/components/ui/input-field'
 import { toast } from 'sonner'
 import { GitBranch, Folder } from 'lucide-react'
@@ -99,7 +99,7 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
               Skip
             </Button>
             <Button
-              variant="primary"
+              variant="default"
               onClick={handleSave}
               loading={saveMutation.isPending}
               leftIcon={<GitBranch size={16} />}

@@ -1,7 +1,7 @@
 // SDK Checkpoints - Checkpoint list with rewind
 
 import { useState } from 'react'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/Spinner'
 import { Checkpoint, CheckpointTrigger } from '@/components/ai-elements/checkpoint'
@@ -107,7 +107,7 @@ export function SdkCheckpoints({
             <div className="flex gap-1">
               {rewindResult.canRewind && selectedCheckpoint && (
                 <Button
-                  variant="danger"
+                  variant="destructive"
                   size="sm"
                   onClick={() => handleRewind(selectedCheckpoint)}
                   className="h-6 px-2 text-2xs"

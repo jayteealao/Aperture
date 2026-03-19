@@ -4,7 +4,7 @@
  */
 
 import { FormSelect } from '@/components/ui/form-select'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import type { PiThinkingLevel } from '@/api/pi-types'
 
 interface PiThinkingLevelSelectorProps {

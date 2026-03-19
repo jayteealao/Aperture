@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { api } from '@/api/client'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { InputField } from '@/components/ui/input-field'
@@ -164,7 +164,7 @@ export default function Workspaces() {
               {refreshing ? 'Refreshing...' : 'Refresh'}
             </Button>
             <Button
-              variant="primary"
+              variant="default"
               onClick={() => setShowCreateDialog(true)}
               leftIcon={<Plus size={18} />}
             >
@@ -187,7 +187,7 @@ export default function Workspaces() {
                 Create a workspace to enable multi-agent isolated environments
               </p>
               <Button
-                variant="primary"
+                variant="default"
                 onClick={() => setShowCreateDialog(true)}
                 leftIcon={<Plus size={18} />}
               >
@@ -278,7 +278,7 @@ function WorkspaceCard({
           </div>
           <div className="flex items-center gap-1 ml-2">
             <Button
-              variant="primary"
+              variant="default"
               size="sm"
               onClick={onNewSession}
               className="p-1.5"
@@ -723,7 +723,7 @@ function CreateWorkspaceDialog({
               </Button>
               <Button
                 type="submit"
-                variant="primary"
+                variant="default"
                 loading={creating}
                 disabled={creating || (mode === 'browse' && !selectedRepo)}
               >

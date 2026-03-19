@@ -1,7 +1,7 @@
 // Pi SDK Control Panel - Collapsible right panel matching SDK panel design
 
 import { useState } from 'react'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/Spinner'

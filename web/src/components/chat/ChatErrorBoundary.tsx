@@ -1,7 +1,7 @@
 import { Component } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { AlertCircle } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 
 interface ChatErrorBoundaryProps {
   children: ReactNode
@@ -58,7 +58,7 @@ export class ChatErrorBoundary extends Component<
             <Button
               onClick={() => this.setState({ error: null })}
               size="sm"
-              variant="primary"
+              variant="default"
             >
               Try again
             </Button>

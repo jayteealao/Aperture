@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { cn } from '@/utils/cn'
 import { Check, Circle, Square, CheckSquare, MessageCircleQuestion, ChevronLeft, ChevronRight, PenLine } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 
 const OTHER_OPTION_KEY = '__other__'
 
@@ -187,7 +187,7 @@ export function AskUserQuestionDisplay({ input, onSubmit }: AskUserQuestionDispl
         )}
 
         <Button
-          variant="primary"
+          variant="default"
           size="sm"
           onClick={handleSubmit}
           disabled={!allAnswered}

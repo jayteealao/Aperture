@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router'
 import { useAppStore } from '@/stores/app'
 import { api } from '@/api/client'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { InputField } from '@/components/ui/input-field'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Check, X, Zap, Shield, Globe } from 'lucide-react'
@@ -152,7 +152,7 @@ export default function Onboarding() {
               )}
 
               <Button
-                variant="primary"
+                variant="default"
                 size="lg"
                 className="w-full mt-4"
                 onClick={handleConnect}

@@ -1,7 +1,7 @@
 // SDK MCP Status - MCP server list with status badges
 
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/Spinner'
 import { Server, RefreshCw, AlertCircle, CheckCircle2, Clock, Lock } from 'lucide-react'
 import type { McpServerStatus } from '@/api/types'

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useSessionsStore } from '@/stores/sessions'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { InputField } from '@/components/ui/input-field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -123,7 +123,7 @@ export default function Sessions() {
               <RefreshCw size={16} />
             </Button>
             <Button
-              variant="primary"
+              variant="default"
               onClick={() => {
                 navigate('/sessions/new')
                 setShowNewSession(true)
@@ -163,7 +163,7 @@ export default function Sessions() {
                 Create your first session to start chatting with an AI agent
               </p>
               <Button
-                variant="primary"
+                variant="default"
                 onClick={() => setShowNewSession(true)}
                 leftIcon={<Plus size={18} />}
               >
@@ -515,7 +515,7 @@ function NewSessionDialog({
               Cancel
             </Button>
             <Button
-              variant="primary"
+              variant="default"
               onClick={handleCreate}
               loading={isCreating}
               disabled={!canCreate}

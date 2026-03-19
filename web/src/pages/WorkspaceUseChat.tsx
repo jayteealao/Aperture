@@ -5,7 +5,7 @@ import { cn } from '@/utils/cn'
 import { useSessionsStore } from '@/stores/sessions'
 import { useAppStore } from '@/stores/app'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { SaveRepoPrompt } from '@/components/session/SaveRepoPrompt'
@@ -387,7 +387,7 @@ export default function WorkspaceUseChat() {
               Select a session from the sidebar or create a new one to start chatting
             </p>
             <Button
-              variant="primary"
+              variant="default"
               onClick={() => navigate('/sessions/new')}
               leftIcon={<Plus size={18} />}
             >

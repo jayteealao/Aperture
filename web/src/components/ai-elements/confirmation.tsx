@@ -1,7 +1,7 @@
 "use client";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/utils/cn";
 import type { ToolUIPart } from "ai";
 import type { ComponentProps, ReactNode } from "react";

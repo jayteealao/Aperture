@@ -1,6 +1,6 @@
 // SDK Control Panel - Main collapsible right panel for SDK session controls
 
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { PanelSection } from '@/components/ui/PanelSection'
 import { useSdkSession } from '@/hooks/useSdkSession'
 import { SdkSessionHeader } from './SdkSessionHeader'

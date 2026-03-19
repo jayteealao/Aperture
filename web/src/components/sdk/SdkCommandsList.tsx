@@ -1,7 +1,7 @@
 // SDK Commands List - Available slash commands (click to insert)
 
 import { useState } from 'react'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/Spinner'
 import { Terminal, Search, Copy, Check } from 'lucide-react'

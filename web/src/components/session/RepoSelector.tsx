@@ -4,7 +4,7 @@ import { api } from '@/api/client'
 import { cn } from '@/utils/cn'
 import { Input } from '@/components/ui/input'
 import { InputField } from '@/components/ui/input-field'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/Spinner'
 import type { WorkspaceRecord, DiscoveredRepo } from '@/api/types'
 import {

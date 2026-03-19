@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/components/ui/button'
 import { InputField } from '@/components/ui/input-field'
 import { FormSelect } from '@/components/ui/form-select'
 import { Card } from '@/components/ui/card'
@@ -77,7 +77,7 @@ export default function Credentials() {
             </p>
           </div>
           <Button
-            variant="primary"
+            variant="default"
             onClick={() => setShowAddDialog(true)}
             leftIcon={<Plus size={18} />}
           >
@@ -119,7 +119,7 @@ export default function Credentials() {
                 Add your API keys to use them across sessions without re-entering
               </p>
               <Button
-                variant="primary"
+                variant="default"
                 onClick={() => setShowAddDialog(true)}
                 leftIcon={<Plus size={18} />}
               >
@@ -299,7 +299,7 @@ function AddCredentialDialog({
               Cancel
             </Button>
             <Button
-              variant="primary"
+              variant="default"
               onClick={handleAdd}
               loading={isAdding}
               disabled={!label || !apiKey}
