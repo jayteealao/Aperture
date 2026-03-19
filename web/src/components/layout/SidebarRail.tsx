@@ -249,7 +249,7 @@ export function SidebarRail() {
         <div className="mx-2.5 h-px bg-border shrink-0" />
 
         {/* New workspace */}
-        <div className="px-2 pt-2 shrink-0">
+        <div className="pt-2 shrink-0">
           <RailButton
             icon={<Plus size={16} />}
             label="New Workspace"
@@ -258,7 +258,7 @@ export function SidebarRail() {
         </div>
 
         {/* Workspace list */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-1 space-y-0.5">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-1 space-y-0.5">
           {workspaces.map((ws) => (
             <WorkspaceItem
               key={ws.id}
@@ -272,7 +272,7 @@ export function SidebarRail() {
         <div className="mx-2.5 h-px bg-border shrink-0" />
 
         {/* Bottom utility icons */}
-        <div className="px-2 py-2 space-y-0.5 shrink-0">
+        <div className="py-2 space-y-0.5 shrink-0">
           <RailNavLink to="/credentials" icon={<Key size={16} />} label="Credentials" />
           <RailNavLink to="/settings" icon={<Settings size={16} />} label="Settings" />
           <RailNavLink to="/help" icon={<HelpCircle size={16} />} label="Help" />
