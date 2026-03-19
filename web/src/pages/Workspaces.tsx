@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { api } from '@/api/client'
-import { toast } from '@/components/ui/toast'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -71,7 +71,7 @@ export default function Workspaces() {
     } catch (error) {
       toast.error(
         'Failed to load workspaces',
-        error instanceof Error ? error.message : 'Unknown error'
+        { description: error instanceof Error ? error.message : 'Unknown error' }
       )
     } finally {
       setLoading(false)
@@ -101,7 +101,7 @@ export default function Workspaces() {
     } catch (error) {
       toast.error(
         'Failed to delete workspace',
-        error instanceof Error ? error.message : 'Unknown error'
+        { description: error instanceof Error ? error.message : 'Unknown error' }
       )
     } finally {
       setIsDeletingWorkspace(false)
@@ -119,7 +119,7 @@ export default function Workspaces() {
     } catch (error) {
       toast.error(
         'Failed to remove checkout',
-        error instanceof Error ? error.message : 'Unknown error'
+        { description: error instanceof Error ? error.message : 'Unknown error' }
       )
     } finally {
       setIsDeletingCheckout(false)
@@ -444,7 +444,7 @@ function CreateWorkspaceDialog({
 
   const handleScan = async () => {
     if (!scanPath.trim()) {
-      toast.error('Validation error', 'Please enter a directory path to scan')
+      toast.error('Validation error', { description: 'Please enter a directory path to scan' })
       return
     }
 
@@ -453,12 +453,12 @@ function CreateWorkspaceDialog({
       const result = await api.discoverRepos(scanPath.trim())
       setDiscoveredRepos(result.repos)
       if (result.repos.length === 0) {
-        toast.info('No repositories found', `Scanned ${result.scannedDirectories} directories`)
+        toast.info('No repositories found', { description: `Scanned ${result.scannedDirectories} directories` })
       }
     } catch (error) {
       toast.error(
         'Scan failed',
-        error instanceof Error ? error.message : 'Unknown error'
+        { description: error instanceof Error ? error.message : 'Unknown error' }
       )
     } finally {
       setIsScanning(false)
@@ -479,7 +479,7 @@ function CreateWorkspaceDialog({
       if (mode === 'clone') {
         // Clone mode: clone and create workspace
         if (!cloneUrl.trim() || !targetDirectory.trim()) {
-          toast.error('Validation error', 'Clone URL and target directory are required')
+          toast.error('Validation error', { description: 'Clone URL and target directory are required' })
           setCreating(false)
           return
         }
@@ -494,7 +494,7 @@ function CreateWorkspaceDialog({
       } else {
         // Manual or Browse mode: create from existing repo
         if (!name.trim() || !repoRoot.trim()) {
-          toast.error('Validation error', 'Name and repository path are required')
+          toast.error('Validation error', { description: 'Name and repository path are required' })
           setCreating(false)
           return
         }
@@ -513,7 +513,7 @@ function CreateWorkspaceDialog({
     } catch (error) {
       toast.error(
         'Failed to create workspace',
-        error instanceof Error ? error.message : 'Unknown error'
+        { description: error instanceof Error ? error.message : 'Unknown error' }
       )
     } finally {
       setCreating(false)

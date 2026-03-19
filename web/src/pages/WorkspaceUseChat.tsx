@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router'
 import { cn } from '@/utils/cn'
 import { useSessionsStore } from '@/stores/sessions'
 import { useAppStore } from '@/stores/app'
-import { toast } from '@/components/ui/toast'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -116,7 +116,7 @@ function WorkspaceChatSessionReady({
       if (import.meta.env.DEV) {
         console.error('[useChat] Chat error:', error)
       }
-      toast.error('Connection error', error instanceof Error ? error.message : 'Chat transport failed')
+      toast.error('Connection error', { description: error instanceof Error ? error.message : 'Chat transport failed' })
       // Always clear streaming on transport error — the WS teardown message may
       // not arrive if the connection dropped, leaving the UI stuck in "Responding…".
       setStreaming(sessionId, false)
@@ -171,7 +171,7 @@ function WorkspaceChatSessionReady({
       await submitChatMessage(message, {
         connection,
         sendMessage,
-        notifyError: toast.error,
+        notifyError: (title, body) => toast.error(title, { description: body }),
       })
     },
     [connection, sendMessage]
@@ -180,7 +180,7 @@ function WorkspaceChatSessionReady({
   /** Show a toast when PromptInput rejects a file (wrong type, too large, too many). */
   const handleFileError = useCallback(
     (err: { code: string; message: string }) => {
-      toast.error('Attachment not added', err.message)
+      toast.error('Attachment not added', { description: err.message })
     },
     []
   )

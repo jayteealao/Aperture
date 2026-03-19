@@ -1,0 +1,2252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aperture Android - Design Playground</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --hud-black: #050505;
+      --hud-dark: #0A0A0A;
+      --hud-darker: #080808;
+      --hud-gray: #1A1A1A;
+      --hud-gray-light: #262626;
+      --hud-white: #E5E5E5;
+      --hud-white-bright: #FFFFFF;
+      --hud-text: #808080;
+      --hud-text-muted: #666666;
+      --hud-silver: #B3B3B3;
+      --hud-accent: #FF451A;
+      --hud-accent-bright: #FF5722;
+      --hud-accent-dark: #CC3914;
+      --hud-accent-glow: rgba(255, 69, 26, 0.3);
+      --hud-success: #00FF88;
+      --hud-warning: #FFB800;
+      --hud-error: #FF3333;
+      --hud-info: #00BFFF;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #111;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .container {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* Controls Panel */
+    .controls {
+      width: 320px;
+      background: #1a1a1a;
+      border-right: 1px solid #333;
+      overflow-y: auto;
+      padding: 16px;
+      flex-shrink: 0;
+    }
+
+    .controls h2 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #888;
+      margin: 20px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #333;
+    }
+
+    .controls h2:first-child { margin-top: 0; }
+
+    .control-group {
+      margin-bottom: 16px;
+    }
+
+    .control-group label {
+      display: block;
+      font-size: 12px;
+      color: #aaa;
+      margin-bottom: 6px;
+    }
+
+    .control-group select,
+    .control-group input[type="text"],
+    .control-group input[type="range"] {
+      width: 100%;
+      background: #252525;
+      border: 1px solid #444;
+      color: #eee;
+      padding: 8px 10px;
+      font-size: 13px;
+      border-radius: 4px;
+    }
+
+    .control-group input[type="range"] {
+      padding: 0;
+      height: 6px;
+      -webkit-appearance: none;
+      cursor: pointer;
+    }
+
+    .control-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: var(--hud-accent);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .range-value {
+      font-size: 11px;
+      color: #888;
+      text-align: right;
+      margin-top: 4px;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--hud-accent);
+    }
+
+    .checkbox-group label {
+      margin: 0;
+      font-size: 13px;
+    }
+
+    /* Screen Tabs */
+    .screen-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 16px;
+    }
+
+    .screen-tab {
+      padding: 6px 10px;
+      font-size: 11px;
+      background: #252525;
+      border: 1px solid #444;
+      color: #888;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .screen-tab:hover {
+      border-color: var(--hud-accent);
+      color: #ccc;
+    }
+
+    .screen-tab.active {
+      background: var(--hud-accent);
+      border-color: var(--hud-accent);
+      color: white;
+    }
+
+    /* Preview Panel */
+    .preview-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: #0a0a0a;
+      overflow: auto;
+    }
+
+    .phone-frame {
+      width: 375px;
+      height: 812px;
+      background: var(--hud-black);
+      border: 2px solid var(--hud-gray);
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 60px rgba(255, 69, 26, 0.1);
+    }
+
+    .phone-notch {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 150px;
+      height: 30px;
+      background: var(--hud-black);
+      border-bottom-left-radius: 20px;
+      border-bottom-right-radius: 20px;
+      z-index: 100;
+    }
+
+    .phone-content {
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      padding-top: 44px;
+    }
+
+    /* Prompt Output */
+    .prompt-output {
+      background: #1a1a1a;
+      border-top: 1px solid #333;
+      padding: 16px 24px;
+    }
+
+    .prompt-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .prompt-header h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #888;
+    }
+
+    .copy-btn {
+      padding: 6px 16px;
+      background: var(--hud-accent);
+      border: none;
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .copy-btn:hover {
+      background: var(--hud-accent-bright);
+    }
+
+    .copy-btn.copied {
+      background: var(--hud-success);
+    }
+
+    .prompt-text {
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #ccc;
+      white-space: pre-wrap;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    /* HUD Components */
+    .hud-corner-brackets {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+    }
+
+    .hud-corner-brackets::before,
+    .hud-corner-brackets::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-color: var(--hud-accent);
+      border-style: solid;
+    }
+
+    .hud-corner-brackets::before {
+      top: 0;
+      left: 0;
+      border-width: 2px 0 0 2px;
+    }
+
+    .hud-corner-brackets::after {
+      top: 0;
+      right: 0;
+      border-width: 2px 2px 0 0;
+    }
+
+    .hud-corner-brackets-bottom::before,
+    .hud-corner-brackets-bottom::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-color: var(--hud-accent);
+      border-style: solid;
+    }
+
+    .hud-corner-brackets-bottom::before {
+      bottom: 0;
+      left: 0;
+      border-width: 0 0 2px 2px;
+    }
+
+    .hud-corner-brackets-bottom::after {
+      bottom: 0;
+      right: 0;
+      border-width: 0 2px 2px 0;
+    }
+
+    /* Status Dot */
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--hud-success);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .status-dot.offline {
+      background: var(--hud-error);
+      animation: none;
+    }
+
+    .status-dot.streaming {
+      background: var(--hud-accent);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.4); }
+      50% { opacity: 0.7; box-shadow: 0 0 0 8px rgba(0, 255, 136, 0); }
+    }
+
+    /* Screen Styles */
+    .screen {
+      display: none;
+      height: 100%;
+      flex-direction: column;
+    }
+
+    .screen.active {
+      display: flex;
+    }
+
+    /* Top Bar */
+    .top-bar {
+      height: 56px;
+      background: var(--hud-dark);
+      border-bottom: 1px solid var(--hud-gray);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .top-bar-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--hud-white);
+      letter-spacing: 0.05em;
+    }
+
+    .hamburger {
+      width: 20px;
+      height: 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+
+    .hamburger span {
+      height: 2px;
+      background: var(--hud-white);
+    }
+
+    /* Onboarding Screen */
+    .onboarding-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+      gap: 32px;
+    }
+
+    .aperture-logo {
+      width: 120px;
+      height: 120px;
+      border: 3px solid var(--hud-accent);
+      border-radius: 50%;
+      position: relative;
+      animation: spin 20s linear infinite;
+    }
+
+    .aperture-logo::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      border: 2px solid var(--hud-accent);
+      border-radius: 50%;
+    }
+
+    .aperture-logo::after {
+      content: '';
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 2px;
+      height: 20px;
+      background: var(--hud-accent);
+      box-shadow:
+        0 90px 0 var(--hud-accent),
+        -45px 45px 0 var(--hud-accent),
+        45px 45px 0 var(--hud-accent),
+        -45px -45px 0 var(--hud-accent),
+        45px -45px 0 var(--hud-accent);
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .onboarding-form {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* HUD Input */
+    .hud-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .hud-input-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--hud-text);
+    }
+
+    .hud-input {
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-gray);
+      padding: 12px 14px;
+      color: var(--hud-white);
+      font-size: 14px;
+      font-family: 'Monaco', monospace;
+    }
+
+    .hud-input:focus {
+      outline: none;
+      border-color: var(--hud-accent);
+      box-shadow: 0 0 0 1px var(--hud-accent-glow);
+    }
+
+    .hud-input::placeholder {
+      color: var(--hud-text-muted);
+    }
+
+    /* HUD Button */
+    .hud-button {
+      background: var(--hud-accent);
+      border: 1px solid var(--hud-accent);
+      padding: 14px 20px;
+      color: var(--hud-white-bright);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hud-button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      animation: shimmer 2s infinite;
+    }
+
+    @keyframes shimmer {
+      100% { left: 100%; }
+    }
+
+    .hud-button.secondary {
+      background: transparent;
+      border-color: var(--hud-gray);
+      color: var(--hud-white);
+    }
+
+    .hud-button.danger {
+      background: var(--hud-error);
+      border-color: var(--hud-error);
+    }
+
+    /* Connection Status */
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-gray);
+    }
+
+    .connection-status-text {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--hud-success);
+    }
+
+    .connection-status-text.error {
+      color: var(--hud-error);
+    }
+
+    /* Sessions Screen */
+    .sessions-content {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+    }
+
+    .sessions-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .session-card {
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-gray);
+      padding: 16px;
+      position: relative;
+    }
+
+    .session-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .session-agent-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--hud-gray);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .session-info {
+      flex: 1;
+    }
+
+    .session-id {
+      font-family: 'Monaco', monospace;
+      font-size: 12px;
+      color: var(--hud-white);
+    }
+
+    .session-agent {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--hud-text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    .session-meta {
+      font-size: 11px;
+      color: var(--hud-text);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .session-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .session-action-btn {
+      flex: 1;
+      padding: 8px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border: 1px solid var(--hud-gray);
+      background: transparent;
+      color: var(--hud-white);
+      cursor: pointer;
+    }
+
+    .session-action-btn:hover {
+      border-color: var(--hud-accent);
+    }
+
+    .session-action-btn.danger:hover {
+      border-color: var(--hud-error);
+      color: var(--hud-error);
+    }
+
+    /* FAB */
+    .fab {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      width: 56px;
+      height: 56px;
+      background: var(--hud-accent);
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: white;
+      cursor: pointer;
+      box-shadow: 0 4px 20px var(--hud-accent-glow);
+    }
+
+    /* Workspace Screen */
+    .workspace-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .session-header {
+      padding: 12px 16px;
+      background: var(--hud-dark);
+      border-bottom: 1px solid var(--hud-gray);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .session-header-badge {
+      padding: 4px 8px;
+      background: var(--hud-gray);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--hud-accent);
+      border: 1px solid var(--hud-accent);
+    }
+
+    .session-header-id {
+      font-family: 'Monaco', monospace;
+      font-size: 11px;
+      color: var(--hud-silver);
+    }
+
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .message {
+      max-width: 85%;
+      padding: 12px 16px;
+      position: relative;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-accent);
+      border-right-width: 3px;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-gray);
+      border-left-width: 3px;
+    }
+
+    .message-role {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--hud-text-muted);
+      margin-bottom: 6px;
+    }
+
+    .message-content {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--hud-white);
+    }
+
+    /* Thinking Block */
+    .thinking-block {
+      background: var(--hud-darker);
+      border: 1px solid var(--hud-gray);
+      border-left: 3px solid var(--hud-info);
+      padding: 12px;
+      margin: 8px 0;
+    }
+
+    .thinking-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--hud-info);
+      margin-bottom: 8px;
+    }
+
+    .thinking-content {
+      font-size: 12px;
+      color: var(--hud-text);
+      font-style: italic;
+    }
+
+    /* Tool Use Block */
+    .tool-use-block {
+      background: var(--hud-darker);
+      border: 1px solid var(--hud-gray);
+      border-left: 3px solid var(--hud-warning);
+      padding: 12px;
+      margin: 8px 0;
+    }
+
+    .tool-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--hud-warning);
+      margin-bottom: 8px;
+    }
+
+    .tool-name {
+      font-family: 'Monaco', monospace;
+      color: var(--hud-white);
+    }
+
+    .tool-input {
+      font-family: 'Monaco', monospace;
+      font-size: 11px;
+      color: var(--hud-silver);
+      background: var(--hud-black);
+      padding: 8px;
+      overflow-x: auto;
+    }
+
+    /* Tool Result */
+    .tool-result-block {
+      background: var(--hud-darker);
+      border: 1px solid var(--hud-gray);
+      border-left: 3px solid var(--hud-success);
+      padding: 12px;
+      margin: 8px 0;
+    }
+
+    .tool-result-block.error {
+      border-left-color: var(--hud-error);
+    }
+
+    .tool-result-header {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--hud-success);
+      margin-bottom: 8px;
+    }
+
+    .tool-result-block.error .tool-result-header {
+      color: var(--hud-error);
+    }
+
+    /* Message Input */
+    .message-input-container {
+      padding: 12px 16px;
+      background: var(--hud-dark);
+      border-top: 1px solid var(--hud-gray);
+    }
+
+    .message-input-wrapper {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .message-textarea {
+      flex: 1;
+      background: var(--hud-black);
+      border: 1px solid var(--hud-gray);
+      padding: 12px;
+      color: var(--hud-white);
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      min-height: 44px;
+      max-height: 120px;
+    }
+
+    .message-textarea:focus {
+      outline: none;
+      border-color: var(--hud-accent);
+    }
+
+    .send-button {
+      width: 44px;
+      height: 44px;
+      background: var(--hud-accent);
+      border: none;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .send-button:disabled {
+      background: var(--hud-gray);
+      cursor: not-allowed;
+    }
+
+    /* Workspaces Screen */
+    .workspaces-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      padding: 16px;
+    }
+
+    .workspace-card {
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-gray);
+      position: relative;
+    }
+
+    .workspace-card-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--hud-gray);
+    }
+
+    .workspace-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--hud-white);
+      margin-bottom: 4px;
+    }
+
+    .workspace-path {
+      font-family: 'Monaco', monospace;
+      font-size: 11px;
+      color: var(--hud-text);
+    }
+
+    .workspace-section {
+      border-bottom: 1px solid var(--hud-gray);
+    }
+
+    .workspace-section:last-child {
+      border-bottom: none;
+    }
+
+    .workspace-section-header {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+
+    .workspace-section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--hud-text);
+    }
+
+    .workspace-section-content {
+      padding: 0 16px 12px;
+    }
+
+    .workspace-agent-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px;
+      background: var(--hud-black);
+      margin-bottom: 8px;
+    }
+
+    .workspace-agent-branch {
+      font-family: 'Monaco', monospace;
+      font-size: 11px;
+      color: var(--hud-silver);
+    }
+
+    /* Credentials Screen */
+    .credentials-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      padding: 16px;
+    }
+
+    .credential-card {
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-gray);
+      padding: 16px;
+    }
+
+    .credential-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .credential-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--hud-gray);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .credential-info {
+      flex: 1;
+    }
+
+    .credential-provider {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--hud-white);
+    }
+
+    .credential-label {
+      font-size: 11px;
+      color: var(--hud-text);
+    }
+
+    .credential-key {
+      font-family: 'Monaco', monospace;
+      font-size: 11px;
+      color: var(--hud-text-muted);
+      background: var(--hud-black);
+      padding: 8px;
+      margin-top: 8px;
+    }
+
+    .security-notice {
+      padding: 12px 16px;
+      background: var(--hud-darker);
+      border: 1px solid var(--hud-gray);
+      border-left: 3px solid var(--hud-success);
+      margin: 16px;
+      font-size: 11px;
+      color: var(--hud-text);
+    }
+
+    /* Settings Screen */
+    .settings-content {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .settings-section {
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-gray);
+    }
+
+    .settings-section-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--hud-gray);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--hud-white);
+    }
+
+    .settings-section-content {
+      padding: 16px;
+    }
+
+    .settings-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+    }
+
+    .settings-label {
+      font-size: 13px;
+      color: var(--hud-text);
+    }
+
+    .settings-value {
+      font-family: 'Monaco', monospace;
+      font-size: 12px;
+      color: var(--hud-silver);
+    }
+
+    /* Help Screen */
+    .help-content {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .help-accordion {
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-gray);
+    }
+
+    .help-accordion-header {
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+
+    .help-accordion-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--hud-white);
+    }
+
+    .help-accordion-icon {
+      color: var(--hud-accent);
+      font-size: 14px;
+    }
+
+    .help-accordion-content {
+      padding: 0 16px 16px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--hud-text);
+      display: none;
+    }
+
+    .help-accordion.open .help-accordion-content {
+      display: block;
+    }
+
+    .help-accordion.open .help-accordion-icon {
+      transform: rotate(180deg);
+    }
+
+    /* Dialog Overlay */
+    .dialog-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 200;
+    }
+
+    .dialog {
+      background: var(--hud-dark);
+      border: 1px solid var(--hud-gray);
+      width: 100%;
+      max-width: 340px;
+      position: relative;
+    }
+
+    .dialog-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--hud-gray);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--hud-white);
+    }
+
+    .dialog-content {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .dialog-actions {
+      padding: 16px;
+      border-top: 1px solid var(--hud-gray);
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    /* Empty State */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      text-align: center;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--hud-white);
+      margin-bottom: 8px;
+    }
+
+    .empty-state-text {
+      font-size: 13px;
+      color: var(--hud-text);
+      margin-bottom: 24px;
+    }
+
+    /* Control Panel (Right Side) */
+    .control-panel {
+      position: absolute;
+      top: 44px;
+      right: 0;
+      width: 280px;
+      height: calc(100% - 44px);
+      background: var(--hud-dark);
+      border-left: 1px solid var(--hud-gray);
+      overflow-y: auto;
+      z-index: 50;
+      transform: translateX(100%);
+      transition: transform 0.2s;
+    }
+
+    .control-panel.open {
+      transform: translateX(0);
+    }
+
+    .control-panel-section {
+      border-bottom: 1px solid var(--hud-gray);
+    }
+
+    .control-panel-header {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      background: var(--hud-darker);
+    }
+
+    .control-panel-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--hud-text);
+    }
+
+    .control-panel-content {
+      padding: 16px;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--hud-text);
+    }
+
+    .stat-value {
+      font-family: 'Monaco', monospace;
+      font-size: 12px;
+      color: var(--hud-white);
+    }
+
+    /* Grid Overlay */
+    .grid-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      opacity: 0.03;
+      background-image:
+        linear-gradient(var(--hud-gray) 1px, transparent 1px),
+        linear-gradient(90deg, var(--hud-gray) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    /* Scanline Effect */
+    .scanline-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.1),
+        rgba(0, 0, 0, 0.1) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      opacity: 0.5;
+    }
+
+    /* Presets */
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .preset-btn {
+      padding: 6px 12px;
+      font-size: 11px;
+      background: #252525;
+      border: 1px solid #444;
+      color: #aaa;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .preset-btn:hover {
+      border-color: var(--hud-accent);
+      color: #eee;
+    }
+
+    .preset-btn.active {
+      background: var(--hud-accent);
+      border-color: var(--hud-accent);
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Controls Panel -->
+    <div class="controls">
+      <h2>Screen</h2>
+      <div class="screen-tabs">
+        <button class="screen-tab active" data-screen="onboarding">Onboarding</button>
+        <button class="screen-tab" data-screen="sessions">Sessions</button>
+        <button class="screen-tab" data-screen="workspace">Workspace</button>
+        <button class="screen-tab" data-screen="workspaces">Workspaces</button>
+        <button class="screen-tab" data-screen="credentials">Credentials</button>
+        <button class="screen-tab" data-screen="settings">Settings</button>
+        <button class="screen-tab" data-screen="help">Help</button>
+      </div>
+
+      <h2>Presets</h2>
+      <div class="presets">
+        <button class="preset-btn active" data-preset="default">Default</button>
+        <button class="preset-btn" data-preset="minimal">Minimal</button>
+        <button class="preset-btn" data-preset="heavy">Heavy HUD</button>
+        <button class="preset-btn" data-preset="terminal">Terminal</button>
+      </div>
+
+      <h2>Visual Effects</h2>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showGrid" checked>
+        <label for="showGrid">Grid overlay</label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showScanlines">
+        <label for="showScanlines">Scanlines</label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showCornerBrackets" checked>
+        <label for="showCornerBrackets">Corner brackets</label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showGlow" checked>
+        <label for="showGlow">Accent glow</label>
+      </div>
+
+      <h2>Colors</h2>
+      <div class="control-group">
+        <label>Accent Color</label>
+        <select id="accentColor">
+          <option value="#FF451A">Orange-Red (Default)</option>
+          <option value="#00BFFF">Cyan</option>
+          <option value="#00FF88">Green</option>
+          <option value="#FFB800">Amber</option>
+          <option value="#FF3399">Magenta</option>
+          <option value="#9966FF">Purple</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label>Background Darkness</label>
+        <input type="range" id="bgDarkness" min="0" max="20" value="5">
+        <div class="range-value" id="bgDarknessValue">#050505</div>
+      </div>
+
+      <h2>Typography</h2>
+      <div class="control-group">
+        <label>Body Font Size</label>
+        <input type="range" id="bodyFontSize" min="12" max="16" value="13">
+        <div class="range-value" id="bodyFontSizeValue">13px</div>
+      </div>
+
+      <div class="control-group">
+        <label>Label Letter Spacing</label>
+        <input type="range" id="labelSpacing" min="0" max="20" value="10">
+        <div class="range-value" id="labelSpacingValue">0.1em</div>
+      </div>
+
+      <h2>Layout</h2>
+      <div class="control-group">
+        <label>Card Padding</label>
+        <input type="range" id="cardPadding" min="8" max="24" value="16">
+        <div class="range-value" id="cardPaddingValue">16px</div>
+      </div>
+
+      <div class="control-group">
+        <label>Border Width</label>
+        <input type="range" id="borderWidth" min="1" max="3" value="1">
+        <div class="range-value" id="borderWidthValue">1px</div>
+      </div>
+
+      <h2>Components</h2>
+      <div class="control-group">
+        <label>Button Style</label>
+        <select id="buttonStyle">
+          <option value="solid">Solid Fill</option>
+          <option value="outline">Outline Only</option>
+          <option value="ghost">Ghost</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label>Input Style</label>
+        <select id="inputStyle">
+          <option value="bordered">Bordered</option>
+          <option value="underline">Underline Only</option>
+          <option value="filled">Filled Background</option>
+        </select>
+      </div>
+
+      <h2>Workspace Options</h2>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showThinking" checked>
+        <label for="showThinking">Show thinking blocks</label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showToolCalls" checked>
+        <label for="showToolCalls">Show tool calls</label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showControlPanel" checked>
+        <label for="showControlPanel">Show control panel</label>
+      </div>
+      <div class="checkbox-group">
+        <input type="checkbox" id="showDialog">
+        <label for="showDialog">Show dialog</label>
+      </div>
+    </div>
+
+    <!-- Preview Panel -->
+    <div class="preview-panel">
+      <div class="phone-frame" id="phoneFrame">
+        <div class="phone-notch"></div>
+        <div class="grid-overlay" id="gridOverlay"></div>
+        <div class="scanline-overlay" id="scanlineOverlay" style="display: none;"></div>
+
+        <div class="phone-content">
+          <!-- Onboarding Screen -->
+          <div class="screen active" id="screen-onboarding">
+            <div class="onboarding-content">
+              <div class="aperture-logo" id="apertureLogo"></div>
+
+              <div style="text-align: center;">
+                <div style="font-size: 24px; font-weight: 300; color: var(--hud-white); letter-spacing: 0.2em; margin-bottom: 8px;">APERTURE</div>
+                <div style="font-size: 10px; color: var(--hud-text); letter-spacing: 0.3em;">GATEWAY INTERFACE</div>
+              </div>
+
+              <div class="onboarding-form">
+                <div class="hud-input-group">
+                  <div class="hud-input-label">Gateway URL</div>
+                  <input type="text" class="hud-input" placeholder="https://gateway.example.com" value="https://api.aperture.dev">
+                </div>
+
+                <div class="hud-input-group">
+                  <div class="hud-input-label">API Token</div>
+                  <input type="password" class="hud-input" placeholder="Enter your API token" value="sk-aper-xxxx...">
+                </div>
+
+                <div class="connection-status">
+                  <div class="status-dot"></div>
+                  <div class="connection-status-text">Connected</div>
+                </div>
+
+                <button class="hud-button">Test Connection</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sessions Screen -->
+          <div class="screen" id="screen-sessions">
+            <div class="top-bar">
+              <div class="hamburger"><span></span><span></span><span></span></div>
+              <div class="top-bar-title">SESSIONS</div>
+              <div style="flex: 1;"></div>
+              <div class="status-dot"></div>
+            </div>
+
+            <div class="sessions-content">
+              <div class="sessions-grid">
+                <div class="session-card">
+                  <div class="hud-corner-brackets"></div>
+                  <div class="hud-corner-brackets hud-corner-brackets-bottom"></div>
+                  <div class="session-card-header">
+                    <div class="session-agent-icon">🤖</div>
+                    <div class="session-info">
+                      <div class="session-id">a7bc3e91</div>
+                      <div class="session-agent">Claude SDK</div>
+                    </div>
+                    <div class="status-dot streaming"></div>
+                  </div>
+                  <div class="session-meta">
+                    <div>📁 ~/projects/aperture</div>
+                    <div>🕐 Active 2m ago</div>
+                  </div>
+                  <div class="session-actions">
+                    <button class="session-action-btn">Open</button>
+                    <button class="session-action-btn danger">Delete</button>
+                  </div>
+                </div>
+
+                <div class="session-card">
+                  <div class="hud-corner-brackets"></div>
+                  <div class="hud-corner-brackets hud-corner-brackets-bottom"></div>
+                  <div class="session-card-header">
+                    <div class="session-agent-icon">⚡</div>
+                    <div class="session-info">
+                      <div class="session-id">f2d8c4a1</div>
+                      <div class="session-agent">Pi SDK</div>
+                    </div>
+                    <div class="status-dot"></div>
+                  </div>
+                  <div class="session-meta">
+                    <div>📁 ~/projects/web-app</div>
+                    <div>🕐 Active 15m ago</div>
+                  </div>
+                  <div class="session-actions">
+                    <button class="session-action-btn">Open</button>
+                    <button class="session-action-btn danger">Delete</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button class="fab">+</button>
+          </div>
+
+          <!-- Workspace Screen -->
+          <div class="screen" id="screen-workspace">
+            <div class="top-bar">
+              <div class="hamburger"><span></span><span></span><span></span></div>
+              <div class="top-bar-title">WORKSPACE</div>
+              <div style="flex: 1;"></div>
+              <div style="font-size: 18px; cursor: pointer;">⚙️</div>
+            </div>
+
+            <div class="workspace-content">
+              <div class="session-header">
+                <span class="session-header-badge">Claude SDK</span>
+                <span class="session-header-id">a7bc3e91</span>
+                <div style="flex: 1;"></div>
+                <div class="status-dot streaming"></div>
+              </div>
+
+              <div class="messages-container">
+                <div class="message user">
+                  <div class="message-role">You</div>
+                  <div class="message-content">Help me refactor the authentication module to use JWT tokens instead of session-based auth.</div>
+                </div>
+
+                <div class="message assistant">
+                  <div class="message-role">Assistant</div>
+                  <div class="message-content">I'll help you refactor the authentication module. Let me analyze the current implementation first.</div>
+
+                  <div class="thinking-block" id="thinkingBlock">
+                    <div class="thinking-header">
+                      <span>🧠</span>
+                      <span>Thinking</span>
+                    </div>
+                    <div class="thinking-content">Analyzing the current auth.ts file structure and identifying the session-based patterns that need to be replaced with JWT...</div>
+                  </div>
+
+                  <div class="tool-use-block" id="toolUseBlock">
+                    <div class="tool-header">
+                      <span>🔧</span>
+                      <span class="tool-name">Read</span>
+                    </div>
+                    <div class="tool-input">{ "file": "src/auth/auth.ts" }</div>
+                  </div>
+
+                  <div class="tool-result-block">
+                    <div class="tool-result-header">✓ Tool Result</div>
+                    <div style="font-size: 12px; color: var(--hud-text);">File read successfully (245 lines)</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="message-input-container">
+                <div class="message-input-wrapper">
+                  <textarea class="message-textarea" placeholder="Send a message..." rows="1"></textarea>
+                  <button class="send-button">→</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="control-panel" id="controlPanel">
+              <div class="control-panel-section">
+                <div class="control-panel-header">
+                  <span class="control-panel-title">Configuration</span>
+                  <span>▼</span>
+                </div>
+                <div class="control-panel-content">
+                  <div class="hud-input-group" style="margin-bottom: 12px;">
+                    <div class="hud-input-label">Model</div>
+                    <select class="hud-input" style="padding: 8px;">
+                      <option>claude-opus-4-20250514</option>
+                      <option>claude-sonnet-4-20250514</option>
+                    </select>
+                  </div>
+                  <div class="hud-input-group">
+                    <div class="hud-input-label">Thinking Tokens</div>
+                    <select class="hud-input" style="padding: 8px;">
+                      <option>Off</option>
+                      <option selected>4,096</option>
+                      <option>8,192</option>
+                      <option>16,384</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="control-panel-section">
+                <div class="control-panel-header">
+                  <span class="control-panel-title">Usage</span>
+                  <span>▼</span>
+                </div>
+                <div class="control-panel-content">
+                  <div class="stat-row">
+                    <span class="stat-label">Turns</span>
+                    <span class="stat-value">3</span>
+                  </div>
+                  <div class="stat-row">
+                    <span class="stat-label">Cost</span>
+                    <span class="stat-value">$0.042</span>
+                  </div>
+                  <div class="stat-row">
+                    <span class="stat-label">Duration</span>
+                    <span class="stat-value">2m 34s</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="control-panel-section">
+                <div class="control-panel-header">
+                  <span class="control-panel-title">MCP Servers</span>
+                  <span>▼</span>
+                </div>
+                <div class="control-panel-content">
+                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <div class="status-dot" style="width: 6px; height: 6px;"></div>
+                    <span style="font-size: 12px; color: var(--hud-text);">filesystem</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="status-dot" style="width: 6px; height: 6px;"></div>
+                    <span style="font-size: 12px; color: var(--hud-text);">github</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Workspaces Screen -->
+          <div class="screen" id="screen-workspaces">
+            <div class="top-bar">
+              <div class="hamburger"><span></span><span></span><span></span></div>
+              <div class="top-bar-title">WORKSPACES</div>
+              <div style="flex: 1;"></div>
+              <div class="status-dot"></div>
+            </div>
+
+            <div class="workspaces-grid" style="overflow-y: auto; flex: 1;">
+              <div class="workspace-card">
+                <div class="hud-corner-brackets"></div>
+                <div class="hud-corner-brackets hud-corner-brackets-bottom"></div>
+                <div class="workspace-card-header">
+                  <div class="workspace-name">aperture-android</div>
+                  <div class="workspace-path">~/dev/Aperture-Android</div>
+                </div>
+                <div class="workspace-section">
+                  <div class="workspace-section-header">
+                    <span class="workspace-section-title">Active Agents (2)</span>
+                    <span style="color: var(--hud-accent);">▼</span>
+                  </div>
+                  <div class="workspace-section-content">
+                    <div class="workspace-agent-item">
+                      <span class="workspace-agent-branch">main</span>
+                      <button class="session-action-btn" style="padding: 4px 8px; font-size: 9px;">Open</button>
+                    </div>
+                    <div class="workspace-agent-item">
+                      <span class="workspace-agent-branch">feature/auth</span>
+                      <button class="session-action-btn" style="padding: 4px 8px; font-size: 9px;">Open</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="workspace-section">
+                  <div class="workspace-section-header">
+                    <span class="workspace-section-title">Git Worktrees (3)</span>
+                    <span style="color: var(--hud-accent);">▶</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="workspace-card">
+                <div class="hud-corner-brackets"></div>
+                <div class="hud-corner-brackets hud-corner-brackets-bottom"></div>
+                <div class="workspace-card-header">
+                  <div class="workspace-name">cyber-web</div>
+                  <div class="workspace-path">~/dev/cyber_web</div>
+                </div>
+                <div class="workspace-section">
+                  <div class="workspace-section-header">
+                    <span class="workspace-section-title">Active Agents (0)</span>
+                    <span style="color: var(--hud-text);">▶</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button class="fab">+</button>
+          </div>
+
+          <!-- Credentials Screen -->
+          <div class="screen" id="screen-credentials">
+            <div class="top-bar">
+              <div class="hamburger"><span></span><span></span><span></span></div>
+              <div class="top-bar-title">CREDENTIALS</div>
+              <div style="flex: 1;"></div>
+              <div class="status-dot"></div>
+            </div>
+
+            <div class="security-notice">
+              🔒 All API keys are encrypted with AES-256 and decrypted only when needed for authentication.
+            </div>
+
+            <div class="credentials-grid" style="overflow-y: auto; flex: 1;">
+              <div class="credential-card">
+                <div class="hud-corner-brackets"></div>
+                <div class="hud-corner-brackets hud-corner-brackets-bottom"></div>
+                <div class="credential-header">
+                  <div class="credential-icon">🅰️</div>
+                  <div class="credential-info">
+                    <div class="credential-provider">Anthropic</div>
+                    <div class="credential-label">Production API Key</div>
+                  </div>
+                </div>
+                <div class="credential-key">sk-ant-••••••••••••••••xxyz</div>
+                <div class="session-actions">
+                  <button class="session-action-btn">Show</button>
+                  <button class="session-action-btn danger">Delete</button>
+                </div>
+              </div>
+
+              <div class="credential-card">
+                <div class="hud-corner-brackets"></div>
+                <div class="hud-corner-brackets hud-corner-brackets-bottom"></div>
+                <div class="credential-header">
+                  <div class="credential-icon">🟢</div>
+                  <div class="credential-info">
+                    <div class="credential-provider">OpenAI</div>
+                    <div class="credential-label">Development Key</div>
+                  </div>
+                </div>
+                <div class="credential-key">sk-proj-••••••••••••••••abcd</div>
+                <div class="session-actions">
+                  <button class="session-action-btn">Show</button>
+                  <button class="session-action-btn danger">Delete</button>
+                </div>
+              </div>
+            </div>
+
+            <button class="fab">+</button>
+          </div>
+
+          <!-- Settings Screen -->
+          <div class="screen" id="screen-settings">
+            <div class="top-bar">
+              <div class="hamburger"><span></span><span></span><span></span></div>
+              <div class="top-bar-title">SETTINGS</div>
+              <div style="flex: 1;"></div>
+              <div class="status-dot"></div>
+            </div>
+
+            <div class="settings-content" style="overflow-y: auto; flex: 1;">
+              <div class="settings-section">
+                <div class="settings-section-header">Gateway Connection</div>
+                <div class="settings-section-content">
+                  <div class="settings-row">
+                    <span class="settings-label">URL</span>
+                    <span class="settings-value">api.aperture.dev</span>
+                  </div>
+                  <div class="settings-row">
+                    <span class="settings-label">Status</span>
+                    <span class="settings-value" style="color: var(--hud-success);">Connected</span>
+                  </div>
+                  <button class="hud-button secondary" style="width: 100%; margin-top: 12px; padding: 10px;">Reconnect</button>
+                </div>
+              </div>
+
+              <div class="settings-section">
+                <div class="settings-section-header">Appearance</div>
+                <div class="settings-section-content">
+                  <div class="settings-row">
+                    <span class="settings-label">Theme</span>
+                    <span class="settings-value">Dark (HUD)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-section">
+                <div class="settings-section-header">Data Management</div>
+                <div class="settings-section-content">
+                  <button class="hud-button danger" style="width: 100%; padding: 10px;">Clear All Data</button>
+                  <div style="font-size: 11px; color: var(--hud-text-muted); margin-top: 8px; text-align: center;">This will remove all local data and credentials</div>
+                </div>
+              </div>
+
+              <div class="settings-section">
+                <div class="settings-section-header">About</div>
+                <div class="settings-section-content">
+                  <div class="settings-row">
+                    <span class="settings-label">Version</span>
+                    <span class="settings-value">1.0.0</span>
+                  </div>
+                  <div class="settings-row">
+                    <span class="settings-label">Build</span>
+                    <span class="settings-value">2025.01.31</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Help Screen -->
+          <div class="screen" id="screen-help">
+            <div class="top-bar">
+              <div class="hamburger"><span></span><span></span><span></span></div>
+              <div class="top-bar-title">HELP</div>
+              <div style="flex: 1;"></div>
+              <div class="status-dot"></div>
+            </div>
+
+            <div class="help-content" style="overflow-y: auto; flex: 1;">
+              <div class="help-accordion open">
+                <div class="help-accordion-header">
+                  <span class="help-accordion-title">Quick Start</span>
+                  <span class="help-accordion-icon">▼</span>
+                </div>
+                <div class="help-accordion-content">
+                  1. Enter your gateway URL and API token on the onboarding screen<br><br>
+                  2. Create a new session by selecting an SDK (Claude or Pi)<br><br>
+                  3. Start chatting and let the AI assist with your coding tasks
+                </div>
+              </div>
+
+              <div class="help-accordion">
+                <div class="help-accordion-header">
+                  <span class="help-accordion-title">Claude SDK</span>
+                  <span class="help-accordion-icon">▼</span>
+                </div>
+                <div class="help-accordion-content">
+                  The Claude SDK provides access to Anthropic's Claude models with features like thinking blocks, tool use, and MCP server integration.
+                </div>
+              </div>
+
+              <div class="help-accordion">
+                <div class="help-accordion-header">
+                  <span class="help-accordion-title">Pi SDK</span>
+                  <span class="help-accordion-icon">▼</span>
+                </div>
+                <div class="help-accordion-content">
+                  The Pi SDK offers multi-model support with steering, forking, and context compaction capabilities.
+                </div>
+              </div>
+
+              <div class="help-accordion">
+                <div class="help-accordion-header">
+                  <span class="help-accordion-title">Session Management</span>
+                  <span class="help-accordion-icon">▼</span>
+                </div>
+                <div class="help-accordion-content">
+                  Sessions persist your conversation history. You can resume sessions later or fork them to explore different paths.
+                </div>
+              </div>
+
+              <div class="help-accordion">
+                <div class="help-accordion-header">
+                  <span class="help-accordion-title">Credentials</span>
+                  <span class="help-accordion-icon">▼</span>
+                </div>
+                <div class="help-accordion-content">
+                  Store API keys securely with AES-256 encryption. Keys are only decrypted when needed for authentication.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dialog Overlay -->
+        <div class="dialog-overlay" id="dialogOverlay" style="display: none;">
+          <div class="dialog">
+            <div class="hud-corner-brackets"></div>
+            <div class="hud-corner-brackets hud-corner-brackets-bottom"></div>
+            <div class="dialog-header">New Session</div>
+            <div class="dialog-content">
+              <div class="hud-input-group">
+                <div class="hud-input-label">Agent Type</div>
+                <select class="hud-input" style="padding: 10px;">
+                  <option>Claude SDK</option>
+                  <option>Pi SDK</option>
+                </select>
+              </div>
+              <div class="hud-input-group">
+                <div class="hud-input-label">Authentication</div>
+                <select class="hud-input" style="padding: 10px;">
+                  <option>OAuth (Browser)</option>
+                  <option>Stored Credential</option>
+                </select>
+              </div>
+              <div class="hud-input-group">
+                <div class="hud-input-label">Repository Path (Optional)</div>
+                <input class="hud-input" type="text" placeholder="~/projects/my-app">
+              </div>
+            </div>
+            <div class="dialog-actions">
+              <button class="hud-button secondary">Cancel</button>
+              <button class="hud-button">Create</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prompt Output -->
+  <div class="prompt-output">
+    <div class="prompt-header">
+      <h3>Design Feedback Prompt</h3>
+      <button class="copy-btn" id="copyBtn">Copy</button>
+    </div>
+    <div class="prompt-text" id="promptText"></div>
+  </div>
+
+  <script>
+    // State
+    const DEFAULTS = {
+      screen: 'onboarding',
+      preset: 'default',
+      showGrid: true,
+      showScanlines: false,
+      showCornerBrackets: true,
+      showGlow: true,
+      accentColor: '#FF451A',
+      bgDarkness: 5,
+      bodyFontSize: 13,
+      labelSpacing: 10,
+      cardPadding: 16,
+      borderWidth: 1,
+      buttonStyle: 'solid',
+      inputStyle: 'bordered',
+      showThinking: true,
+      showToolCalls: true,
+      showControlPanel: true,
+      showDialog: false
+    };
+
+    const PRESETS = {
+      default: { ...DEFAULTS },
+      minimal: {
+        ...DEFAULTS,
+        showGrid: false,
+        showCornerBrackets: false,
+        showGlow: false,
+        cardPadding: 12,
+        borderWidth: 1
+      },
+      heavy: {
+        ...DEFAULTS,
+        showGrid: true,
+        showScanlines: true,
+        showCornerBrackets: true,
+        showGlow: true,
+        borderWidth: 2,
+        accentColor: '#FF451A'
+      },
+      terminal: {
+        ...DEFAULTS,
+        showGrid: true,
+        showScanlines: true,
+        accentColor: '#00FF88',
+        showGlow: true
+      }
+    };
+
+    let state = { ...DEFAULTS };
+
+    // DOM Elements
+    const screenTabs = document.querySelectorAll('.screen-tab');
+    const screens = document.querySelectorAll('.screen');
+    const presetBtns = document.querySelectorAll('.preset-btn');
+    const gridOverlay = document.getElementById('gridOverlay');
+    const scanlineOverlay = document.getElementById('scanlineOverlay');
+    const phoneFrame = document.getElementById('phoneFrame');
+    const controlPanel = document.getElementById('controlPanel');
+    const thinkingBlock = document.getElementById('thinkingBlock');
+    const toolUseBlock = document.getElementById('toolUseBlock');
+    const dialogOverlay = document.getElementById('dialogOverlay');
+    const promptText = document.getElementById('promptText');
+    const copyBtn = document.getElementById('copyBtn');
+
+    // Screen names for prompt
+    const SCREEN_NAMES = {
+      onboarding: 'Onboarding',
+      sessions: 'Sessions',
+      workspace: 'Workspace',
+      workspaces: 'Workspaces',
+      credentials: 'Credentials',
+      settings: 'Settings',
+      help: 'Help'
+    };
+
+    // Initialize controls
+    function initControls() {
+      // Screen tabs
+      screenTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          state.screen = tab.dataset.screen;
+          updateAll();
+        });
+      });
+
+      // Presets
+      presetBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          state = { ...PRESETS[btn.dataset.preset] };
+          syncControlsToState();
+          updateAll();
+        });
+      });
+
+      // Checkboxes
+      ['showGrid', 'showScanlines', 'showCornerBrackets', 'showGlow', 'showThinking', 'showToolCalls', 'showControlPanel', 'showDialog'].forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener('change', () => {
+          state[id] = el.checked;
+          updateAll();
+        });
+      });
+
+      // Selects
+      ['accentColor', 'buttonStyle', 'inputStyle'].forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener('change', () => {
+          state[id] = el.value;
+          updateAll();
+        });
+      });
+
+      // Ranges
+      ['bgDarkness', 'bodyFontSize', 'labelSpacing', 'cardPadding', 'borderWidth'].forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener('input', () => {
+          state[id] = parseInt(el.value);
+          updateAll();
+        });
+      });
+
+      // Copy button
+      copyBtn.addEventListener('click', copyPrompt);
+
+      // Help accordions
+      document.querySelectorAll('.help-accordion-header').forEach(header => {
+        header.addEventListener('click', () => {
+          header.parentElement.classList.toggle('open');
+        });
+      });
+    }
+
+    function syncControlsToState() {
+      document.getElementById('showGrid').checked = state.showGrid;
+      document.getElementById('showScanlines').checked = state.showScanlines;
+      document.getElementById('showCornerBrackets').checked = state.showCornerBrackets;
+      document.getElementById('showGlow').checked = state.showGlow;
+      document.getElementById('showThinking').checked = state.showThinking;
+      document.getElementById('showToolCalls').checked = state.showToolCalls;
+      document.getElementById('showControlPanel').checked = state.showControlPanel;
+      document.getElementById('showDialog').checked = state.showDialog;
+      document.getElementById('accentColor').value = state.accentColor;
+      document.getElementById('bgDarkness').value = state.bgDarkness;
+      document.getElementById('bodyFontSize').value = state.bodyFontSize;
+      document.getElementById('labelSpacing').value = state.labelSpacing;
+      document.getElementById('cardPadding').value = state.cardPadding;
+      document.getElementById('borderWidth').value = state.borderWidth;
+      document.getElementById('buttonStyle').value = state.buttonStyle;
+      document.getElementById('inputStyle').value = state.inputStyle;
+    }
+
+    function updateAll() {
+      renderPreview();
+      updatePrompt();
+    }
+
+    function renderPreview() {
+      // Update screen tabs
+      screenTabs.forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.screen === state.screen);
+      });
+
+      // Update preset buttons
+      presetBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.preset === state.preset);
+      });
+
+      // Update screens
+      screens.forEach(screen => {
+        screen.classList.toggle('active', screen.id === `screen-${state.screen}`);
+      });
+
+      // Update overlays
+      gridOverlay.style.display = state.showGrid ? 'block' : 'none';
+      scanlineOverlay.style.display = state.showScanlines ? 'block' : 'none';
+
+      // Update accent color
+      document.documentElement.style.setProperty('--hud-accent', state.accentColor);
+      document.documentElement.style.setProperty('--hud-accent-glow', state.accentColor + '4D');
+
+      // Update background
+      const bgHex = state.bgDarkness.toString(16).padStart(2, '0');
+      const bgColor = `#${bgHex}${bgHex}${bgHex}`;
+      document.documentElement.style.setProperty('--hud-black', bgColor);
+      document.getElementById('bgDarknessValue').textContent = bgColor;
+
+      // Update font size
+      document.documentElement.style.setProperty('--body-font-size', state.bodyFontSize + 'px');
+      document.getElementById('bodyFontSizeValue').textContent = state.bodyFontSize + 'px';
+
+      // Update label spacing
+      document.getElementById('labelSpacingValue').textContent = (state.labelSpacing / 100).toFixed(2) + 'em';
+
+      // Update card padding
+      document.getElementById('cardPaddingValue').textContent = state.cardPadding + 'px';
+
+      // Update border width
+      document.getElementById('borderWidthValue').textContent = state.borderWidth + 'px';
+
+      // Update corner brackets visibility
+      document.querySelectorAll('.hud-corner-brackets, .hud-corner-brackets-bottom').forEach(el => {
+        el.style.display = state.showCornerBrackets ? 'block' : 'none';
+      });
+
+      // Update glow
+      phoneFrame.style.boxShadow = state.showGlow ? `0 0 60px ${state.accentColor}1A` : 'none';
+
+      // Workspace-specific toggles
+      if (thinkingBlock) thinkingBlock.style.display = state.showThinking ? 'block' : 'none';
+      if (toolUseBlock) toolUseBlock.style.display = state.showToolCalls ? 'block' : 'none';
+      if (controlPanel) controlPanel.classList.toggle('open', state.showControlPanel);
+      if (dialogOverlay) dialogOverlay.style.display = state.showDialog ? 'flex' : 'none';
+
+      // Update button styles
+      document.querySelectorAll('.hud-button:not(.secondary):not(.danger)').forEach(btn => {
+        if (state.buttonStyle === 'solid') {
+          btn.style.background = state.accentColor;
+          btn.style.borderColor = state.accentColor;
+        } else if (state.buttonStyle === 'outline') {
+          btn.style.background = 'transparent';
+          btn.style.borderColor = state.accentColor;
+          btn.style.color = state.accentColor;
+        } else {
+          btn.style.background = 'transparent';
+          btn.style.borderColor = 'transparent';
+          btn.style.color = state.accentColor;
+        }
+      });
+
+      // Update input styles
+      document.querySelectorAll('.hud-input').forEach(input => {
+        if (state.inputStyle === 'bordered') {
+          input.style.border = '1px solid var(--hud-gray)';
+          input.style.background = 'var(--hud-dark)';
+        } else if (state.inputStyle === 'underline') {
+          input.style.border = 'none';
+          input.style.borderBottom = '1px solid var(--hud-gray)';
+          input.style.background = 'transparent';
+        } else {
+          input.style.border = 'none';
+          input.style.background = 'var(--hud-gray)';
+        }
+      });
+    }
+
+    function updatePrompt() {
+      const parts = [];
+      const screenName = SCREEN_NAMES[state.screen];
+
+      parts.push(`I'm reviewing the ${screenName} screen design for the Aperture Android app.`);
+      parts.push('');
+
+      // Describe current configuration
+      const config = [];
+
+      if (state.accentColor !== DEFAULTS.accentColor) {
+        const colorNames = {
+          '#FF451A': 'orange-red',
+          '#00BFFF': 'cyan',
+          '#00FF88': 'green',
+          '#FFB800': 'amber',
+          '#FF3399': 'magenta',
+          '#9966FF': 'purple'
+        };
+        config.push(`accent color is ${colorNames[state.accentColor] || state.accentColor}`);
+      }
+
+      if (state.showGrid && state.showScanlines) {
+        config.push('both grid overlay and scanlines are enabled for a heavy CRT effect');
+      } else if (state.showGrid) {
+        config.push('grid overlay is visible');
+      } else if (state.showScanlines) {
+        config.push('scanlines are visible');
+      } else {
+        config.push('no background effects');
+      }
+
+      if (!state.showCornerBrackets) {
+        config.push('corner brackets are hidden');
+      }
+
+      if (!state.showGlow) {
+        config.push('accent glow is disabled');
+      }
+
+      if (state.buttonStyle !== 'solid') {
+        config.push(`buttons use ${state.buttonStyle} style`);
+      }
+
+      if (state.inputStyle !== 'bordered') {
+        config.push(`inputs use ${state.inputStyle} style`);
+      }
+
+      if (state.cardPadding !== DEFAULTS.cardPadding) {
+        config.push(`card padding is ${state.cardPadding}px`);
+      }
+
+      if (state.borderWidth !== DEFAULTS.borderWidth) {
+        config.push(`border width is ${state.borderWidth}px`);
+      }
+
+      if (config.length > 0) {
+        parts.push('Current configuration: ' + config.join(', ') + '.');
+        parts.push('');
+      }
+
+      // Screen-specific notes
+      if (state.screen === 'workspace') {
+        const wsConfig = [];
+        if (!state.showThinking) wsConfig.push('thinking blocks hidden');
+        if (!state.showToolCalls) wsConfig.push('tool call blocks hidden');
+        if (!state.showControlPanel) wsConfig.push('control panel collapsed');
+        if (state.showDialog) wsConfig.push('permission dialog visible');
+
+        if (wsConfig.length > 0) {
+          parts.push('Workspace settings: ' + wsConfig.join(', ') + '.');
+          parts.push('');
+        }
+      }
+
+      parts.push('Please provide feedback on:');
+      parts.push('1. Visual hierarchy and readability');
+      parts.push('2. HUD aesthetic consistency');
+      parts.push('3. Component spacing and alignment');
+      parts.push('4. Color contrast and accessibility');
+      parts.push('5. Any suggested improvements');
+
+      promptText.textContent = parts.join('\n');
+    }
+
+    function copyPrompt() {
+      navigator.clipboard.writeText(promptText.textContent).then(() => {
+        copyBtn.textContent = 'Copied!';
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy';
+          copyBtn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // Initialize
+    initControls();
+    updateAll();
+  </script>
+</body>
+</html>

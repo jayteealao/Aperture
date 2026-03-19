@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aperture Session Dialog Designer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a25;
+      --bg-elevated: #22222f;
+      --cyan-primary: #00d4ff;
+      --cyan-dim: #00a8cc;
+      --cyan-glow: rgba(0, 212, 255, 0.3);
+      --purple-primary: #a855f7;
+      --purple-dim: #7c3aed;
+      --purple-glow: rgba(168, 85, 247, 0.3);
+      --text-primary: #e4e4e7;
+      --text-secondary: #a1a1aa;
+      --text-dim: #71717a;
+      --border-color: #2a2a3a;
+      --border-glow: rgba(0, 212, 255, 0.2);
+      --error: #ef4444;
+      --success: #22c55e;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--cyan-primary);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .header .subtitle {
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .controls {
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-color);
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .control-group h3 {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--cyan-primary);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .control-row label {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    select, input[type="text"] {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      width: 100%;
+      transition: all 0.2s;
+    }
+
+    select:hover, input[type="text"]:hover {
+      border-color: var(--cyan-dim);
+    }
+
+    select:focus, input[type="text"]:focus {
+      outline: none;
+      border-color: var(--cyan-primary);
+      box-shadow: 0 0 0 2px var(--cyan-glow);
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--cyan-primary);
+    }
+
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .preset-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .preset-btn:hover {
+      border-color: var(--purple-primary);
+      color: var(--purple-primary);
+    }
+
+    .preset-btn.active {
+      background: var(--purple-primary);
+      border-color: var(--purple-primary);
+      color: white;
+    }
+
+    .preview-area {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-primary);
+    }
+
+    .preview-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      background:
+        radial-gradient(circle at 20% 80%, var(--purple-glow) 0%, transparent 40%),
+        radial-gradient(circle at 80% 20%, var(--cyan-glow) 0%, transparent 40%),
+        var(--bg-primary);
+    }
+
+    /* Phone Frame */
+    .phone-frame {
+      width: 375px;
+      height: 750px;
+      background: var(--bg-secondary);
+      border-radius: 40px;
+      border: 3px solid var(--border-color);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow:
+        0 0 0 1px rgba(0, 212, 255, 0.1),
+        0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    .phone-status-bar {
+      height: 44px;
+      background: var(--bg-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .phone-content {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: var(--bg-primary);
+    }
+
+    /* Dim background with Sessions list hint */
+    .sessions-bg {
+      position: absolute;
+      inset: 0;
+      padding: 16px;
+      opacity: 0.3;
+    }
+
+    .sessions-bg-item {
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .sessions-bg-item .line {
+      height: 8px;
+      background: var(--bg-elevated);
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+
+    .sessions-bg-item .line.short { width: 60%; }
+    .sessions-bg-item .line.medium { width: 80%; }
+
+    /* Dialog Overlay */
+    .dialog-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .dialog {
+      background: var(--bg-secondary);
+      width: 100%;
+      max-height: 100%;
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px var(--cyan-glow),
+        0 0 30px var(--cyan-glow);
+    }
+
+    .dialog-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .dialog-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--cyan-primary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .dialog-close {
+      width: 28px;
+      height: 28px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    /* Tab Bar for Repo Modes */
+    .dialog-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-tertiary);
+    }
+
+    .dialog-tab {
+      flex: 1;
+      padding: 12px 6px;
+      text-align: center;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .dialog-tab:hover {
+      color: var(--text-secondary);
+    }
+
+    .dialog-tab.active {
+      color: var(--cyan-primary);
+      border-bottom-color: var(--cyan-primary);
+      background: rgba(0, 212, 255, 0.05);
+    }
+
+    .dialog-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .dialog-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 12px;
+    }
+
+    /* Section Divider */
+    .section-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 4px 0;
+    }
+
+    .section-divider-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border-color);
+    }
+
+    .section-divider-text {
+      font-size: 9px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* HUD Form Elements */
+    .hud-field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .hud-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--cyan-primary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .hud-select {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: var(--text-primary);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .hud-select .arrow {
+      color: var(--text-dim);
+      font-size: 10px;
+    }
+
+    .hud-input {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: var(--text-primary);
+      font-size: 13px;
+      width: 100%;
+    }
+
+    .hud-input::placeholder {
+      color: var(--text-dim);
+    }
+
+    /* Segmented Control */
+    .hud-segment {
+      display: flex;
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 3px;
+      border: 1px solid var(--border-color);
+    }
+
+    .hud-segment-option {
+      flex: 1;
+      padding: 10px 8px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .hud-segment-option.active {
+      background: var(--cyan-primary);
+      color: var(--bg-primary);
+    }
+
+    /* Info Box */
+    .info-box {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .info-box-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .info-box-desc {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .info-box-path {
+      font-size: 10px;
+      color: var(--cyan-dim);
+      font-family: 'SF Mono', monospace;
+      margin-top: 4px;
+    }
+
+    /* Buttons */
+    .hud-btn {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .hud-btn-primary {
+      background: var(--cyan-primary);
+      color: var(--bg-primary);
+    }
+
+    .hud-btn-primary:hover {
+      background: var(--cyan-dim);
+      box-shadow: 0 0 20px var(--cyan-glow);
+    }
+
+    .hud-btn-secondary {
+      background: transparent;
+      border-color: var(--border-color);
+      color: var(--text-secondary);
+    }
+
+    /* Prompt Output */
+    .prompt-section {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      padding: 16px 24px;
+    }
+
+    .prompt-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .prompt-header h3 {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--purple-primary);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    .copy-btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .copy-btn:hover {
+      border-color: var(--purple-primary);
+      color: var(--purple-primary);
+    }
+
+    .copy-btn.copied {
+      background: var(--success);
+      border-color: var(--success);
+      color: white;
+    }
+
+    .prompt-output {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Aperture</h1>
+    <span class="subtitle">Session Creation Dialog Designer</span>
+  </div>
+
+  <div class="main">
+    <div class="controls">
+      <div class="control-group">
+        <h3>Presets</h3>
+        <div class="presets">
+          <button class="preset-btn" onclick="applyPreset('none')">No Repo</button>
+          <button class="preset-btn active" onclick="applyPreset('init')">Init Empty</button>
+          <button class="preset-btn" onclick="applyPreset('existing')">Existing</button>
+          <button class="preset-btn" onclick="applyPreset('clone')">Clone</button>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>Repository Tab</h3>
+        <div class="control-row">
+          <label>Active Tab</label>
+          <select id="repoMode" onchange="updateAll()">
+            <option value="none">No Repo</option>
+            <option value="init" selected>Init Empty</option>
+            <option value="existing">Existing</option>
+            <option value="clone">Clone</option>
+          </select>
+        </div>
+        <div class="control-row" id="cloneUrlControl" style="display: none;">
+          <label>Clone URL</label>
+          <input type="text" id="cloneUrl" placeholder="https://github.com/user/repo" oninput="updateAll()">
+        </div>
+        <div class="control-row" id="existingRepoControl" style="display: none;">
+          <label>Select Repo</label>
+          <select id="existingRepo" onchange="updateAll()">
+            <option value="">Select a repository...</option>
+            <option value="my-project">my-project</option>
+            <option value="api-server">api-server</option>
+            <option value="frontend-app">frontend-app</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <h3>Agent Settings</h3>
+        <div class="control-row">
+          <label>Agent Type</label>
+          <select id="agentType" onchange="updateAll()">
+            <option value="claude_sdk">Claude SDK</option>
+            <option value="pi_sdk">Pi SDK</option>
+          </select>
+        </div>
+        <div class="control-row">
+          <label>Auth Mode</label>
+          <select id="authMode" onchange="updateAll()">
+            <option value="oauth">OAuth</option>
+            <option value="api_key">API Key</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-area">
+      <div class="preview-container">
+        <div class="phone-frame">
+          <div class="phone-status-bar">9:41</div>
+          <div class="phone-content">
+            <!-- Dim background -->
+            <div class="sessions-bg">
+              <div class="sessions-bg-item">
+                <div class="line short"></div>
+                <div class="line medium"></div>
+              </div>
+              <div class="sessions-bg-item">
+                <div class="line short"></div>
+                <div class="line medium"></div>
+              </div>
+              <div class="sessions-bg-item">
+                <div class="line short"></div>
+                <div class="line medium"></div>
+              </div>
+            </div>
+
+            <div class="dialog-overlay">
+              <div class="dialog" id="dialog">
+                <div class="dialog-header">
+                  <span class="dialog-title">New Session</span>
+                  <div class="dialog-close">×</div>
+                </div>
+                <div class="dialog-tabs" id="dialogTabs">
+                  <!-- Rendered by JS -->
+                </div>
+                <div class="dialog-body" id="dialogBody">
+                  <!-- Rendered by JS -->
+                </div>
+                <div class="dialog-footer">
+                  <button class="hud-btn hud-btn-secondary">Cancel</button>
+                  <button class="hud-btn hud-btn-primary">Create</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="prompt-section">
+        <div class="prompt-header">
+          <h3>Generated Implementation Prompt</h3>
+          <button class="copy-btn" onclick="copyPrompt()">
+            <span>Copy</span>
+          </button>
+        </div>
+        <div class="prompt-output" id="promptOutput"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DEFAULTS = {
+      repoMode: 'init',
+      cloneUrl: '',
+      existingRepo: '',
+      agentType: 'claude_sdk',
+      authMode: 'oauth'
+    };
+
+    const state = { ...DEFAULTS };
+
+    const tabInfo = {
+      none: { label: 'No Repo', desc: 'Start without a working directory' },
+      init: { label: 'Init', desc: 'Create a new empty git repository' },
+      existing: { label: 'Existing', desc: 'Select a previously created repository' },
+      clone: { label: 'Clone', desc: 'Clone a repository from GitHub' }
+    };
+
+    function applyPreset(name) {
+      document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      state.repoMode = name;
+      if (name === 'clone') {
+        state.cloneUrl = 'https://github.com/anthropics/claude-code';
+      } else if (name === 'existing') {
+        state.existingRepo = 'my-project';
+      }
+
+      syncControls();
+      updateAll();
+    }
+
+    function syncControls() {
+      document.getElementById('repoMode').value = state.repoMode;
+      document.getElementById('cloneUrl').value = state.cloneUrl;
+      document.getElementById('existingRepo').value = state.existingRepo;
+      document.getElementById('agentType').value = state.agentType;
+      document.getElementById('authMode').value = state.authMode;
+    }
+
+    function readControls() {
+      state.repoMode = document.getElementById('repoMode').value;
+      state.cloneUrl = document.getElementById('cloneUrl').value;
+      state.existingRepo = document.getElementById('existingRepo').value;
+      state.agentType = document.getElementById('agentType').value;
+      state.authMode = document.getElementById('authMode').value;
+
+      // Show/hide conditional controls
+      document.getElementById('cloneUrlControl').style.display =
+        state.repoMode === 'clone' ? 'flex' : 'none';
+      document.getElementById('existingRepoControl').style.display =
+        state.repoMode === 'existing' ? 'flex' : 'none';
+    }
+
+    function renderPreview() {
+      // Render tabs
+      let tabsHtml = '';
+      for (const [mode, info] of Object.entries(tabInfo)) {
+        tabsHtml += `<div class="dialog-tab ${state.repoMode === mode ? 'active' : ''}" onclick="setTab('${mode}')">${info.label}</div>`;
+      }
+      document.getElementById('dialogTabs').innerHTML = tabsHtml;
+
+      // Render body content based on active tab
+      let bodyHtml = '';
+
+      // Tab-specific content
+      if (state.repoMode === 'none') {
+        bodyHtml += `
+          <div class="info-box">
+            <div class="info-box-title">No Repository</div>
+            <div class="info-box-desc">Session will start without a working directory. You can still ask Claude to create files.</div>
+          </div>
+        `;
+      } else if (state.repoMode === 'init') {
+        bodyHtml += `
+          <div class="info-box">
+            <div class="info-box-title">Initialize Empty Repository</div>
+            <div class="info-box-desc">A new git repository will be created automatically.</div>
+            <div class="info-box-path">~/.aperture/workspaces/default/session-abc123/</div>
+          </div>
+        `;
+      } else if (state.repoMode === 'existing') {
+        bodyHtml += `
+          <div class="hud-field">
+            <div class="hud-label">Select Repository</div>
+            <div class="hud-select">
+              <span>${state.existingRepo || 'Choose a repository...'}</span>
+              <span class="arrow">▼</span>
+            </div>
+          </div>
+          <div class="info-box" style="margin-top: -8px;">
+            <div class="info-box-path">~/.aperture/workspaces/default/${state.existingRepo || '...'}/</div>
+          </div>
+        `;
+      } else if (state.repoMode === 'clone') {
+        bodyHtml += `
+          <div class="hud-field">
+            <div class="hud-label">GitHub URL</div>
+            <input class="hud-input" type="text" placeholder="https://github.com/user/repo" value="${state.cloneUrl}">
+          </div>
+        `;
+        if (state.cloneUrl) {
+          const repoName = state.cloneUrl.match(/\/([^\/]+?)(\.git)?$/)?.[1] || 'repo';
+          bodyHtml += `
+            <div class="info-box" style="margin-top: -8px;">
+              <div class="info-box-desc">Repository will be cloned to:</div>
+              <div class="info-box-path">~/.aperture/workspaces/default/${repoName}/</div>
+            </div>
+          `;
+        }
+      }
+
+      // Divider
+      bodyHtml += `
+        <div class="section-divider">
+          <div class="section-divider-line"></div>
+          <div class="section-divider-text">Agent Settings</div>
+          <div class="section-divider-line"></div>
+        </div>
+      `;
+
+      // Agent Type
+      bodyHtml += `
+        <div class="hud-field">
+          <div class="hud-label">Agent Type</div>
+          <div class="hud-segment">
+            <div class="hud-segment-option ${state.agentType === 'claude_sdk' ? 'active' : ''}">Claude SDK</div>
+            <div class="hud-segment-option ${state.agentType === 'pi_sdk' ? 'active' : ''}">Pi SDK</div>
+          </div>
+        </div>
+      `;
+
+      // Auth Mode
+      bodyHtml += `
+        <div class="hud-field">
+          <div class="hud-label">Authentication</div>
+          <div class="hud-segment">
+            <div class="hud-segment-option ${state.authMode === 'oauth' ? 'active' : ''}">OAuth</div>
+            <div class="hud-segment-option ${state.authMode === 'api_key' ? 'active' : ''}">API Key</div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('dialogBody').innerHTML = bodyHtml;
+    }
+
+    function setTab(mode) {
+      state.repoMode = mode;
+      document.getElementById('repoMode').value = mode;
+
+      // Update presets
+      document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        if (btn.textContent.toLowerCase().includes(mode) ||
+            (mode === 'init' && btn.textContent === 'Init Empty') ||
+            (mode === 'none' && btn.textContent === 'No Repo')) {
+          btn.classList.add('active');
+        }
+      });
+
+      readControls();
+      renderPreview();
+      updatePrompt();
+    }
+
+    function updatePrompt() {
+      const parts = [];
+
+      parts.push('Update the Android session creation dialog with tabbed repo modes:\n');
+
+      parts.push('## Dialog Structure');
+      parts.push('• Header: "NEW SESSION" title with close button');
+      parts.push('• Tab bar: 4 tabs for repo mode - "NO REPO" | "INIT" | "EXISTING" | "CLONE"');
+      parts.push('• Body: Tab-specific content + Agent settings section');
+      parts.push('• Footer: Cancel and Create buttons\n');
+
+      parts.push('## Tab Content');
+      parts.push('• No Repo: Info box explaining no working directory');
+      parts.push('• Init: Info box showing auto-generated path (~/.aperture/workspaces/...)');
+      parts.push('• Existing: Dropdown to select from managed repos');
+      parts.push('• Clone: Text input for GitHub URL + preview of clone path\n');
+
+      parts.push('## Agent Settings (shown on all tabs)');
+      parts.push('• Divider with "AGENT SETTINGS" label');
+      parts.push('• Agent Type: Segmented control (Claude SDK / Pi SDK)');
+      parts.push('• Auth Mode: Segmented control (OAuth / API Key)\n');
+
+      parts.push('## Backend API Changes');
+      parts.push('• Add repoMode: "none" | "init" | "clone" | "existing"');
+      parts.push('• Add repoUrl for clone mode');
+      parts.push('• Add existingRepoId for existing mode');
+      parts.push('• Add GET /v1/repos to list managed repos');
+      parts.push('• Auto-create repos at ~/.aperture/workspaces/{workspace}/{name}/');
+
+      document.getElementById('promptOutput').textContent = parts.join('\n');
+    }
+
+    function updateAll() {
+      readControls();
+      renderPreview();
+      updatePrompt();
+    }
+
+    function copyPrompt() {
+      const text = document.getElementById('promptOutput').textContent;
+      navigator.clipboard.writeText(text);
+
+      const btn = document.querySelector('.copy-btn');
+      btn.classList.add('copied');
+      btn.querySelector('span').textContent = 'Copied!';
+
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.querySelector('span').textContent = 'Copy';
+      }, 2000);
+    }
+
+    // Initialize
+    syncControls();
+    updateAll();
+  </script>
+</body>
+</html>

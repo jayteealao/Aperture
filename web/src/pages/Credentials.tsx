@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
-import { toast } from '@/components/ui/toast'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/Button'
 import { InputField } from '@/components/ui/input-field'
 import { FormSelect } from '@/components/ui/form-select'
@@ -50,7 +50,7 @@ export default function Credentials() {
       queryClient.invalidateQueries({ queryKey: ['credentials'] })
     },
     onError: (error) => {
-      toast.error('Failed to delete credential', error.message)
+      toast.error('Failed to delete credential', { description: error.message })
     },
   })
 
@@ -252,12 +252,12 @@ function AddCredentialDialog({
         label,
         apiKey,
       })
-      toast.success('Credential added', `"${label}" is now available for sessions`)
+      toast.success('Credential added', { description: `"${label}" is now available for sessions` })
       setLabel('')
       setApiKey('')
       onAdded()
     } catch (error) {
-      toast.error('Failed to add credential', error instanceof Error ? error.message : 'Unknown error')
+      toast.error('Failed to add credential', { description: error instanceof Error ? error.message : 'Unknown error' })
     } finally {
       setIsAdding(false)
     }

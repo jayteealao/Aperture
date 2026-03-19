@@ -3,7 +3,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/client'
 import { useSessionsStore } from '@/stores/sessions'
-import { toast } from '@/components/ui/toast'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/input'
 import { InputField } from '@/components/ui/input-field'
@@ -93,7 +93,7 @@ export default function Sessions() {
       queryClient.invalidateQueries({ queryKey: ['sessions'] })
     },
     onError: (error) => {
-      toast.error('Failed to delete session', error.message)
+      toast.error('Failed to delete session', { description: error.message })
     },
   })
 
@@ -363,7 +363,7 @@ function NewSessionDialog({
 
   async function handleCreate() {
     if (!repoSelection) {
-      toast.error('Repository required', 'Please select a repository for this session')
+      toast.error('Repository required', { description: 'Please select a repository for this session' })
       return
     }
 
@@ -422,10 +422,10 @@ function NewSessionDialog({
         status: session.status,
       })
 
-      toast.success('Session created', `Session ${session.id.slice(0, 8)} is ready`)
+      toast.success('Session created', { description: `Session ${session.id.slice(0, 8)} is ready` })
       onCreated({ id: session.id, agent: session.agent, status: session.status }, shouldPromptSave, repoPath)
     } catch (error) {
-      toast.error('Failed to create session', error instanceof Error ? error.message : 'Unknown error')
+      toast.error('Failed to create session', { description: error instanceof Error ? error.message : 'Unknown error' })
     } finally {
       setIsCreating(false)
       setCreationStep(null)

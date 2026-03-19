@@ -4,7 +4,7 @@ import { api } from '@/api/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/Button'
 import { InputField } from '@/components/ui/input-field'
-import { toast } from '@/components/ui/toast'
+import { toast } from 'sonner'
 import { GitBranch, Folder } from 'lucide-react'
 
 interface SaveRepoPromptProps {
@@ -35,12 +35,12 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
       })
     },
     onSuccess: () => {
-      toast.success('Repository saved', 'This repository will appear in your list for future sessions')
+      toast.success('Repository saved', { description: 'This repository will appear in your list for future sessions' })
       queryClient.invalidateQueries({ queryKey: ['workspaces'] })
       onClose()
     },
     onError: (error) => {
-      toast.error('Failed to save repository', error instanceof Error ? error.message : 'Unknown error')
+      toast.error('Failed to save repository', { description: error instanceof Error ? error.message : 'Unknown error' })
     },
   })
 

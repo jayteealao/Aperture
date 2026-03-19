@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
-import { toast } from '@/components/ui/toast'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/Button'
 import { InputField } from '@/components/ui/input-field'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -28,7 +28,7 @@ export default function Settings() {
 
   const handleSaveUrl = () => {
     setGatewayUrl(editUrl)
-    toast.success('Gateway URL updated', 'Reconnect to apply changes')
+    toast.success('Gateway URL updated', { description: 'Reconnect to apply changes' })
   }
 
   const handleClearAll = async () => {
@@ -39,7 +39,7 @@ export default function Settings() {
       toast.success('All data cleared')
       navigate('/onboarding')
     } catch (error) {
-      toast.error('Failed to clear data', error instanceof Error ? error.message : 'Unknown error')
+      toast.error('Failed to clear data', { description: error instanceof Error ? error.message : 'Unknown error' })
     } finally {
       setIsClearing(false)
       setShowClearDialog(false)
