@@ -2,7 +2,6 @@
 // Slides in next to SidebarRail; can be dismissed and re-opened by clicking
 // a workspace icon in the rail.
 
-import { useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import { X, Plus } from 'lucide-react'
 import { cn } from '@/utils/cn'
@@ -42,20 +41,14 @@ export function WorkspacePanel() {
     useSessionsStore()
   const { workspaces } = useWorkspaces()
 
-  // Derive active workspace record from the shared list
-  const workspace = useMemo(
-    () => workspaces.find((w) => w.id === activeWorkspaceId) ?? null,
-    [workspaces, activeWorkspaceId],
-  )
+  // Derive active workspace record from the shared list (title only)
+  const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
 
-  // Show sessions whose working directory lives inside the workspace root.
-  // Falls back to showing all sessions when no workspace is selected.
-  const panelSessions = useMemo(() => {
-    if (!workspace) return sessions
-    return sessions.filter((s) =>
-      s.status.workingDirectory?.startsWith(workspace.repoRoot),
-    )
-  }, [sessions, workspace])
+  // Show all sessions — workspace selection changes the panel title only.
+  // A workingDirectory-based filter was previously here but sessions rarely
+  // carry that field, so every session was silently filtered out.
+  // Scope filtering to workspace once sessions carry a reliable workspaceId.
+  const panelSessions = sessions
 
   const workspaceName =
     workspace?.name ||
