@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react'
+import { Agentation } from 'agentation'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router'
 import { useAppStore } from './stores/app'
 import { Shell } from './components/layout/Shell'
@@ -63,29 +64,32 @@ export default function App() {
   }, [theme])
 
   return (
-    <Suspense fallback={<LoadingFallback />}>
-      <Routes>
-        <Route path="/onboarding" element={<Onboarding />} />
+    <>
+      <Suspense fallback={<LoadingFallback />}>
+        <Routes>
+          <Route path="/onboarding" element={<Onboarding />} />
 
-        <Route
-          path="/*"
-          element={
-            <RequireConnection>
-              <Shell />
-            </RequireConnection>
-          }
-        >
-          <Route index element={<Navigate to="/workspace" replace />} />
-          <Route path="workspace" element={<Workspace />} />
-          <Route path="workspace/:sessionId" element={<Workspace />} />
-          <Route path="workspaces" element={<Workspaces />} />
-          <Route path="sessions" element={<Sessions />} />
-          <Route path="sessions/new" element={<Sessions />} />
-          <Route path="credentials" element={<Credentials />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="help" element={<Help />} />
-        </Route>
-      </Routes>
-    </Suspense>
+          <Route
+            path="/*"
+            element={
+              <RequireConnection>
+                <Shell />
+              </RequireConnection>
+            }
+          >
+            <Route index element={<Navigate to="/workspace" replace />} />
+            <Route path="workspace" element={<Workspace />} />
+            <Route path="workspace/:sessionId" element={<Workspace />} />
+            <Route path="workspaces" element={<Workspaces />} />
+            <Route path="sessions" element={<Sessions />} />
+            <Route path="sessions/new" element={<Sessions />} />
+            <Route path="credentials" element={<Credentials />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="help" element={<Help />} />
+          </Route>
+        </Routes>
+      </Suspense>
+      {import.meta.env.DEV && <Agentation />}
+    </>
   )
 }

@@ -7,6 +7,12 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  optimizeDeps: {
+    // react-markdown is a peer dep of streamdown but is not imported directly.
+    // pnpm intentionally does not materialize it into the virtual store, so
+    // Vite's dep optimizer must not attempt to pre-bundle it.
+    exclude: ['react-markdown'],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
