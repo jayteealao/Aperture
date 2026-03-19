@@ -65,7 +65,6 @@ describe('Button', () => {
     expect(screen.getByTestId('left')).toBeTruthy()
     const btn = screen.getByRole('button')
     const left = btn.querySelector('[data-testid="left"]')
-    const text = btn.querySelector('span:not(:has([data-testid]))')
     expect(left).toBeTruthy()
     // left icon wrapper comes before the text node
     expect(btn.innerHTML.indexOf('left')).toBeLessThan(btn.innerHTML.indexOf('Label'))

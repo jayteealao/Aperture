@@ -19,6 +19,10 @@ interface AppState {
   commandPaletteOpen: boolean
   sdkPanelOpen: boolean
 
+  // Workspace rail state
+  activeWorkspaceId: string | null
+  workspacePanelOpen: boolean
+
   // Actions
   setGatewayUrl: (url: string) => void
   setApiToken: (token: string) => void
@@ -31,6 +35,8 @@ interface AppState {
   toggleCommandPalette: () => void
   setSdkPanelOpen: (open: boolean) => void
   toggleSdkPanel: () => void
+  setActiveWorkspaceId: (id: string | null) => void
+  setWorkspacePanelOpen: (open: boolean) => void
 
   // Initialization
   initFromStorage: () => boolean
@@ -51,9 +57,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   apiToken: '',
   isConnected: false,
   theme: 'dark',
-  sidebarOpen: true,
+  sidebarOpen: false,
   commandPaletteOpen: false,
   sdkPanelOpen: true,
+  activeWorkspaceId: null,
+  workspacePanelOpen: false,
 
   // Actions
   setGatewayUrl: (url) => {
@@ -90,6 +98,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setSdkPanelOpen: (open) => set({ sdkPanelOpen: open }),
   toggleSdkPanel: () => set((s) => ({ sdkPanelOpen: !s.sdkPanelOpen })),
+
+  setActiveWorkspaceId: (id) => set({ activeWorkspaceId: id }),
+  setWorkspacePanelOpen: (open) => set({ workspacePanelOpen: open }),
 
   initFromStorage: () => {
     const gatewayUrl = localStorage.getItem(STORAGE_KEYS.gatewayUrl) || 'http://localhost:8080'

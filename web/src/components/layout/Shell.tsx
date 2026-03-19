@@ -1,6 +1,8 @@
 import { Outlet } from 'react-router'
 import { useEffect } from 'react'
 import { Sidebar } from './Sidebar'
+import { SidebarRail } from './SidebarRail'
+import { WorkspacePanel } from './WorkspacePanel'
 import { Topbar } from './Topbar'
 import { CommandPalette } from './CommandPalette'
 import { Toaster } from '@/components/ui/Toaster'
@@ -54,7 +56,11 @@ export function Shell() {
 
   return (
     <div className="h-screen flex bg-gradient-mesh overflow-hidden">
+      {/* Mobile overlay drawer — hidden on lg+, opened via Topbar hamburger */}
       <Sidebar />
+      {/* Desktop: narrow icon rail + closable workspace context panel */}
+      <SidebarRail />
+      <WorkspacePanel />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />
         <main className="flex-1 overflow-hidden">
