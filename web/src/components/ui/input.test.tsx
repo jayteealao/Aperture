@@ -34,6 +34,21 @@ describe('Input', () => {
     expect(input.className).toContain('border-destructive')
   })
 
+  it('sets aria-invalid when error=true', () => {
+    render(<Input error data-testid="inp" />)
+    expect(screen.getByTestId('inp').getAttribute('aria-invalid')).toBe('true')
+  })
+
+  it('does not set aria-invalid when error is absent', () => {
+    render(<Input data-testid="inp" />)
+    expect(screen.getByTestId('inp').getAttribute('aria-invalid')).toBeNull()
+  })
+
+  it('sets aria-invalid on the wrapped input path (with icon)', () => {
+    render(<Input error leftIcon={<span />} data-testid="inp" />)
+    expect(screen.getByTestId('inp').getAttribute('aria-invalid')).toBe('true')
+  })
+
   it('does not apply error classes when error is absent', () => {
     render(<Input data-testid="inp" />)
     expect(screen.getByTestId('inp').className).not.toContain('border-destructive')
@@ -110,5 +125,15 @@ describe('InputField', () => {
     render(<InputField label="Field" error="Bad value" data-testid="inp" />)
     const input = screen.getByTestId('inp')
     expect(input.className).toContain('border-destructive')
+  })
+
+  it('sets aria-invalid on the underlying input when error is provided', () => {
+    render(<InputField label="Field" error="Bad value" data-testid="inp" />)
+    expect(screen.getByTestId('inp').getAttribute('aria-invalid')).toBe('true')
+  })
+
+  it('does not set aria-invalid when no error is provided', () => {
+    render(<InputField label="Field" data-testid="inp" />)
+    expect(screen.getByTestId('inp').getAttribute('aria-invalid')).toBeNull()
   })
 })
