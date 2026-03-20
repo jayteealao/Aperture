@@ -3,8 +3,6 @@ import { cn } from '@/utils/cn'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
 import {
-  MessageSquare,
-  Folder,
   Key,
   Settings,
   HelpCircle,
@@ -16,6 +14,7 @@ import {
   GitBranch,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { StatusDot } from '@/components/ui/status-dot'
 
 interface SidebarProps {
   className?: string
@@ -27,9 +26,7 @@ export function Sidebar({ className }: SidebarProps) {
   const { sessions, connections, activeSessionId, setActiveSession } = useSessionsStore()
 
   const navItems = [
-    { to: '/workspace', icon: MessageSquare, label: 'Workspace' },
     { to: '/workspaces', icon: GitBranch, label: 'Workspaces' },
-    { to: '/sessions', icon: Folder, label: 'Sessions' },
     { to: '/credentials', icon: Key, label: 'Credentials' },
     { to: '/settings', icon: Settings, label: 'Settings' },
     { to: '/help', icon: HelpCircle, label: 'Help' },
@@ -77,19 +74,6 @@ export function Sidebar({ className }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-2">
-          {/* New Session button */}
-          <Button
-            variant="default"
-            className="w-full mb-3 justify-start"
-            onClick={() => {
-              navigate('/sessions/new')
-              setSidebarOpen(false)
-            }}
-            leftIcon={<Plus size={18} />}
-          >
-            New Session
-          </Button>
-
           <div className="space-y-1">
             {navItems.map(({ to, icon: Icon, label }) => (
               <NavLink
@@ -119,7 +103,7 @@ export function Sidebar({ className }: SidebarProps) {
               </span>
               <button
                 onClick={() => {
-                  navigate('/sessions/new')
+                  navigate('/workspaces')
                   setSidebarOpen(false)
                 }}
                 className="p-1 rounded-sm hover:bg-secondary text-foreground/40 hover:text-foreground"
@@ -139,7 +123,7 @@ export function Sidebar({ className }: SidebarProps) {
                     key={session.id}
                     onClick={() => {
                       setActiveSession(session.id)
-                      navigate('/workspace')
+                      navigate(session.workspaceId ? `/workspaces/${session.workspaceId}` : '/workspaces')
                       setSidebarOpen(false)
                     }}
                     className={cn(
@@ -149,7 +133,7 @@ export function Sidebar({ className }: SidebarProps) {
                         : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                     )}
                   >
-                    <StatusDot status={conn?.status || 'disconnected'} />
+                    <StatusDot status={conn?.status ?? 'disconnected'} />
                     <span className="truncate font-mono text-xs flex-1 text-left">
                       {session.id.slice(0, 8)}
                     </span>
@@ -180,7 +164,7 @@ export function Sidebar({ className }: SidebarProps) {
               {sessions.length > 8 && (
                 <button
                   onClick={() => {
-                    navigate('/sessions')
+                    navigate('/workspaces')
                     setSidebarOpen(false)
                   }}
                   className="w-full px-3 py-1 text-xs text-foreground/40 hover:text-muted-foreground"
@@ -218,17 +202,4 @@ export function Sidebar({ className }: SidebarProps) {
       </aside>
     </>
   )
-}
-
-function StatusDot({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    connected: 'bg-success',
-    connecting: 'bg-warning animate-pulse',
-    reconnecting: 'bg-warning animate-pulse',
-    disconnected: 'bg-foreground/40',
-    error: 'bg-danger',
-    ended: 'bg-foreground/40',
-  }
-
-  return <span className={cn('w-2 h-2 rounded-full shrink-0', colors[status] || colors.disconnected)} />
 }

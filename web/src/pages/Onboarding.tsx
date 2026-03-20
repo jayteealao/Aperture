@@ -27,7 +27,7 @@ export default function Onboarding() {
   const [test, setTest] = useState<ConnectionTest>({ health: 'pending', ready: 'pending' })
   const [error, setError] = useState('')
 
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/workspace'
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/workspaces'
 
   async function handleConnect() {
     if (!url || !token) {

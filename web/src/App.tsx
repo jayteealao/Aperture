@@ -8,9 +8,8 @@ import { getSingletonHighlighter } from './lib/shiki.bundle'
 
 // Lazy load pages for code splitting
 const Onboarding = lazy(() => import('./pages/Onboarding'))
-const Workspace = lazy(() => import('./pages/Workspace'))
 const Workspaces = lazy(() => import('./pages/Workspaces'))
-const Sessions = lazy(() => import('./pages/Sessions'))
+const WorkspaceView = lazy(() => import('./pages/WorkspaceView'))
 const Credentials = lazy(() => import('./pages/Credentials'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Help = lazy(() => import('./pages/Help'))
@@ -35,6 +34,16 @@ function RequireConnection({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>
+}
+
+// Redirect legacy /workspace and /workspace/:sessionId to workspace-scoped
+// view. Reads activeWorkspaceId so users land back on their last workspace.
+function WorkspaceRedirect() {
+  const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId)
+  if (activeWorkspaceId) {
+    return <Navigate to={`/workspaces/${activeWorkspaceId}`} replace />
+  }
+  return <Navigate to="/workspaces" replace />
 }
 
 export default function App() {
@@ -77,15 +86,19 @@ export default function App() {
               </RequireConnection>
             }
           >
-            <Route index element={<Navigate to="/workspace" replace />} />
-            <Route path="workspace" element={<Workspace />} />
-            <Route path="workspace/:sessionId" element={<Workspace />} />
+            {/* Canonical routes */}
+            <Route index element={<Navigate to="/workspaces" replace />} />
             <Route path="workspaces" element={<Workspaces />} />
-            <Route path="sessions" element={<Sessions />} />
-            <Route path="sessions/new" element={<Sessions />} />
+            <Route path="workspaces/:id" element={<WorkspaceView />} />
             <Route path="credentials" element={<Credentials />} />
             <Route path="settings" element={<Settings />} />
             <Route path="help" element={<Help />} />
+
+            {/* Legacy redirects — kept so old bookmarks / history entries still work */}
+            <Route path="workspace" element={<WorkspaceRedirect />} />
+            <Route path="workspace/:sessionId" element={<WorkspaceRedirect />} />
+            <Route path="sessions" element={<Navigate to="/workspaces" replace />} />
+            <Route path="sessions/new" element={<Navigate to="/workspaces" replace />} />
           </Route>
         </Routes>
       </Suspense>

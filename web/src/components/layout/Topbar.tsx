@@ -4,9 +4,7 @@ import { Menu, Wifi, WifiOff } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 const pageTitles: Record<string, string> = {
-  '/workspace': 'Workspace',
-  '/sessions': 'Sessions',
-  '/sessions/new': 'New Session',
+  '/workspaces': 'Workspaces',
   '/credentials': 'Credentials',
   '/settings': 'Settings',
   '/help': 'Help',
@@ -16,6 +14,7 @@ export function Topbar() {
   const location = useLocation()
   const { setSidebarOpen, gatewayUrl, isConnected } = useAppStore()
 
+  // /workspaces/:id pages show "Aperture" — the workspace name is in the page header
   const title = pageTitles[location.pathname] || 'Aperture'
 
   return (

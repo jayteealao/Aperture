@@ -8,28 +8,7 @@ import { cn } from '@/utils/cn'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
 import { useWorkspaces } from '@/hooks/useWorkspaces'
-
-// ── Status indicator ───────────────────────────────────────────────────────
-
-const STATUS_COLORS: Record<string, string> = {
-  connected: 'bg-success',
-  connecting: 'bg-warning animate-pulse',
-  reconnecting: 'bg-warning animate-pulse',
-  disconnected: 'bg-foreground/40',
-  error: 'bg-danger',
-  ended: 'bg-foreground/40',
-}
-
-function StatusDot({ status }: { status: string }) {
-  return (
-    <span
-      className={cn(
-        'w-2 h-2 rounded-full shrink-0',
-        STATUS_COLORS[status] ?? STATUS_COLORS.disconnected,
-      )}
-    />
-  )
-}
+import { StatusDot } from '@/components/ui/status-dot'
 
 // ── WorkspacePanel ─────────────────────────────────────────────────────────
 
@@ -44,11 +23,17 @@ export function WorkspacePanel() {
   // Derive active workspace record from the shared list (title only)
   const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null
 
-  // Show all sessions — workspace selection changes the panel title only.
-  // A workingDirectory-based filter was previously here but sessions rarely
-  // carry that field, so every session was silently filtered out.
-  // Scope filtering to workspace once sessions carry a reliable workspaceId.
-  const panelSessions = sessions
+  // Filter by workspaceId (set at creation, persisted in IndexedDB), with a
+  // workingDirectory fallback for sessions that predate the field.
+  // Shows all sessions when no workspace is selected.
+  const panelSessions = activeWorkspaceId
+    ? sessions.filter((s) =>
+        s.workspaceId === activeWorkspaceId ||
+        (s.status.workingDirectory != null &&
+          workspace != null &&
+          s.status.workingDirectory.startsWith(workspace.repoRoot)),
+      )
+    : sessions
 
   const workspaceName =
     workspace?.name ||
@@ -102,7 +87,10 @@ export function WorkspacePanel() {
                 key={session.id}
                 onClick={() => {
                   setActiveSession(session.id)
-                  navigate('/workspace')
+                  // Stay in the workspace-scoped view — the pane auto-connects
+                  if (activeWorkspaceId) {
+                    navigate(`/workspaces/${activeWorkspaceId}`)
+                  }
                 }}
                 className={cn(
                   'w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm transition-colors',
@@ -127,7 +115,14 @@ export function WorkspacePanel() {
       {/* Footer */}
       <div className="p-2 border-t border-border shrink-0">
         <button
-          onClick={() => navigate('/sessions/new')}
+          onClick={() => {
+            // Navigate to the workspace view where AddSessionDialog lives
+            if (activeWorkspaceId) {
+              navigate(`/workspaces/${activeWorkspaceId}`)
+            } else {
+              navigate('/workspaces')
+            }
+          }}
           className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-xs text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
         >
           <Plus size={14} />

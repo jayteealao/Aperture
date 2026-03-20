@@ -5,12 +5,11 @@ import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
 import {
   Search,
-  MessageSquare,
-  Folder,
+  GitBranch,
   Key,
   Settings,
   HelpCircle,
-  Plus,
+  MessageSquare,
   Moon,
   Sun,
   LogOut,
@@ -41,35 +40,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const commands = useMemo<CommandItem[]>(() => {
     const items: CommandItem[] = [
       {
-        id: 'workspace',
-        title: 'Go to Workspace',
-        icon: <MessageSquare size={18} />,
+        id: 'workspaces',
+        title: 'Go to Workspaces',
+        icon: <GitBranch size={18} />,
         action: () => {
-          navigate('/workspace')
+          navigate('/workspaces')
           onClose()
         },
-        keywords: ['chat', 'home'],
-      },
-      {
-        id: 'sessions',
-        title: 'View Sessions',
-        icon: <Folder size={18} />,
-        action: () => {
-          navigate('/sessions')
-          onClose()
-        },
-        keywords: ['list', 'manage'],
-      },
-      {
-        id: 'new-session',
-        title: 'New Session',
-        subtitle: 'Create a new agent session',
-        icon: <Plus size={18} />,
-        action: () => {
-          navigate('/sessions/new')
-          onClose()
-        },
-        keywords: ['create', 'start'],
+        keywords: ['workspace', 'repos', 'home'],
       },
       {
         id: 'credentials',
@@ -125,7 +103,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       },
     ]
 
-    // Add session shortcuts
+    // Add session shortcuts — navigate to the session's workspace if known
     sessions.slice(0, 5).forEach((session) => {
       items.push({
         id: `session-${session.id}`,
@@ -134,7 +112,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         icon: <MessageSquare size={18} />,
         action: () => {
           setActiveSession(session.id)
-          navigate('/workspace')
+          if (session.workspaceId) {
+            navigate(`/workspaces/${session.workspaceId}`)
+          } else {
+            navigate('/workspaces')
+          }
           onClose()
         },
         keywords: ['session', session.agent, session.id],
