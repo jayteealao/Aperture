@@ -69,7 +69,6 @@ export interface Session {
   id: string
   agent: AgentType
   status: SessionStatus
-  /** Frontend-only. Set at creation time to associate the session with a workspace. */
   workspaceId?: string
 }
 
@@ -97,7 +96,7 @@ export interface ReadyResponse {
 }
 
 export interface ListSessionsResponse {
-  sessions: SessionStatus[]
+  sessions: Session[]
   total: number
 }
 
@@ -109,6 +108,7 @@ export interface ResumableSession {
   piSessionPath?: string
   lastActivity: number
   workingDirectory: string | null
+  workspaceId?: string
 }
 
 export interface ListResumableSessionsResponse {
@@ -121,6 +121,7 @@ export interface ConnectSessionResponse {
   agent: AgentType
   status: SessionStatus
   restored: boolean
+  workspaceId?: string
 }
 
 export interface ListCredentialsResponse {

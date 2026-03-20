@@ -1,7 +1,8 @@
 import { get as idbGet, set as idbSet } from 'idb-keyval'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { api } from '@/api/client'
 import type { ApertureUIMessage } from '@/utils/ui-message'
-import { coerceStoredMessagesToUIMessages } from '@/utils/ui-message'
+import { coerceStoredMessagesToUIMessages, legacyMessageToUIMessage } from '@/utils/ui-message'
 
 /** O(1) fingerprint for dedup — avoids JSON.stringify on every streaming delta */
 function messageFingerprint(messages: ApertureUIMessage[]): string {
@@ -16,24 +17,34 @@ export function usePersistedUIMessages(sessionId: string) {
   const [messages, setMessages] = useState<ApertureUIMessage[] | null>(null)
   const lastFingerprintRef = useRef('')
 
+  const loadMessages = useCallback(async () => {
+    try {
+      const response = await api.getSessionMessages(sessionId)
+      const nextMessages = response.messages.map(legacyMessageToUIMessage)
+      lastFingerprintRef.current = messageFingerprint(nextMessages)
+      await idbSet(`ui-messages:${sessionId}`, nextMessages)
+      return nextMessages
+    } catch {
+      const stored = await idbGet(`ui-messages:${sessionId}`)
+      const nextMessages = coerceStoredMessagesToUIMessages(stored)
+      lastFingerprintRef.current = messageFingerprint(nextMessages)
+      return nextMessages
+    }
+  }, [sessionId])
+
   useEffect(() => {
     let cancelled = false
 
-    // Use distinct key to avoid collision with legacy message-slice persistence
-    idbGet(`ui-messages:${sessionId}`).then((stored) => {
-      if (cancelled) {
-        return
+    loadMessages().then((nextMessages) => {
+      if (!cancelled) {
+        setMessages(nextMessages)
       }
-
-      const nextMessages = coerceStoredMessagesToUIMessages(stored)
-      lastFingerprintRef.current = messageFingerprint(nextMessages)
-      setMessages(nextMessages)
     })
 
     return () => {
       cancelled = true
     }
-  }, [sessionId])
+  }, [loadMessages])
 
   // Stable reference — sessionId is the only dependency that changes the IDB key.
   // Without useCallback, consumers using persistMessages in useEffect deps re-fire every render.
@@ -47,5 +58,11 @@ export function usePersistedUIMessages(sessionId: string) {
     await idbSet(`ui-messages:${sessionId}`, nextMessages)
   }, [sessionId])
 
-  return { initialMessages: messages, persistMessages }
+  const reloadMessages = useCallback(async () => {
+    const nextMessages = await loadMessages()
+    setMessages(nextMessages)
+    return nextMessages
+  }, [loadMessages])
+
+  return { initialMessages: messages, persistMessages, reloadMessages }
 }

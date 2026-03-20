@@ -91,7 +91,6 @@ class WebSocketManager {
       }
 
       ws.onerror = () => {
-        this.endUIChunkStream(sessionId, { type: 'abort', reason: 'WebSocket error' })
         conn.statusHandler(sessionId, 'error', 'WebSocket error')
       }
 
@@ -110,10 +109,6 @@ class WebSocketManager {
         }
 
         if (!event.wasClean || event.code !== 1000) {
-          this.endUIChunkStream(sessionId, {
-            type: 'abort',
-            reason: event.reason || `Connection closed (${event.code})`,
-          })
           this.scheduleRetry(sessionId, wsUrl)
         } else {
           this.endUIChunkStream(sessionId, { type: 'abort', reason: 'Connection closed' })
@@ -133,6 +128,10 @@ class WebSocketManager {
     conn.retryCount++
 
     if (conn.retryCount > this.maxRetries) {
+      this.endUIChunkStream(sessionId, {
+        type: 'error',
+        errorText: 'Max retries exceeded',
+      })
       conn.statusHandler(sessionId, 'error', 'Max retries exceeded')
       this.connections.delete(sessionId)
       return

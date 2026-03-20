@@ -117,81 +117,30 @@ export const createSessionSlice: StateCreator<SessionsStore, [], [], SessionSlic
 
   // Persistence
   restoreFromStorage: async () => {
-    // Restore sessions from local IndexedDB
-    const localSessions = await loadPersistedSessions()
+    let sessionsFromServer: Session[] = []
 
-    // Also fetch resumable sessions from the backend
-    // These are SDK sessions that survived server restarts
     try {
-      const resumableResponse = await api.listResumableSessions()
-      for (const resumable of resumableResponse.sessions) {
-        // Check if this session is already in local storage
-        const exists = localSessions.find((s) => s.id === resumable.id)
-        if (!exists) {
-          // Add the resumable session to local list
-          const session: Session = {
-            id: resumable.id,
-            agent: resumable.agent as Session['agent'],
-            status: {
-              id: resumable.id,
-              agent: resumable.agent as Session['agent'],
-              authMode: 'oauth', // SDK sessions typically use oauth
-              running: false, // Not running yet - needs restore
-              pendingRequests: 0,
-              lastActivityTime: resumable.lastActivity,
-              idleMs: Date.now() - resumable.lastActivity,
-              acpSessionId: resumable.sdkSessionId ?? null,
-              sdkSessionId: resumable.sdkSessionId ?? null,
-              isResumable: true,
-              workingDirectory: resumable.workingDirectory || undefined,
-            },
-          }
-          localSessions.push(session)
-          // Save to IndexedDB for consistency
-          await persistSession(session)
-          if (import.meta.env.DEV) {
-            console.log(`[Sessions] Discovered resumable SDK session: ${session.id}`)
-          }
-        }
-      }
+      const response = await api.listSessions()
+      sessionsFromServer = response.sessions
     } catch (err) {
-      // Backend might not be available yet, that's okay
       if (import.meta.env.DEV) {
-        console.warn('[Sessions] Failed to fetch resumable sessions from backend:', err)
+        console.warn('[Sessions] Failed to fetch sessions from backend, falling back to IndexedDB:', err)
       }
     }
 
-    // Auto-assign orphan sessions: match sessions without workspaceId to a
-    // workspace via workingDirectory prefix. This handles sessions created
-    // before the workspaceId field existed or restored from the backend API.
-    try {
-      const { workspaces } = await api.listWorkspaces()
-      for (const session of localSessions) {
-        if (!session.workspaceId && session.status.workingDirectory) {
-          const match = workspaces.find((w) =>
-            session.status.workingDirectory!.startsWith(w.repoRoot),
-          )
-          if (match) {
-            session.workspaceId = match.id
-            await persistSession(session)
-            if (import.meta.env.DEV) {
-              console.log(`[Sessions] Auto-assigned session ${session.id.slice(0, 8)} to workspace ${match.name}`)
-            }
-          }
-        }
-      }
-    } catch {
-      // Workspace list unavailable — skip auto-assign, not critical
-    }
+    const sessions = sessionsFromServer.length > 0
+      ? sessionsFromServer
+      : await loadPersistedSessions()
 
-    if (localSessions.length > 0) {
-      get().setSessions(localSessions)
+    if (sessions.length > 0) {
+      get().setSessions(sessions)
+      await Promise.all(sessions.map((session) => persistSession(session)))
     }
 
     // Restore active session
     const activeId = await loadPersistedActiveSessionId()
     if (activeId) {
-      const exists = localSessions.find((s) => s.id === activeId)
+      const exists = sessions.find((s) => s.id === activeId)
       if (exists) {
         set({ activeSessionId: activeId })
       }

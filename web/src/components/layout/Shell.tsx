@@ -12,8 +12,14 @@ import { api } from '@/api/client'
 
 export function Shell() {
   const { commandPaletteOpen, setCommandPaletteOpen, setWorkspacePanelOpen, gatewayUrl, apiToken } = useAppStore()
-  const { restoreFromStorage, sessions, connectSession } = useSessionsStore()
+  const { restoreFromStorage } = useSessionsStore()
   const location = useLocation()
+
+  useEffect(() => {
+    if (gatewayUrl && apiToken) {
+      api.configure(gatewayUrl, apiToken)
+    }
+  }, [gatewayUrl, apiToken])
 
   // Restore sessions from storage on mount (only run once)
   useEffect(() => {
@@ -28,22 +34,6 @@ export function Shell() {
       setWorkspacePanelOpen(false)
     }
   }, [location.pathname, setWorkspacePanelOpen])
-
-  // Connect to active sessions when sessions list changes
-  useEffect(() => {
-    // Configure API client
-    if (gatewayUrl && apiToken) {
-      api.configure(gatewayUrl, apiToken)
-    }
-
-    // Connect to all sessions (up to a limit)
-    const sessionsToConnect = sessions.slice(0, 5)
-    sessionsToConnect.forEach((session) => {
-      connectSession(session.id)
-    })
-    // sessions.length is intentionally used to avoid re-connecting on every session update
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions.length, gatewayUrl, apiToken])
 
   // Keyboard shortcuts
   useEffect(() => {

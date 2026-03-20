@@ -96,11 +96,15 @@ export const createConnectionSlice: StateCreator<SessionsStore, [], [], Connecti
     // First, try to restore/connect to the session on the backend
     try {
       const response = await api.connectSession(sessionId)
-      if (response.restored) {
-        if (import.meta.env.DEV) {
-          console.log(`[Sessions] Restored SDK session ${sessionId}`)
+      if (response.restored && import.meta.env.DEV) {
+        console.log(`[Sessions] Restored SDK session ${sessionId}`)
+      }
+      get().updateSessionStatus(sessionId, response.status)
+      if (response.workspaceId) {
+        const session = get().sessions.find((item) => item.id === sessionId)
+        if (session && session.workspaceId !== response.workspaceId) {
+          void get().addSession({ ...session, workspaceId: response.workspaceId, status: response.status })
         }
-        get().updateSessionStatus(sessionId, response.status)
       }
     } catch (err) {
       if (import.meta.env.DEV) {
