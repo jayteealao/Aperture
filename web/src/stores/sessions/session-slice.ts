@@ -161,6 +161,29 @@ export const createSessionSlice: StateCreator<SessionsStore, [], [], SessionSlic
       }
     }
 
+    // Auto-assign orphan sessions: match sessions without workspaceId to a
+    // workspace via workingDirectory prefix. This handles sessions created
+    // before the workspaceId field existed or restored from the backend API.
+    try {
+      const { workspaces } = await api.listWorkspaces()
+      for (const session of localSessions) {
+        if (!session.workspaceId && session.status.workingDirectory) {
+          const match = workspaces.find((w) =>
+            session.status.workingDirectory!.startsWith(w.repoRoot),
+          )
+          if (match) {
+            session.workspaceId = match.id
+            await persistSession(session)
+            if (import.meta.env.DEV) {
+              console.log(`[Sessions] Auto-assigned session ${session.id.slice(0, 8)} to workspace ${match.name}`)
+            }
+          }
+        }
+      }
+    } catch {
+      // Workspace list unavailable — skip auto-assign, not critical
+    }
+
     if (localSessions.length > 0) {
       get().setSessions(localSessions)
     }
