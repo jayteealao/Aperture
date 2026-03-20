@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 import type { Config } from './config.js';
-import type { ApertureDatabase } from './database.js';
+import type { ApertureDatabase, MessageRecord } from './database.js';
 import type { AgentType, SessionConfig } from './agents/index.js';
 import type {
   SdkSessionConfig,
@@ -41,6 +42,8 @@ interface PendingPermission {
   toolUseID: string;
   resolve: (result: PermissionResult) => void;
   signal: AbortSignal;
+  options?: PermissionOption[];
+  context?: PermissionContext;
 }
 
 // SDK WebSocket message (first-class, no JSON-RPC wrapper)
@@ -174,11 +177,6 @@ export class SdkSession extends EventEmitter {
     // Start idle timer
     this.resetIdleTimer();
 
-    // SDK sessions don't have an init phase like process-based sessions.
-    // The session is "ready" immediately - actual initialization happens on first prompt.
-    // We emit an init-like message for frontend compatibility.
-    this.sdkSessionId = this.id;
-
     // Emit a synthetic init message for frontend compatibility
     const initMessage = {
       jsonrpc: '2.0' as const,
@@ -225,10 +223,10 @@ export class SdkSession extends EventEmitter {
       stderr: (data: string) => this.emit('stderr', data),
 
       // Session resumption: auto-continue when resuming within the same Aperture session
-      resume: this.sdkConfig.resume || (this.sdkSessionId !== this.id ? this.sdkSessionId ?? undefined : undefined),
+      resume: this.sdkConfig.resume || this.sdkSessionId || undefined,
       resumeSessionAt: this.sdkConfig.resumeSessionAt,
       forkSession: this.sdkConfig.forkSession,
-      continue: this.sdkConfig.continue ?? (this.sdkSessionId !== this.id ? true : undefined),
+      continue: this.sdkConfig.continue ?? (this.sdkSessionId ? true : undefined),
       persistSession: this.sdkConfig.persistSession ?? true,
 
       // File checkpointing
@@ -297,21 +295,6 @@ export class SdkSession extends EventEmitter {
       return new Promise<PermissionResult>((resolve, reject) => {
         const { toolUseID, signal, suggestions, blockedPath, decisionReason, agentID } = options;
 
-        // Store the pending permission
-        this.pendingPermissions.set(toolUseID, {
-          toolName,
-          toolInput: input,
-          toolUseID,
-          resolve,
-          signal,
-        });
-
-        // Handle abort
-        signal.addEventListener('abort', () => {
-          this.pendingPermissions.delete(toolUseID);
-          reject(new Error('Permission request aborted'));
-        });
-
         // Translate SDK suggestions to frontend-friendly options
         const permissionOptions = this.translatePermissionSuggestions(suggestions);
 
@@ -321,6 +304,23 @@ export class SdkSession extends EventEmitter {
           decisionReason,
           agentID,
         };
+
+        // Store the pending permission
+        this.pendingPermissions.set(toolUseID, {
+          toolName,
+          toolInput: input,
+          toolUseID,
+          resolve,
+          signal,
+          options: permissionOptions,
+          context,
+        });
+
+        // Handle abort
+        signal.addEventListener('abort', () => {
+          this.pendingPermissions.delete(toolUseID);
+          reject(new Error('Permission request aborted'));
+        });
 
         // Debug: Log the permission request details
         console.log('[SDK-Session] Permission request for tool:', toolName);
@@ -515,6 +515,7 @@ export class SdkSession extends EventEmitter {
 
     this.isProcessing = true;
     this.updateActivity();
+    this.persistUserPrompt(content, images);
 
     // Reset per-prompt state
     this.permissionDenials = [];
@@ -787,6 +788,8 @@ export class SdkSession extends EventEmitter {
       return { type: 'text' as const, text: JSON.stringify(block) };
     });
 
+    this.persistAssistantMessage(message.uuid, contentBlocks, message.parent_tool_use_id);
+
     // Emit first-class SDK message with all content blocks
     this.emitSdkMessage('assistant_message', {
       messageId: message.uuid,
@@ -969,6 +972,7 @@ export class SdkSession extends EventEmitter {
 
       // Emit first-class SDK message
       this.emitSdkMessage('prompt_complete', payload);
+      this.logEvent('prompt_complete', payload);
 
       // Also emit legacy format
       this.emitSessionUpdate('prompt_complete', payload);
@@ -986,6 +990,7 @@ export class SdkSession extends EventEmitter {
 
       // Emit first-class SDK message
       this.emitSdkMessage('prompt_error', payload);
+      this.logEvent('prompt_error', payload);
 
       // Also emit legacy format
       this.emitSessionUpdate('prompt_error', payload);
@@ -1012,6 +1017,7 @@ export class SdkSession extends EventEmitter {
       method: 'session/update',
       params,
     });
+    this.logEvent(`session_update:${updateType}`, data);
   }
 
   /**
@@ -1026,6 +1032,82 @@ export class SdkSession extends EventEmitter {
       payload,
     };
     this.emit('sdk_message', message);
+    this.logEvent(`sdk:${type}`, payload);
+  }
+
+  private persistUserPrompt(
+    content: string,
+    images?: import('./agents/types.js').ImageAttachment[]
+  ): void {
+    if (!this.database) {
+      return;
+    }
+
+    const contentBlocks: Array<Record<string, unknown>> = [];
+    if (images?.length) {
+      for (const image of images) {
+        contentBlocks.push({
+          type: 'image',
+          mimeType: image.mimeType,
+          data: image.data,
+          filename: image.filename,
+        });
+      }
+    }
+    if (content) {
+      contentBlocks.push({ type: 'text', text: content });
+    }
+
+    this.database.saveMessage({
+      id: randomUUID(),
+      session_id: this.id,
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+      metadata: JSON.stringify({
+        contentBlocks: contentBlocks.length > 0 ? contentBlocks : [{ type: 'text', text: content }],
+      }),
+    });
+  }
+
+  private persistAssistantMessage(
+    messageId: string | undefined,
+    contentBlocks: SdkContentBlock[],
+    parentToolUseId: string | null | undefined
+  ): void {
+    if (!this.database) {
+      return;
+    }
+
+    const textContent = contentBlocks
+      .filter((block): block is SdkTextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('');
+
+    const record: MessageRecord = {
+      id: messageId || randomUUID(),
+      session_id: this.id,
+      role: 'assistant',
+      content: textContent,
+      timestamp: Date.now(),
+      metadata: JSON.stringify({
+        contentBlocks,
+        parentToolUseId: parentToolUseId ?? null,
+      }),
+    };
+    this.database.upsertMessage(record);
+  }
+
+  private logEvent(eventType: string, eventData: unknown): void {
+    if (!this.database) {
+      return;
+    }
+
+    this.database.logEvent(this.id, eventType, {
+      payload: eventData,
+      claudeSessionId: this.sdkSessionId,
+      timestamp: Date.now(),
+    });
   }
 
   // ===========================================================================
@@ -1195,6 +1277,25 @@ export class SdkSession extends EventEmitter {
    */
   getPermissionDenials(): PermissionDenial[] {
     return [...this.permissionDenials];
+  }
+
+  getPendingPermissions(): Array<{
+    toolCallId: string;
+    toolCall: { toolCallId: string; name: string; rawInput: unknown; title: string };
+    options: PermissionOption[];
+    context?: PermissionContext;
+  }> {
+    return Array.from(this.pendingPermissions.values()).map((pending) => ({
+      toolCallId: pending.toolUseID,
+      toolCall: {
+        toolCallId: pending.toolUseID,
+        name: pending.toolName,
+        rawInput: pending.toolInput,
+        title: pending.toolName,
+      },
+      options: pending.options || [],
+      context: pending.context,
+    }));
   }
 
   // ===========================================================================

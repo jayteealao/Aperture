@@ -12,7 +12,7 @@ import type {
 } from './agents/index.js';
 import { IMAGE_LIMITS } from './agents/types.js';
 import type { CredentialStore } from './credentials.js';
-import type { ApertureDatabase } from './database.js';
+import type { ApertureDatabase, MessageRecord, SessionRecord } from './database.js';
 import { SdkSession, type SdkWsMessage } from './sdk-session.js';
 import { PiSession, type PiWsMessage } from './pi-session.js';
 import { checkReadiness } from './claudeInstaller.js';
@@ -70,6 +70,55 @@ function validateImageAttachments(raw: unknown): ImageAttachment[] {
   }
 
   return images;
+}
+
+function sessionRecordToStatus(record: SessionRecord) {
+  return {
+    id: record.id,
+    agent: record.agent as AgentType,
+    authMode: record.auth_mode,
+    running: record.status === 'active',
+    pendingRequests: 0,
+    lastActivityTime: record.last_activity_at,
+    idleMs: Math.max(0, Date.now() - record.last_activity_at),
+    acpSessionId: record.sdk_session_id,
+    sdkSessionId: record.sdk_session_id,
+    piSessionPath: record.pi_session_path,
+    isResumable: record.is_resumable === 1,
+    workingDirectory: record.working_directory || undefined,
+  };
+}
+
+function sessionRecordToResponse(record: SessionRecord) {
+  return {
+    id: record.id,
+    agent: record.agent as AgentType,
+    workspaceId: record.workspace_id || undefined,
+    status: sessionRecordToStatus(record),
+  };
+}
+
+function messageRecordToResponse(message: MessageRecord) {
+  let parsedMetadata: Record<string, unknown> | null = null;
+  if (message.metadata) {
+    try {
+      parsedMetadata = JSON.parse(message.metadata) as Record<string, unknown>;
+    } catch {
+      parsedMetadata = null;
+    }
+  }
+
+  const contentBlocks = Array.isArray(parsedMetadata?.contentBlocks)
+    ? parsedMetadata.contentBlocks
+    : undefined;
+
+  return {
+    id: message.id,
+    sessionId: message.session_id,
+    role: message.role,
+    content: contentBlocks ?? message.content,
+    timestamp: new Date(message.timestamp).toISOString(),
+  };
 }
 
 interface CreateSessionBody {
@@ -234,6 +283,7 @@ export async function registerRoutes(
           id: session.id,
           agent: session.agentType,
           status: session.getStatus(),
+          workspaceId,
         });
       } catch (err) {
         const error = err as Error;
@@ -263,18 +313,30 @@ export async function registerRoutes(
     async (request, reply) => {
       const session = sessionManager.getSession(request.params.id);
 
-      if (!session) {
-        return reply.code(404).send({
-          error: 'Session not found',
-        });
+      if (session) {
+        const record = database?.getSession(request.params.id);
+        return {
+          id: session.id,
+          agent: session.agentType,
+          status: session.getStatus(),
+          restored: false,
+          workspaceId: record?.workspace_id || undefined,
+        };
       }
 
-      return {
-        id: session.id,
-        agent: session.agentType,
-        status: session.getStatus(),
-        restored: false,
-      };
+      if (database) {
+        const record = database.getSession(request.params.id);
+        if (record) {
+          return {
+            ...sessionRecordToResponse(record),
+            restored: false,
+          };
+        }
+      }
+
+      return reply.code(404).send({
+        error: 'Session not found',
+      });
     }
   );
 
@@ -295,9 +357,35 @@ export async function registerRoutes(
 
   // List all sessions
   fastify.get('/v1/sessions', async () => {
-    const sessions = sessionManager.getAllSessions();
+    const liveSessions = new Map(sessionManager.getAllSessions().map((session) => [session.id, session]));
+    const records = database ? sessionManager.getDiscoverableSessions() : [];
+    const sessions = records.map((record) => {
+      const live = liveSessions.get(record.id);
+      if (live) {
+        return {
+          id: live.id,
+          agent: live.agentType,
+          workspaceId: record.workspace_id || undefined,
+          status: live.getStatus(),
+        };
+      }
+      return sessionRecordToResponse(record);
+    });
+
+    if (!database) {
+      const memorySessions = sessionManager.getAllSessions().map((session) => ({
+        id: session.id,
+        agent: session.agentType,
+        status: session.getStatus(),
+      }));
+      return {
+        sessions: memorySessions,
+        total: memorySessions.length,
+      };
+    }
+
     return {
-      sessions: sessions.map((s) => s.getStatus()),
+      sessions,
       total: sessions.length,
     };
   });
@@ -326,7 +414,7 @@ export async function registerRoutes(
       const total = database.getMessageCount(request.params.id);
 
       return {
-        messages,
+        messages: messages.map(messageRecordToResponse),
         total,
         limit,
         offset,
@@ -366,7 +454,13 @@ export async function registerRoutes(
   fastify.get('/v1/sessions/resumable', async () => {
     const resumableSessions = sessionManager.getResumableSessions();
     return {
-      sessions: resumableSessions,
+      sessions: resumableSessions.map((session) => {
+        const record = database?.getSession(session.id);
+        return {
+          ...session,
+          workspaceId: record?.workspace_id || undefined,
+        };
+      }),
       total: resumableSessions.length,
     };
   });
@@ -415,6 +509,7 @@ export async function registerRoutes(
         agent: session.agentType,
         status: session.getStatus(),
         restored,
+        workspaceId: database?.getSession(session.id)?.workspace_id || undefined,
       };
     }
   );
@@ -791,6 +886,7 @@ export async function registerRoutes(
     (socket, request) => {
       const sessionId = (request.params as { id: string }).id;
       const session = sessionManager.getSession(sessionId);
+      const maxBufferedBytes = 1024 * 1024;
 
       if (!session) {
         request.log.warn({ sessionId }, 'WebSocket rejected: session not found');
@@ -798,10 +894,21 @@ export async function registerRoutes(
         return;
       }
 
+      const sendJson = (payload: unknown) => {
+        if (socket.bufferedAmount > maxBufferedBytes) {
+          request.log.warn({ sessionId, bufferedAmount: socket.bufferedAmount }, 'Closing slow WebSocket subscriber');
+          socket.close(1013, 'Client too slow');
+          return false;
+        }
+
+        socket.send(JSON.stringify(payload));
+        return true;
+      };
+
       // Forward messages from session to WebSocket
       const messageHandler = (message: unknown) => {
         try {
-          socket.send(JSON.stringify(message));
+          sendJson(message);
         } catch (err) {
           request.log.error(err, 'Failed to send WebSocket message');
         }
@@ -810,11 +917,11 @@ export async function registerRoutes(
       // Handle session/update notifications
       const sessionUpdateHandler = (params: unknown) => {
         try {
-          socket.send(JSON.stringify({
+          sendJson({
             jsonrpc: '2.0',
             method: 'session/update',
             params,
-          }));
+          });
         } catch (err) {
           request.log.error(err, 'Failed to send session update');
         }
@@ -828,7 +935,7 @@ export async function registerRoutes(
         options: unknown[];
       }) => {
         try {
-          socket.send(JSON.stringify({
+          sendJson({
             jsonrpc: '2.0',
             method: 'session/request_permission',
             params: {
@@ -836,20 +943,18 @@ export async function registerRoutes(
               toolCall: request.toolCall,
               options: request.options,
             },
-          }));
+          });
         } catch (err) {
           console.error('Failed to send permission request', err);
         }
       };
 
       const exitHandler = ({ code, signal }: { code: number | null; signal: string | null }) => {
-        socket.send(
-          JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'session/exit',
-            params: { code, signal },
-          })
-        );
+        sendJson({
+          jsonrpc: '2.0',
+          method: 'session/exit',
+          params: { code, signal },
+        });
         socket.close(1000, 'Session ended');
       };
 
@@ -861,7 +966,7 @@ export async function registerRoutes(
       // Handle SDK-specific messages (Claude SDK)
       const sdkMessageHandler = (message: SdkWsMessage) => {
         try {
-          socket.send(JSON.stringify(message));
+          sendJson(message);
         } catch (err) {
           request.log.error(err, 'Failed to send SDK WebSocket message');
         }
@@ -870,7 +975,7 @@ export async function registerRoutes(
       // Handle Pi SDK-specific messages
       const piMessageHandler = (message: PiWsMessage) => {
         try {
-          socket.send(JSON.stringify(message));
+          sendJson(message);
         } catch (err) {
           request.log.error(err, 'Failed to send Pi WebSocket message');
         }
@@ -883,6 +988,16 @@ export async function registerRoutes(
         session.on('pi_message', piMessageHandler);
       }
 
+      if (isSdkSession(session)) {
+        for (const pendingPermission of session.getPendingPermissions()) {
+          sendJson({
+            jsonrpc: '2.0',
+            method: 'session/request_permission',
+            params: pendingPermission,
+          });
+        }
+      }
+
       // Handle messages from WebSocket (frontend) to agent
       socket.on('message', async (data: Buffer) => {
         try {
@@ -890,16 +1005,14 @@ export async function registerRoutes(
 
           // Check message size
           if (text.length > config.maxMessageSizeBytes) {
-            socket.send(
-              JSON.stringify({
-                jsonrpc: '2.0',
-                error: {
-                  code: -32000,
-                  message: `Message exceeds max size of ${config.maxMessageSizeBytes} bytes`,
-                },
-                id: null,
-              })
-            );
+            sendJson({
+              jsonrpc: '2.0',
+              error: {
+                code: -32000,
+                message: `Message exceeds max size of ${config.maxMessageSizeBytes} bytes`,
+              },
+              id: null,
+            });
             return;
           }
 
@@ -920,11 +1033,11 @@ export async function registerRoutes(
 
             session.sendPrompt(obj.content, images.length > 0 ? images : undefined).catch((err) => {
               request.log.error(err, 'Failed to send prompt');
-              socket.send(JSON.stringify({
+              sendJson({
                 jsonrpc: '2.0',
                 method: 'session/error',
                 params: { message: (err as Error).message },
-              }));
+              });
             });
           } else if (obj.type === 'permission_response') {
             // Claude SDK only - Pi SDK handles permissions via extension system
@@ -966,28 +1079,28 @@ export async function registerRoutes(
             // Claude SDK only
             if (isSdkSession(session)) {
               const result = await session.rewindFiles(obj.messageId, obj.dryRun as boolean | undefined);
-              socket.send(JSON.stringify({
+              sendJson({
                 jsonrpc: '2.0',
                 method: 'session/rewind_result',
                 params: result,
-              }));
+              });
             }
           } else if (obj.type === 'get_mcp_status') {
             // Claude SDK only
             if (isSdkSession(session)) {
               try {
                 const status = await session.getMcpServerStatus();
-                socket.send(JSON.stringify({
+                sendJson({
                   jsonrpc: '2.0',
                   method: 'session/mcp_status',
                   params: { servers: status },
-                }));
+                });
               } catch (err) {
-                socket.send(JSON.stringify({
+                sendJson({
                   jsonrpc: '2.0',
                   method: 'session/mcp_status',
                   params: { error: (err as Error).message },
-                }));
+                });
               }
             }
           } else if (obj.type === 'set_mcp_servers' && obj.servers) {
@@ -995,17 +1108,17 @@ export async function registerRoutes(
             if (isSdkSession(session)) {
               try {
                 const result = await session.setMcpServers(obj.servers as Record<string, McpServerConfig>);
-                socket.send(JSON.stringify({
+                sendJson({
                   jsonrpc: '2.0',
                   method: 'session/mcp_servers_updated',
                   params: result,
-                }));
+                });
               } catch (err) {
-                socket.send(JSON.stringify({
+                sendJson({
                   jsonrpc: '2.0',
                   method: 'session/mcp_servers_updated',
                   params: { error: (err as Error).message },
-                }));
+                });
               }
             }
           } else if (obj.type === 'get_account_info') {
@@ -1013,17 +1126,17 @@ export async function registerRoutes(
             if (isSdkSession(session)) {
               try {
                 const info = await session.getAccountInfo();
-                socket.send(JSON.stringify({
+                sendJson({
                   jsonrpc: '2.0',
                   method: 'session/account_info',
                   params: info,
-                }));
+                });
               } catch (err) {
-                socket.send(JSON.stringify({
+                sendJson({
                   jsonrpc: '2.0',
                   method: 'session/account_info',
                   params: { error: (err as Error).message },
-                }));
+                });
               }
             }
           } else if (obj.type === 'get_supported_models') {
@@ -1031,52 +1144,52 @@ export async function registerRoutes(
             try {
               if (isSdkSession(session)) {
                 const models = await session.getSupportedModels();
-                socket.send(JSON.stringify({
+                sendJson({
                   jsonrpc: '2.0',
                   method: 'session/supported_models',
                   params: { models },
-                }));
+                });
               } else if (isPiSession(session)) {
                 const models = await session.getAvailableModels();
-                socket.send(JSON.stringify({
+                sendJson({
                   jsonrpc: '2.0',
                   method: 'session/supported_models',
                   params: { models },
-                }));
+                });
               }
             } catch (err) {
-              socket.send(JSON.stringify({
+              sendJson({
                 jsonrpc: '2.0',
                 method: 'session/supported_models',
                 params: { error: (err as Error).message },
-              }));
+              });
             }
           } else if (obj.type === 'get_supported_commands') {
             // Claude SDK only
             if (isSdkSession(session)) {
               try {
                 const commands = await session.getSupportedCommands();
-                socket.send(JSON.stringify({
+                sendJson({
                   jsonrpc: '2.0',
                   method: 'session/supported_commands',
                   params: { commands },
-                }));
+                });
               } catch (err) {
-                socket.send(JSON.stringify({
+                sendJson({
                   jsonrpc: '2.0',
                   method: 'session/supported_commands',
                   params: { error: (err as Error).message },
-                }));
+                });
               }
             }
           } else if (obj.type === 'update_config' && obj.config) {
             if (isSdkSession(session)) {
               session.updateConfig(obj.config as Partial<SdkSessionConfig>);
-              socket.send(JSON.stringify({
+              sendJson({
                 jsonrpc: '2.0',
                 method: 'session/config_updated',
                 params: { config: session.getConfig() },
-              }));
+              });
             }
           }
           // ==================== Pi SDK Specific Handlers ====================
@@ -1114,11 +1227,11 @@ export async function registerRoutes(
             // Cycle to next model (Pi SDK only)
             if (isPiSession(session)) {
               const result = await session.cycleModel();
-              socket.send(JSON.stringify({
+              sendJson({
                 jsonrpc: '2.0',
                 method: 'pi/model_cycled',
                 params: result,
-              }));
+              });
             }
           } else if (obj.type === 'pi_set_thinking_level') {
             // Set thinking level (Pi SDK only)
@@ -1127,22 +1240,22 @@ export async function registerRoutes(
               const level = obj.level as string;
               if (validLevels.includes(level)) {
                 await session.setThinkingLevel(level as 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh');
-                socket.send(JSON.stringify({
+                sendJson({
                   jsonrpc: '2.0',
                   method: 'pi/thinking_level_set',
                   params: { level: obj.level },
-                }));
+                });
               }
             }
           } else if (obj.type === 'pi_cycle_thinking') {
             // Cycle thinking level (Pi SDK only)
             if (isPiSession(session)) {
               const newLevel = await session.cycleThinkingLevel();
-              socket.send(JSON.stringify({
+              sendJson({
                 jsonrpc: '2.0',
                 method: 'pi/thinking_level_cycled',
                 params: { level: newLevel },
-              }));
+              });
             }
           } else if (obj.type === 'pi_new_session') {
             // Start a new session (Pi SDK only - clears context)
@@ -1153,41 +1266,41 @@ export async function registerRoutes(
             // Get session tree (Pi SDK only)
             if (isPiSession(session)) {
               const tree = await session.getSessionTree();
-              socket.send(JSON.stringify({
+              sendJson({
                 jsonrpc: '2.0',
                 method: 'pi/session_tree',
                 params: { tree },
-              }));
+              });
             }
           } else if (obj.type === 'pi_get_forkable') {
             // Get forkable entries (Pi SDK only)
             if (isPiSession(session)) {
               const entries = await session.getForkableEntries();
-              socket.send(JSON.stringify({
+              sendJson({
                 jsonrpc: '2.0',
                 method: 'pi/forkable_entries',
                 params: { entries },
-              }));
+              });
             }
           } else if (obj.type === 'pi_get_stats') {
             // Get session stats (Pi SDK only)
             if (isPiSession(session)) {
               const stats = session.getStats();
-              socket.send(JSON.stringify({
+              sendJson({
                 jsonrpc: '2.0',
                 method: 'pi/session_stats',
                 params: { stats },
-              }));
+              });
             }
           } else if (obj.type === 'pi_get_models') {
             // Get available models (Pi SDK only)
             if (isPiSession(session)) {
               const models = await session.getAvailableModels();
-              socket.send(JSON.stringify({
+              sendJson({
                 jsonrpc: '2.0',
                 method: 'pi/available_models',
                 params: { models },
-              }));
+              });
             }
           } else {
             throw new Error('Unknown message type');
@@ -1195,16 +1308,14 @@ export async function registerRoutes(
         } catch (err) {
           const error = err as Error;
           request.log.error(error, 'Failed to process WebSocket message');
-          socket.send(
-            JSON.stringify({
-              jsonrpc: '2.0',
-              error: {
-                code: -32700,
-                message: `Parse error: ${error.message}`,
-              },
-              id: null,
-            })
-          );
+          sendJson({
+            jsonrpc: '2.0',
+            error: {
+              code: -32700,
+              message: `Parse error: ${error.message}`,
+            },
+            id: null,
+          });
         }
       });
 

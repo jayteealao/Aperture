@@ -18,6 +18,7 @@ export interface SessionRecord {
   sdk_config: string | null;
   is_resumable: number;
   working_directory: string | null;
+  workspace_id: string | null;
   // Pi SDK session field
   pi_session_path: string | null;
 }
@@ -144,8 +145,8 @@ export class ApertureDatabase {
   saveSession(session: SessionRecord): void {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO sessions
-      (id, agent, auth_mode, acp_session_id, created_at, last_activity_at, ended_at, status, metadata, user_id, sdk_session_id, sdk_config, is_resumable, working_directory, pi_session_path)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, agent, auth_mode, acp_session_id, created_at, last_activity_at, ended_at, status, metadata, user_id, sdk_session_id, sdk_config, is_resumable, working_directory, workspace_id, pi_session_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -163,6 +164,7 @@ export class ApertureDatabase {
       session.sdk_config ?? null,
       session.is_resumable ?? 0,
       session.working_directory ?? null,
+      session.workspace_id ?? null,
       session.pi_session_path ?? null
     );
   }
@@ -201,11 +203,40 @@ export class ApertureDatabase {
   }
 
   /**
+   * Get sessions that should be discoverable to browsers.
+   * Active sessions are always included. Idle sessions are included when resumable.
+   */
+  getDiscoverableSessions(): SessionRecord[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM sessions
+      WHERE status = 'active'
+         OR (status = 'idle' AND is_resumable = 1)
+      ORDER BY last_activity_at DESC
+    `);
+    return stmt.all() as SessionRecord[];
+  }
+
+  /**
    * Update session activity timestamp
    */
   updateSessionActivity(id: string, timestamp: number = Date.now()): void {
     const stmt = this.db.prepare('UPDATE sessions SET last_activity_at = ? WHERE id = ?');
     stmt.run(timestamp, id);
+  }
+
+  /**
+   * Update status fields without replacing the full row.
+   */
+  updateSessionStatus(
+    id: string,
+    status: SessionRecord['status'],
+    timestamp: number = Date.now(),
+    endedAt: number | null = null
+  ): void {
+    const stmt = this.db.prepare(
+      'UPDATE sessions SET status = ?, last_activity_at = ?, ended_at = ? WHERE id = ?'
+    );
+    stmt.run(status, timestamp, endedAt, id);
   }
 
   /**
@@ -221,7 +252,7 @@ export class ApertureDatabase {
    */
   getResumableSessions(): SessionRecord[] {
     const stmt = this.db.prepare(
-      "SELECT * FROM sessions WHERE is_resumable = 1 AND sdk_session_id IS NOT NULL ORDER BY last_activity_at DESC"
+      "SELECT * FROM sessions WHERE is_resumable = 1 AND (sdk_session_id IS NOT NULL OR pi_session_path IS NOT NULL) ORDER BY last_activity_at DESC"
     );
     return stmt.all() as SessionRecord[];
   }
@@ -258,6 +289,14 @@ export class ApertureDatabase {
   updateWorkingDirectory(id: string, workingDirectory: string): void {
     const stmt = this.db.prepare("UPDATE sessions SET working_directory = ? WHERE id = ?");
     stmt.run(workingDirectory, id);
+  }
+
+  /**
+   * Update workspace association for a session.
+   */
+  updateWorkspaceId(id: string, workspaceId: string | null): void {
+    const stmt = this.db.prepare("UPDATE sessions SET workspace_id = ? WHERE id = ?");
+    stmt.run(workspaceId, id);
   }
 
   /**
@@ -299,6 +338,31 @@ export class ApertureDatabase {
     const stmt = this.db.prepare(`
       INSERT INTO messages (id, session_id, role, content, timestamp, metadata)
       VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      message.id,
+      message.session_id,
+      message.role,
+      message.content,
+      message.timestamp,
+      message.metadata
+    );
+  }
+
+  /**
+   * Save or update a canonical message snapshot for a session.
+   */
+  upsertMessage(message: MessageRecord): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO messages (id, session_id, role, content, timestamp, metadata)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        session_id = excluded.session_id,
+        role = excluded.role,
+        content = excluded.content,
+        timestamp = excluded.timestamp,
+        metadata = excluded.metadata
     `);
 
     stmt.run(

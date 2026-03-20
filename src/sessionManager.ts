@@ -197,10 +197,16 @@ export class SessionManager {
     // Set up event handlers
     this.setupSdkSessionEventHandlers(session, sessionId);
 
-    // Start the session
-    await session.start();
-
+    // Insert into memory before start() so attach/connect paths cannot race restore.
     this.sessions.set(sessionId, session);
+
+    // Start the session
+    try {
+      await session.start();
+    } catch (error) {
+      this.sessions.delete(sessionId);
+      throw error;
+    }
     this.logger.info(`Restored Claude SDK session ${sessionId} with SDK session ID ${sessionRecord.sdk_session_id}`);
 
     return session;
@@ -251,10 +257,16 @@ export class SessionManager {
     // Set up event handlers
     this.setupPiSessionEventHandlers(session, sessionId);
 
-    // Start the session
-    await session.start();
-
+    // Insert into memory before start() so attach/connect paths cannot race restore.
     this.sessions.set(sessionId, session);
+
+    // Start the session
+    try {
+      await session.start();
+    } catch (error) {
+      this.sessions.delete(sessionId);
+      throw error;
+    }
     this.logger.info(`Restored Pi SDK session ${sessionId} with session path ${sessionRecord.pi_session_path}`);
 
     return session;
@@ -273,9 +285,9 @@ export class SessionManager {
     });
 
     session.on('idle', () => {
-      this.logger.info(`Session ${sessionId} idle, terminating`);
+      this.logger.info(`Session ${sessionId} idle`);
       if (this.database) {
-        this.database.endSession(sessionId, Date.now());
+        this.database.updateSessionStatus(sessionId, 'idle', Date.now(), null);
       }
     });
 
@@ -344,6 +356,43 @@ export class SessionManager {
       lastActivity: r.last_activity_at,
       workingDirectory: r.working_directory,
     }));
+  }
+
+  /**
+   * Get server-authoritative discoverable sessions for UI bootstrap.
+   */
+  getDiscoverableSessions(): SessionRecord[] {
+    if (!this.database) {
+      return this.getAllSessions().map((session) => {
+        const status = session.getStatus() as {
+          authMode: string;
+          lastActivityTime: number;
+          running?: boolean;
+          isResumable?: boolean;
+          workingDirectory?: string;
+          acpSessionId?: string | null;
+        };
+        return {
+        id: session.id,
+        agent: session.agentType,
+        auth_mode: status.authMode,
+        acp_session_id: status.acpSessionId ?? null,
+        created_at: 0,
+        last_activity_at: status.lastActivityTime,
+        ended_at: null,
+        status: status.running ? 'active' : 'idle',
+        metadata: null,
+        user_id: null,
+        sdk_session_id: 'sdkSessionId' in session ? session.sdkSessionId : null,
+        sdk_config: null,
+        is_resumable: status.isResumable ? 1 : 0,
+        working_directory: status.workingDirectory || null,
+        workspace_id: null,
+        pi_session_path: 'piSessionPath' in session ? session.piSessionPath : null,
+      };});
+    }
+
+    return this.database.getDiscoverableSessions();
   }
 
   /**
@@ -652,6 +701,7 @@ export class SessionManager {
         sdk_config: options.sdk ? JSON.stringify(options.sdk) : null,
         is_resumable: 1, // SDK sessions start as potentially resumable
         working_directory: sessionCwd || null,
+        workspace_id: options.workspaceId || null,
         pi_session_path: null,
       });
 
@@ -668,16 +718,9 @@ export class SessionManager {
     });
 
     session.on('idle', () => {
-      this.logger.info(`Session ${id} idle, terminating`);
+      this.logger.info(`Session ${id} idle`);
       if (this.database) {
-        const record = this.database.getSession(id);
-        if (record) {
-          this.database.saveSession({
-            ...record,
-            status: 'idle',
-            last_activity_at: Date.now(),
-          });
-        }
+        this.database.updateSessionStatus(id, 'idle', Date.now(), null);
       }
     });
 
@@ -742,6 +785,7 @@ export class SessionManager {
         sdk_config: options.pi ? JSON.stringify(options.pi) : null,
         is_resumable: 1, // Pi SDK sessions start as potentially resumable
         working_directory: sessionCwd || null,
+        workspace_id: options.workspaceId || null,
         pi_session_path: null, // Will be updated when Pi SDK creates session file
       });
 
