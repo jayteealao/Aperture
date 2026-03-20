@@ -9,3 +9,6 @@ coverage/
 
 # Local database
 /data/
+
+# Scratch workspace
+.scratch/
