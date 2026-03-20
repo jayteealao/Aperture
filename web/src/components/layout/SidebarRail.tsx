@@ -218,6 +218,7 @@ export function SidebarRail() {
     } else {
       setActiveWorkspaceId(id)
       setWorkspacePanelOpen(true)
+      navigate(`/workspaces/${id}`)
     }
   }
 

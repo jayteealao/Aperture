@@ -69,6 +69,8 @@ export interface Session {
   id: string
   agent: AgentType
   status: SessionStatus
+  /** Frontend-only. Set at creation time to associate the session with a workspace. */
+  workspaceId?: string
 }
 
 export interface Credential {
