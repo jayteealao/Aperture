@@ -29,7 +29,7 @@ export function WorkspacePanel() {
   const panelSessions = activeWorkspaceId
     ? sessions.filter((s) =>
         s.workspaceId === activeWorkspaceId ||
-        (s.status.workingDirectory != null &&
+        (s.status?.workingDirectory != null &&
           workspace != null &&
           s.status.workingDirectory.startsWith(workspace.repoRoot)),
       )

@@ -65,6 +65,7 @@ function WorkspaceChatPaneReady({
   pendingPermissions,
   initialMessages,
   persistMessages,
+  reloadMessages,
   sendPermissionResponse,
   onDelete,
 }: {
@@ -74,6 +75,7 @@ function WorkspaceChatPaneReady({
   pendingPermissions: Array<{ toolCallId: string; toolCall: unknown; options: unknown[] }>
   initialMessages: ApertureUIMessage[]
   persistMessages: (messages: ApertureUIMessage[]) => Promise<void>
+  reloadMessages: () => Promise<ApertureUIMessage[]>
   sendPermissionResponse: (
     sessionId: string,
     toolCallId: string,
@@ -101,6 +103,15 @@ function WorkspaceChatPaneReady({
 
   useEffect(() => { void persistMessages(messages) }, [messages, persistMessages])
   useEffect(() => () => { setStreaming(sessionId, false) }, [sessionId, setStreaming])
+  useEffect(() => {
+    if (connection?.status !== 'connected') {
+      return
+    }
+
+    void reloadMessages().then((nextMessages) => {
+      setMessages(nextMessages)
+    })
+  }, [connection?.status, reloadMessages, setMessages])
 
   const handleAddUserMessage = useCallback(
     async (content: string) => {
@@ -212,13 +223,13 @@ function WorkspaceChatPaneReady({
             <span className="text-muted-foreground">Status</span>
             <span className="text-foreground">{connection?.status ?? 'disconnected'}</span>
           </div>
-          {session.status.workingDirectory && (
+          {session.status?.workingDirectory && (
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground shrink-0">Directory</span>
               <span className="font-mono text-foreground truncate">{session.status.workingDirectory}</span>
             </div>
           )}
-          {session.status.isResumable && (
+          {session.status?.isResumable && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Resumable</span>
               <span className="text-foreground">Yes</span>
@@ -332,7 +343,7 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
   const sendPermissionResponse = useSessionsStore((s) => s.sendPermissionResponse)
   const connectSession = useSessionsStore((s) => s.connectSession)
   const removeSession = useSessionsStore((s) => s.removeSession)
-  const { initialMessages, persistMessages } = usePersistedUIMessages(sessionId)
+  const { initialMessages, persistMessages, reloadMessages } = usePersistedUIMessages(sessionId)
 
   // Connect exactly once per sessionId. Ref guards against StrictMode double-invoke.
   const hasConnected = useRef(false)
@@ -368,6 +379,7 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
       initialMessages={initialMessages}
       pendingPermissions={pendingPermissions}
       persistMessages={persistMessages}
+      reloadMessages={reloadMessages}
       sendPermissionResponse={sendPermissionResponse}
       session={session}
       sessionId={sessionId}

@@ -88,9 +88,10 @@ function AddSessionDialog({
         },
         workspaceId,
       })
-      await addSession({ id: session.id, agent: session.agent, status: session.status, workspaceId })
+      const nextSession = { id: session.id, agent: session.agent, status: session.status, workspaceId: session.workspaceId ?? workspaceId }
+      await addSession(nextSession)
       toast.success('Session created', { description: `Session ${session.id.slice(0, 8)} ready` })
-      onCreated({ id: session.id, agent: session.agent, status: session.status, workspaceId })
+      onCreated(nextSession)
     } catch (err) {
       toast.error('Failed to create session', {
         description: err instanceof Error ? err.message : 'Unknown error',
@@ -177,7 +178,7 @@ function AddSessionDialog({
 
 export default function WorkspaceView() {
   const { id } = useParams<{ id: string }>()
-  const { workspaces, loading: workspacesLoading } = useWorkspaces()
+  const { workspaces } = useWorkspaces()
   const sessions = useSessionsStore((s) => s.sessions)
   const { setActiveWorkspaceId, setWorkspacePanelOpen } = useAppStore()
 
@@ -192,13 +193,11 @@ export default function WorkspaceView() {
 
   const workspace = workspaces.find((w) => w.id === id) ?? null
 
-  // Filter: prefer the frontend-only workspaceId (set at creation, persisted in
-  // IndexedDB). Fall back to workingDirectory prefix match for sessions that
-  // predate the workspaceId field or were restored from the backend API.
   const workspaceSessions = id
     ? sessions.filter((s) =>
         s.workspaceId === id ||
-        (s.status.workingDirectory != null &&
+        (s.workspaceId == null &&
+          s.status?.workingDirectory != null &&
           workspace != null &&
           s.status.workingDirectory.startsWith(workspace.repoRoot)),
       )

@@ -25,6 +25,8 @@ import type {
   InitRepoResponse,
 } from './types'
 
+type SessionWireShape = Session | (SessionStatus & { workspaceId?: string })
+
 class ApiError extends Error {
   constructor(
     message: string,
@@ -90,6 +92,24 @@ class ApertureClient {
     return response.json()
   }
 
+  private normalizeSession(session: SessionWireShape): Session {
+    if ('status' in session && session.status) {
+      return session
+    }
+
+    const { id, agent, workspaceId, ...status } = session
+    return {
+      id,
+      agent,
+      workspaceId,
+      status: {
+        id,
+        agent,
+        ...(status as Omit<SessionStatus, 'id' | 'agent'>),
+      },
+    }
+  }
+
   // Health checks
   async checkHealth(): Promise<HealthResponse> {
     return this.request<HealthResponse>('/healthz')
@@ -101,10 +121,11 @@ class ApertureClient {
 
   // Sessions
   async createSession(config: CreateSessionRequest): Promise<Session> {
-    return this.request<Session>('/v1/sessions', {
+    const session = await this.request<SessionWireShape>('/v1/sessions', {
       method: 'POST',
       body: JSON.stringify(config),
     })
+    return this.normalizeSession(session)
   }
 
   async getSession(sessionId: string): Promise<SessionStatus> {
@@ -112,7 +133,11 @@ class ApertureClient {
   }
 
   async listSessions(): Promise<ListSessionsResponse> {
-    return this.request<ListSessionsResponse>('/v1/sessions')
+    const response = await this.request<ListSessionsResponse & { sessions: SessionWireShape[] }>('/v1/sessions')
+    return {
+      ...response,
+      sessions: response.sessions.map((session) => this.normalizeSession(session)),
+    }
   }
 
   async deleteSession(sessionId: string): Promise<void> {
@@ -145,9 +170,18 @@ class ApertureClient {
 
   // Connect to a session (restores SDK session if needed)
   async connectSession(sessionId: string): Promise<ConnectSessionResponse> {
-    return this.request<ConnectSessionResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/connect`, {
+    const response = await this.request<ConnectSessionResponse | SessionWireShape>(`/v1/sessions/${encodeURIComponent(sessionId)}/connect`, {
       method: 'POST',
     })
+    if ('restored' in response && 'status' in response && response.status) {
+      return response
+    }
+
+    const session = this.normalizeSession(response)
+    return {
+      ...session,
+      restored: false,
+    }
   }
 
   // Credentials
