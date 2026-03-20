@@ -1,6 +1,6 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { Agentation } from 'agentation'
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router'
+import { Routes, Route, Navigate, useLocation } from 'react-router'
 import { useAppStore } from './stores/app'
 import { Shell } from './components/layout/Shell'
 import { Spinner } from './components/ui/Spinner'
@@ -48,29 +48,29 @@ function WorkspaceRedirect() {
 
 export default function App() {
   const { theme, initFromStorage } = useAppStore()
-  const navigate = useNavigate()
-  const location = useLocation()
+  const [isHydrated, setIsHydrated] = useState(false)
 
-  // Initialize app state from storage on mount (only run once)
+  // Hydrate connection state before rendering guarded routes. Without this,
+  // a fresh load of /workspaces/:id redirects to onboarding before storage
+  // state is restored, dropping the original destination.
   useEffect(() => {
-    const isConnected = initFromStorage()
-
-    // Redirect to onboarding if not connected and not already there
-    if (!isConnected && location.pathname !== '/onboarding') {
-      navigate('/onboarding', { replace: true })
-    }
+    initFromStorage()
+    setIsHydrated(true)
 
     // Pre-warm the Shiki singleton so the highlighter engine is ready before
     // the user sees their first code block, preventing FOUC / shimmer flash.
     void getSingletonHighlighter({ langs: [], themes: [] })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [initFromStorage])
 
   // Apply theme class to body
   useEffect(() => {
     document.body.classList.remove('light', 'dark')
     document.body.classList.add(theme)
   }, [theme])
+
+  if (!isHydrated) {
+    return <LoadingFallback />
+  }
 
   return (
     <>
