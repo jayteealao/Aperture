@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router'
+import { Outlet, useLocation } from 'react-router'
 import { useEffect } from 'react'
 import { Sidebar } from './Sidebar'
 import { SidebarRail } from './SidebarRail'
@@ -11,14 +11,23 @@ import { useSessionsStore } from '@/stores/sessions'
 import { api } from '@/api/client'
 
 export function Shell() {
-  const { commandPaletteOpen, setCommandPaletteOpen, gatewayUrl, apiToken } = useAppStore()
+  const { commandPaletteOpen, setCommandPaletteOpen, setWorkspacePanelOpen, gatewayUrl, apiToken } = useAppStore()
   const { restoreFromStorage, sessions, connectSession } = useSessionsStore()
+  const location = useLocation()
 
   // Restore sessions from storage on mount (only run once)
   useEffect(() => {
     restoreFromStorage()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Close the workspace panel when navigating away from a workspace detail page.
+  // Opening is handled by WorkspaceView's own mount effect (setWorkspacePanelOpen(true)).
+  useEffect(() => {
+    if (!location.pathname.startsWith('/workspaces/')) {
+      setWorkspacePanelOpen(false)
+    }
+  }, [location.pathname, setWorkspacePanelOpen])
 
   // Connect to active sessions when sessions list changes
   useEffect(() => {
