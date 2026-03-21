@@ -66,6 +66,7 @@ export interface ManagedRepoRecord {
 
 export class ApertureDatabase {
   private db: Database.Database;
+  private hasSessionWorkspaceColumn = false;
 
   constructor(dbPath: string) {
     // Ensure directory exists
@@ -79,6 +80,7 @@ export class ApertureDatabase {
     // Enable WAL mode for better concurrency
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
+    this.refreshSchemaCapabilities();
 
     console.log('[DB] Opened database:', dbPath);
   }
@@ -119,8 +121,41 @@ export class ApertureDatabase {
       }
     }
 
+    this.ensureSessionWorkspaceCompatibility();
     const newVersion = this.getCurrentVersion();
+    this.refreshSchemaCapabilities();
     console.log('[DB] Schema version after migrations:', newVersion);
+  }
+
+  private refreshSchemaCapabilities(): void {
+    this.hasSessionWorkspaceColumn = this.hasColumn('sessions', 'workspace_id');
+  }
+
+  private hasColumn(table: string, column: string): boolean {
+    const rows = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    return rows.some((row) => row.name === column);
+  }
+
+  /**
+   * Some upgraded installations can have managed repos/workspaces but still miss the
+   * sessions.workspace_id column if migration 008 never ran. Self-heal that case so
+   * legacy workspace sessions can be associated and shown without manual cleanup.
+   */
+  private ensureSessionWorkspaceCompatibility(): void {
+    if (this.hasColumn('sessions', 'workspace_id')) {
+      this.hasSessionWorkspaceColumn = true;
+      return;
+    }
+
+    console.log('[DB] Adding missing sessions.workspace_id compatibility column');
+    this.db.exec('ALTER TABLE sessions ADD COLUMN workspace_id TEXT');
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_workspace_id ON sessions(workspace_id)');
+    this.db.prepare(`
+      INSERT INTO schema_version (version, applied_at)
+      SELECT 8, ?
+      WHERE NOT EXISTS (SELECT 1 FROM schema_version WHERE version = 8)
+    `).run(Date.now());
+    this.hasSessionWorkspaceColumn = true;
   }
 
   /**
@@ -143,10 +178,38 @@ export class ApertureDatabase {
    * Save or update a session
    */
   saveSession(session: SessionRecord): void {
+    if (this.hasSessionWorkspaceColumn) {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO sessions
+        (id, agent, auth_mode, acp_session_id, created_at, last_activity_at, ended_at, status, metadata, user_id, sdk_session_id, sdk_config, is_resumable, working_directory, workspace_id, pi_session_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        session.id,
+        session.agent,
+        session.auth_mode,
+        session.acp_session_id,
+        session.created_at,
+        session.last_activity_at,
+        session.ended_at,
+        session.status,
+        session.metadata,
+        session.user_id,
+        session.sdk_session_id ?? null,
+        session.sdk_config ?? null,
+        session.is_resumable ?? 0,
+        session.working_directory ?? null,
+        session.workspace_id ?? null,
+        session.pi_session_path ?? null
+      );
+      return;
+    }
+
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO sessions
-      (id, agent, auth_mode, acp_session_id, created_at, last_activity_at, ended_at, status, metadata, user_id, sdk_session_id, sdk_config, is_resumable, working_directory, workspace_id, pi_session_path)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, agent, auth_mode, acp_session_id, created_at, last_activity_at, ended_at, status, metadata, user_id, sdk_session_id, sdk_config, is_resumable, working_directory, pi_session_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -164,7 +227,6 @@ export class ApertureDatabase {
       session.sdk_config ?? null,
       session.is_resumable ?? 0,
       session.working_directory ?? null,
-      session.workspace_id ?? null,
       session.pi_session_path ?? null
     );
   }
@@ -175,6 +237,20 @@ export class ApertureDatabase {
   getSession(id: string): SessionRecord | null {
     const stmt = this.db.prepare('SELECT * FROM sessions WHERE id = ?');
     const result = stmt.get(id) as SessionRecord | undefined;
+    return result || null;
+  }
+
+  /**
+   * Get the most recent session associated with a working directory.
+   */
+  getSessionByWorkingDirectory(workingDirectory: string): SessionRecord | null {
+    const stmt = this.db.prepare(`
+      SELECT * FROM sessions
+      WHERE working_directory = ?
+      ORDER BY last_activity_at DESC, created_at DESC
+      LIMIT 1
+    `);
+    const result = stmt.get(workingDirectory) as SessionRecord | undefined;
     return result || null;
   }
 
@@ -295,6 +371,9 @@ export class ApertureDatabase {
    * Update workspace association for a session.
    */
   updateWorkspaceId(id: string, workspaceId: string | null): void {
+    if (!this.hasSessionWorkspaceColumn) {
+      return;
+    }
     const stmt = this.db.prepare("UPDATE sessions SET workspace_id = ? WHERE id = ?");
     stmt.run(workspaceId, id);
   }
@@ -568,6 +647,17 @@ export class ApertureDatabase {
   getManagedRepo(id: string): ManagedRepoRecord | null {
     const stmt = this.db.prepare('SELECT * FROM managed_repos WHERE id = ?');
     const result = stmt.get(id) as ManagedRepoRecord | undefined;
+    return result || null;
+  }
+
+  /**
+   * Get the most recent managed repo associated with a session.
+   */
+  getManagedRepoBySessionId(sessionId: string): ManagedRepoRecord | null {
+    const stmt = this.db.prepare(
+      'SELECT * FROM managed_repos WHERE session_id = ? ORDER BY updated_at DESC, created_at DESC LIMIT 1'
+    );
+    const result = stmt.get(sessionId) as ManagedRepoRecord | undefined;
     return result || null;
   }
 

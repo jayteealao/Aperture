@@ -510,9 +510,22 @@ export async function registerWorkspaceRoutes(
 
         return reply.send({
           checkouts: repos.map((r) => ({
+            sessionId: (() => {
+              if (r.session_id) {
+                return r.session_id;
+              }
+
+              const legacySession = database!.getSessionByWorkingDirectory(r.path);
+              if (!legacySession) {
+                return null;
+              }
+
+              database!.updateManagedRepoSession(r.id, legacySession.id);
+              r.session_id = legacySession.id;
+              return legacySession.id;
+            })(),
             id: r.id,
             workspaceId: r.workspace_id,
-            sessionId: r.session_id,
             path: r.path,
             name: r.name,
             cloneSource: r.clone_source,

@@ -89,12 +89,59 @@ function sessionRecordToStatus(record: SessionRecord) {
   };
 }
 
-function sessionRecordToResponse(record: SessionRecord) {
+function resolveWorkspaceIdForRecord(
+  record: SessionRecord,
+  database?: ApertureDatabase
+): string | undefined {
+  if (record.workspace_id) {
+    return record.workspace_id;
+  }
+
+  if (!database) {
+    return undefined;
+  }
+
+  const managedRepo =
+    database.getManagedRepoBySessionId(record.id) ||
+    (record.working_directory ? database.getManagedRepoByPath(record.working_directory) : null);
+
+  if (!managedRepo) {
+    return undefined;
+  }
+
+  try {
+    database.updateWorkspaceId(record.id, managedRepo.workspace_id);
+  } catch (error) {
+    // Keep legacy sessions visible even if persistence lags behind schema repair.
+    void error;
+  }
+  record.workspace_id = managedRepo.workspace_id;
+  return managedRepo.workspace_id;
+}
+
+function sessionRecordToResponse(record: SessionRecord, database?: ApertureDatabase) {
   return {
     id: record.id,
     agent: record.agent as AgentType,
-    workspaceId: record.workspace_id || undefined,
+    workspaceId: resolveWorkspaceIdForRecord(record, database),
     status: sessionRecordToStatus(record),
+  };
+}
+
+function buildSessionResponse(
+  session: { id: string; agentType: AgentType; getStatus: () => unknown },
+  database?: ApertureDatabase,
+  restored = false
+) {
+  const record = database?.getSession(session.id);
+  const workspaceId = record ? resolveWorkspaceIdForRecord(record, database) : undefined;
+
+  return {
+    id: session.id,
+    agent: session.agentType,
+    status: session.getStatus(),
+    restored,
+    workspaceId,
   };
 }
 
@@ -282,8 +329,10 @@ export async function registerRoutes(
         return reply.code(201).send({
           id: session.id,
           agent: session.agentType,
+          workspaceId: database?.getSession(session.id)
+            ? resolveWorkspaceIdForRecord(database.getSession(session.id)!, database)
+            : workspaceId || undefined,
           status: session.getStatus(),
-          workspaceId,
         });
       } catch (err) {
         const error = err as Error;
@@ -314,23 +363,13 @@ export async function registerRoutes(
       const session = sessionManager.getSession(request.params.id);
 
       if (session) {
-        const record = database?.getSession(request.params.id);
-        return {
-          id: session.id,
-          agent: session.agentType,
-          status: session.getStatus(),
-          restored: false,
-          workspaceId: record?.workspace_id || undefined,
-        };
+        return buildSessionResponse(session, database, false);
       }
 
       if (database) {
         const record = database.getSession(request.params.id);
         if (record) {
-          return {
-            ...sessionRecordToResponse(record),
-            restored: false,
-          };
+          return sessionRecordToResponse(record, database);
         }
       }
 
@@ -359,17 +398,17 @@ export async function registerRoutes(
   fastify.get('/v1/sessions', async () => {
     const liveSessions = new Map(sessionManager.getAllSessions().map((session) => [session.id, session]));
     const records = database ? sessionManager.getDiscoverableSessions() : [];
-    const sessions = records.map((record) => {
+      const sessions = records.map((record) => {
       const live = liveSessions.get(record.id);
       if (live) {
         return {
           id: live.id,
           agent: live.agentType,
-          workspaceId: record.workspace_id || undefined,
+          workspaceId: resolveWorkspaceIdForRecord(record, database),
           status: live.getStatus(),
         };
       }
-      return sessionRecordToResponse(record);
+      return sessionRecordToResponse(record, database);
     });
 
     if (!database) {
@@ -452,15 +491,15 @@ export async function registerRoutes(
 
   // Get all resumable SDK sessions
   fastify.get('/v1/sessions/resumable', async () => {
-    const resumableSessions = sessionManager.getResumableSessions();
-    return {
-      sessions: resumableSessions.map((session) => {
-        const record = database?.getSession(session.id);
-        return {
-          ...session,
-          workspaceId: record?.workspace_id || undefined,
-        };
-      }),
+      const resumableSessions = sessionManager.getResumableSessions();
+      return {
+        sessions: resumableSessions.map((session) => {
+          const record = database?.getSession(session.id);
+          return {
+            ...session,
+            workspaceId: record ? resolveWorkspaceIdForRecord(record, database) : undefined,
+          };
+        }),
       total: resumableSessions.length,
     };
   });
@@ -505,11 +544,7 @@ export async function registerRoutes(
       }
 
       return {
-        id: session.id,
-        agent: session.agentType,
-        status: session.getStatus(),
-        restored,
-        workspaceId: database?.getSession(session.id)?.workspace_id || undefined,
+        ...buildSessionResponse(session, database, restored),
       };
     }
   );
