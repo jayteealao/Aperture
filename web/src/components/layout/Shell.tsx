@@ -87,7 +87,7 @@ export function Shell() {
       <WorkspacePanel />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />
-        <main className="flex-1 overflow-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+        <main className="flex-1 overflow-hidden pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0">
           <Outlet />
         </main>
       </div>
@@ -141,7 +141,6 @@ export function Shell() {
         primaryActionLabel={activeWorkspaceId ? 'New' : undefined}
       />
       <MobileBottomBar
-        activePath={location.pathname}
         openSheet={mobileSheet}
         onOpenWorkspaces={() => setMobileSheet('workspaces')}
         onOpenSessions={() => setMobileSheet('sessions')}

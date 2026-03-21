@@ -6,7 +6,6 @@ import { CircleHelp, FolderRoot, KeyRound, MessageSquareText, Settings2, Plus, A
 type MobileSheet = 'workspaces' | 'sessions' | null
 
 interface MobileBottomBarProps {
-  activePath: string
   openSheet: MobileSheet
   onOpenWorkspaces: () => void
   onOpenSessions: () => void
@@ -19,12 +18,10 @@ interface MobileBottomBarProps {
 }
 
 function NavButton({
-  active,
   icon,
   label,
   onClick,
 }: {
-  active: boolean
   icon: ReactNode
   label: string
   onClick: () => void
@@ -34,18 +31,17 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[11px] font-medium transition-colors',
-        active ? 'bg-accent/10 text-accent' : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+        'flex min-w-0 flex-1 items-center justify-center rounded-xl px-2 py-3 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground',
       )}
+      aria-label={label}
     >
       <span>{icon}</span>
-      <span className="truncate">{label}</span>
+      <span className="sr-only">{label}</span>
     </button>
   )
 }
 
 export function MobileBottomBar({
-  activePath,
   openSheet,
   onOpenWorkspaces,
   onOpenSessions,
@@ -56,10 +52,6 @@ export function MobileBottomBar({
   onPrimaryAction,
   primaryActionLabel,
 }: MobileBottomBarProps) {
-  const isSettings = activePath.startsWith('/settings')
-  const isCredentials = activePath.startsWith('/credentials')
-  const isHelp = activePath.startsWith('/help')
-
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur md:hidden">
       <div className="mx-auto flex max-w-screen-sm items-center gap-2 px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
@@ -84,31 +76,26 @@ export function MobileBottomBar({
         ) : (
           <>
             <NavButton
-              active={activePath.startsWith('/workspaces')}
               icon={<FolderRoot size={18} />}
               label="Workspaces"
               onClick={onOpenWorkspaces}
             />
             <NavButton
-              active={activePath.startsWith('/workspaces/')}
               icon={<MessageSquareText size={18} />}
               label="Sessions"
               onClick={onOpenSessions}
             />
             <NavButton
-              active={isSettings}
               icon={<Settings2 size={18} />}
               label="Settings"
               onClick={onOpenSettings}
             />
             <NavButton
-              active={isCredentials}
               icon={<KeyRound size={18} />}
               label="Credentials"
               onClick={onOpenCredentials}
             />
             <NavButton
-              active={isHelp}
               icon={<CircleHelp size={18} />}
               label="Help"
               onClick={onOpenHelp}

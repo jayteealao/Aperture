@@ -310,9 +310,7 @@ export default function WorkspaceView() {
     const container = mobileScrollRef.current
     if (!container) return
     const clamped = Math.max(0, Math.min(nextIndex, mobileItems.length - 1))
-    const child = container.children.item(clamped) as HTMLElement | null
-    if (!child) return
-    child.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
+    container.scrollTo({ left: clamped * container.clientWidth, behavior: 'smooth' })
     setMobileIndex(clamped)
     const target = mobileItems[clamped]
     if (target?.kind === 'session') {
@@ -323,24 +321,12 @@ export default function WorkspaceView() {
   const handleMobileScroll = () => {
     const container = mobileScrollRef.current
     if (!container) return
-    const children = Array.from(container.children) as HTMLElement[]
-    if (children.length === 0) return
-    const viewportCenter = container.scrollLeft + container.clientWidth / 2
-    let bestIndex = 0
-    let bestDistance = Number.POSITIVE_INFINITY
+    const bestIndex = Math.round(container.scrollLeft / Math.max(container.clientWidth, 1))
+    const clamped = Math.max(0, Math.min(bestIndex, mobileItems.length - 1))
 
-    children.forEach((child, index) => {
-      const center = child.offsetLeft + child.clientWidth / 2
-      const distance = Math.abs(center - viewportCenter)
-      if (distance < bestDistance) {
-        bestDistance = distance
-        bestIndex = index
-      }
-    })
-
-    if (bestIndex !== mobileIndex) {
-      setMobileIndex(bestIndex)
-      const target = mobileItems[bestIndex]
+    if (clamped !== mobileIndex) {
+      setMobileIndex(clamped)
+      const target = mobileItems[clamped]
       if (target?.kind === 'session') {
         setActiveSession(target.session.id)
       }
@@ -360,19 +346,19 @@ export default function WorkspaceView() {
     <div className="h-full flex flex-col overflow-hidden">
       {/* Mobile session carousel */}
       <div className="relative flex flex-1 flex-col min-h-0 md:hidden">
-          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-background to-transparent" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-background to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-gradient-to-r from-background to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-gradient-to-l from-background to-transparent" />
 
           <div
             ref={mobileScrollRef}
             onScroll={handleMobileScroll}
-            className="flex flex-1 snap-x snap-mandatory gap-3 overflow-x-auto px-3 py-3 min-h-0 scroll-smooth"
+            className="flex flex-1 snap-x snap-mandatory overflow-x-auto min-h-0 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             {mobileItems.map((item) =>
               item.kind === 'session' ? (
                 <div
                   key={item.key}
-                  className="w-[calc(100vw-1.5rem)] shrink-0 snap-center rounded-xl border border-border bg-card overflow-hidden"
+                  className="h-full w-full shrink-0 snap-start overflow-hidden"
                 >
                   <WorkspaceChatPane sessionId={item.session.id} />
                 </div>
@@ -381,7 +367,7 @@ export default function WorkspaceView() {
                   key={item.key}
                   onClick={() => setShowAddSession(true)}
                   className={cn(
-                    'w-[calc(100vw-4rem)] shrink-0 snap-center rounded-2xl border-2 border-dashed border-border',
+                    'h-full w-full shrink-0 snap-start border-2 border-dashed border-border',
                     'flex flex-col items-center justify-center gap-3 bg-card/50 text-muted-foreground/60',
                     'hover:border-accent/50 hover:bg-accent/5 hover:text-accent transition-colors',
                   )}
@@ -394,7 +380,7 @@ export default function WorkspaceView() {
           </div>
 
           {mobileItems.length > 1 && (
-            <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-1">
+            <div className="flex items-center justify-between gap-3 border-t border-border bg-background/80 px-3 pb-2 pt-2">
               <Button
                 variant="ghost"
                 size="sm"
