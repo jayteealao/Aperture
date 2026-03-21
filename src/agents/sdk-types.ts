@@ -9,7 +9,6 @@ export type PermissionMode =
   | 'acceptEdits'
   | 'bypassPermissions'
   | 'plan'
-  | 'delegate'
   | 'dontAsk';
 
 // Hook event types from SDK
@@ -55,7 +54,7 @@ export type McpServerConfig = McpStdioServer | McpSseServer | McpHttpServer;
 
 export interface McpServerStatus {
   name: string;
-  status: 'connected' | 'failed' | 'needs-auth' | 'pending';
+  status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled';
   serverInfo?: { name: string; version: string };
   error?: string;
 }

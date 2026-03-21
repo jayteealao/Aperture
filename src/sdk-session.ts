@@ -1,5 +1,8 @@
 import { EventEmitter } from 'events';
+import { fork, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import type { Config } from './config.js';
 import type { ApertureDatabase, MessageRecord } from './database.js';
 import type { AgentType, SessionConfig } from './agents/index.js';
@@ -23,6 +26,8 @@ import type {
 import type {
   Query,
   Options,
+  SDKSession as ClaudeV2Session,
+  SDKSessionOptions,
   SDKMessage,
   SDKAssistantMessage,
   SDKResultMessage,
@@ -33,7 +38,11 @@ import type {
   PermissionUpdate as SDKPermissionUpdate,
   SDKPermissionDenial,
 } from '@anthropic-ai/claude-agent-sdk';
-import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
+import {
+  getSessionInfo,
+  unstable_v2_createSession,
+  unstable_v2_resumeSession,
+} from '@anthropic-ai/claude-agent-sdk';
 
 // Pending permission request from SDK
 interface PendingPermission {
@@ -82,6 +91,34 @@ export interface SdkToolResultBlock {
 
 export type SdkContentBlock = SdkTextBlock | SdkThinkingBlock | SdkToolUseBlock | SdkToolResultBlock;
 
+interface ClaudeV2SessionWithQuery extends ClaudeV2Session {
+  query?: Query;
+}
+
+interface WorkerRpcPending {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+}
+
+type SdkWorkerMessage =
+  | { type: 'ready'; sessionId?: string }
+  | { type: 'sdk_message'; message: SDKMessage }
+  | {
+      type: 'permission_request';
+      toolName: string;
+      input: Record<string, unknown>;
+      toolUseId: string;
+      suggestions?: SDKPermissionUpdate[];
+      blockedPath?: string;
+      decisionReason?: string;
+      agentId?: string;
+    }
+  | { type: 'prompt_complete' }
+  | { type: 'prompt_failed'; error: string }
+  | { type: 'rpc_result'; requestId: number; result: unknown }
+  | { type: 'rpc_error'; requestId: number; error: string }
+  | { type: 'worker_error'; error: string };
+
 /**
  * Manages a single Claude SDK session (non-process based)
  * Provides the same event interface as Session for frontend compatibility
@@ -109,13 +146,25 @@ export class SdkSession extends EventEmitter {
   private database?: ApertureDatabase;
   private resolvedApiKey?: string;
   private workingDir?: string;
+  private runtimeSession: ClaudeV2SessionWithQuery | null = null;
+  private workerProcess: ChildProcess | null = null;
+  private workerReady: Promise<void> | null = null;
+  private workerReadyResolve: (() => void) | null = null;
+  private workerReadyReject: ((error: Error) => void) | null = null;
+  private workerPromptPromise: Promise<void> | null = null;
+  private workerPromptResolve: (() => void) | null = null;
+  private workerPromptReject: ((error: Error) => void) | null = null;
+  private workerRpcId = 0;
+  private pendingWorkerRpc: Map<number, WorkerRpcPending> = new Map();
   private abortController: AbortController | null = null;
   private currentQuery: Query | null = null;
+  private currentStream: AsyncGenerator<SDKMessage, void> | null = null;
   private pendingPermissions: Map<string, PendingPermission> = new Map();
   private lastActivityTime: number = Date.now();
   private idleTimer: NodeJS.Timeout | null = null;
   private isShuttingDown = false;
   private isProcessing = false;
+  private hasStartedConversation = false;
 
   // Result tracking
   private permissionDenials: PermissionDenial[] = [];
@@ -156,6 +205,16 @@ export class SdkSession extends EventEmitter {
     this.workingDir = path;
   }
 
+  private usesWorkerRuntime(): boolean {
+    return Boolean(this.workingDir && path.resolve(this.workingDir) !== process.cwd());
+  }
+
+  private getWorkerModulePath(): string {
+    const currentFile = fileURLToPath(import.meta.url);
+    const ext = path.extname(currentFile) === '.ts' ? '.ts' : '.js';
+    return fileURLToPath(new URL(`./sdk-session-worker${ext}`, import.meta.url));
+  }
+
   /**
    * Update SDK configuration dynamically
    */
@@ -174,6 +233,12 @@ export class SdkSession extends EventEmitter {
    * Starts the SDK session (no process to spawn, but we initialize state)
    */
   async start(): Promise<void> {
+    if (this.usesWorkerRuntime()) {
+      await this.ensureWorkerRuntime();
+    } else if (!this.runtimeSession) {
+      this.createOrResumeRuntimeSession();
+    }
+
     // Start idle timer
     this.resetIdleTimer();
 
@@ -200,10 +265,231 @@ export class SdkSession extends EventEmitter {
     this.emit('session_update', initMessage.params);
   }
 
+  private buildWorkerConfig(): Record<string, unknown> {
+    return {
+      model: this.sdkConfig.model,
+      allowedTools: this.sdkConfig.allowedTools,
+      disallowedTools: this.sdkConfig.disallowedTools,
+      permissionMode: this.sdkConfig.permissionMode,
+      systemPrompt: this.sdkConfig.systemPrompt,
+      maxThinkingTokens: this.sdkConfig.maxThinkingTokens,
+      mcpServers: this.sdkConfig.mcpServers,
+      additionalDirectories: this.sdkConfig.additionalDirectories,
+      settingSources: this.sdkConfig.settingSources,
+      sandbox: this.sdkConfig.sandbox,
+      agents: this.sdkConfig.agents,
+      agent: this.sdkConfig.agent,
+      outputFormat: this.sdkConfig.outputFormat,
+      fallbackModel: this.sdkConfig.fallbackModel,
+      allowDangerouslySkipPermissions: this.sdkConfig.allowDangerouslySkipPermissions,
+      plugins: this.sdkConfig.plugins,
+      betas: this.sdkConfig.betas,
+    };
+  }
+
+  private async ensureWorkerRuntime(): Promise<void> {
+    if (this.workerProcess && this.workerReady) {
+      await this.workerReady;
+      return;
+    }
+
+    const workerEnv: NodeJS.ProcessEnv = { ...process.env };
+    if (this.sessionConfig.env) {
+      Object.assign(workerEnv, this.sessionConfig.env);
+    }
+    if (this.resolvedApiKey) {
+      workerEnv.ANTHROPIC_API_KEY = this.resolvedApiKey;
+    }
+
+    const workerPath = this.getWorkerModulePath();
+    const child = fork(workerPath, [], {
+      cwd: this.workingDir || process.cwd(),
+      env: workerEnv,
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    });
+
+    this.workerProcess = child;
+    this.workerReady = new Promise<void>((resolve, reject) => {
+      this.workerReadyResolve = resolve;
+      this.workerReadyReject = reject;
+    });
+
+    child.on('message', (message: SdkWorkerMessage) => {
+      this.handleWorkerMessage(message);
+    });
+
+    child.stderr?.on('data', (chunk) => {
+      this.emit('stderr', chunk.toString());
+    });
+
+    child.on('exit', (code, signal) => {
+      const error = code === 0 || this.isShuttingDown
+        ? null
+        : new Error(`SDK worker exited unexpectedly (${code ?? 'null'}${signal ? `, ${signal}` : ''})`);
+
+      this.workerProcess = null;
+      this.workerReady = null;
+      this.runtimeSession = null;
+      this.currentQuery = null;
+      this.currentStream = null;
+
+      if (error) {
+        this.workerReadyReject?.(error);
+        this.workerPromptReject?.(error);
+        for (const pending of this.pendingWorkerRpc.values()) {
+          pending.reject(error);
+        }
+        this.pendingWorkerRpc.clear();
+        this.emit('error', error);
+      }
+
+      this.workerReadyResolve = null;
+      this.workerReadyReject = null;
+      this.workerPromptPromise = null;
+      this.workerPromptResolve = null;
+      this.workerPromptReject = null;
+      this.emit('exit', { code, signal });
+    });
+
+    child.send({
+      type: 'init',
+      config: this.buildWorkerConfig(),
+      resumeId: this.sdkConfig.resume || this.sdkSessionId || undefined,
+    });
+
+    await this.workerReady;
+  }
+
+  private handleWorkerMessage(message: SdkWorkerMessage): void {
+    switch (message.type) {
+      case 'ready':
+        if (message.sessionId && this.sdkSessionId !== message.sessionId) {
+          this.sdkSessionId = message.sessionId;
+          this.persistRuntimeSessionId();
+        }
+        this.workerReadyResolve?.();
+        this.workerReadyResolve = null;
+        this.workerReadyReject = null;
+        break;
+
+      case 'sdk_message':
+        this.updateActivity();
+        this.processSDKMessage(message.message);
+        break;
+
+      case 'permission_request':
+        this.handleWorkerPermissionRequest(message);
+        break;
+
+      case 'prompt_complete':
+        this.workerPromptResolve?.();
+        this.workerPromptPromise = null;
+        this.workerPromptResolve = null;
+        this.workerPromptReject = null;
+        break;
+
+      case 'prompt_failed': {
+        const error = new Error(message.error);
+        this.workerPromptReject?.(error);
+        this.workerPromptPromise = null;
+        this.workerPromptResolve = null;
+        this.workerPromptReject = null;
+        break;
+      }
+
+      case 'rpc_result': {
+        const pending = this.pendingWorkerRpc.get(message.requestId);
+        if (pending) {
+          this.pendingWorkerRpc.delete(message.requestId);
+          pending.resolve(message.result);
+        }
+        break;
+      }
+
+      case 'rpc_error': {
+        const pending = this.pendingWorkerRpc.get(message.requestId);
+        if (pending) {
+          this.pendingWorkerRpc.delete(message.requestId);
+          pending.reject(new Error(message.error));
+        }
+        break;
+      }
+
+      case 'worker_error':
+        this.emit('error', new Error(message.error));
+        break;
+    }
+  }
+
+  private handleWorkerPermissionRequest(message: Extract<SdkWorkerMessage, { type: 'permission_request' }>): void {
+    const permissionOptions = this.translatePermissionSuggestions(message.suggestions);
+    const context: PermissionContext = {
+      blockedPath: message.blockedPath,
+      decisionReason: message.decisionReason,
+      agentID: message.agentId,
+    };
+
+    this.pendingPermissions.set(message.toolUseId, {
+      toolName: message.toolName,
+      toolInput: message.input,
+      toolUseID: message.toolUseId,
+      resolve: () => {},
+      signal: new AbortController().signal,
+      options: permissionOptions,
+      context,
+    });
+
+    this.emit('permission_request', {
+      id: message.toolUseId,
+      toolCallId: message.toolUseId,
+      toolCall: {
+        toolCallId: message.toolUseId,
+        name: message.toolName,
+        rawInput: message.input,
+        title: message.toolName,
+      },
+      options: permissionOptions,
+      context,
+    });
+
+    this.emitSessionUpdate('request_permission', {
+      toolCallId: message.toolUseId,
+      toolCall: {
+        toolCallId: message.toolUseId,
+        name: message.toolName,
+        rawInput: message.input,
+        title: message.toolName,
+      },
+      options: permissionOptions,
+      context,
+    });
+  }
+
+  private async callWorkerRpc<T>(method: string, ...args: unknown[]): Promise<T> {
+    await this.ensureWorkerRuntime();
+
+    const requestId = ++this.workerRpcId;
+    const result = new Promise<T>((resolve, reject) => {
+      this.pendingWorkerRpc.set(requestId, {
+        resolve: (value) => resolve(value as T),
+        reject,
+      });
+    });
+
+    this.workerProcess?.send({
+      type: 'rpc',
+      requestId,
+      method,
+      args,
+    });
+
+    return result;
+  }
+
   /**
    * Build SDK options from configuration
    */
-  private buildOptions(): Options {
+  private buildRuntimeOptions(): Options {
     const env: Record<string, string | undefined> = { ...process.env };
     if (this.resolvedApiKey) {
       env.ANTHROPIC_API_KEY = this.resolvedApiKey;
@@ -216,7 +502,6 @@ export class SdkSession extends EventEmitter {
 
     const options: Options = {
       cwd: this.workingDir || process.cwd(),
-      abortController: this.abortController!,
       canUseTool: this.createCanUseTool(),
       env,
       includePartialMessages: true,
@@ -273,6 +558,77 @@ export class SdkSession extends EventEmitter {
     };
 
     return options;
+  }
+
+  private getRuntimeSessionOptions(): SDKSessionOptions {
+    return this.buildRuntimeOptions() as unknown as SDKSessionOptions;
+  }
+
+  private createOrResumeRuntimeSession(): void {
+    const options = this.getRuntimeSessionOptions();
+    const resumeId = this.sdkConfig.resume || this.sdkSessionId || undefined;
+
+    if (this.runtimeSession) {
+      this.runtimeSession.close();
+    }
+
+    this.runtimeSession = resumeId
+      ? (unstable_v2_resumeSession(resumeId, options) as ClaudeV2SessionWithQuery)
+      : (unstable_v2_createSession(options) as ClaudeV2SessionWithQuery);
+
+    this.currentQuery = this.runtimeSession.query ?? null;
+    this.currentStream = null;
+    this.hasStartedConversation = Boolean(resumeId);
+
+    if (resumeId) {
+      const resumedSessionId = this.runtimeSession.sessionId || resumeId;
+      if (this.sdkSessionId !== resumedSessionId) {
+        this.sdkSessionId = resumedSessionId;
+        this.persistRuntimeSessionId();
+      }
+    }
+  }
+
+  private persistRuntimeSessionId(): void {
+    if (this.sdkSessionId) {
+      this.sdkConfig.resume = this.sdkSessionId;
+      this.sdkConfig.continue = true;
+    }
+
+    if (!this.database || !this.sdkSessionId) {
+      return;
+    }
+
+    this.database.updateSdkSessionId(this.id, this.sdkSessionId);
+    this.database.updateSdkConfig(this.id, JSON.stringify(this.sdkConfig));
+    console.log(`[SDK-Session] Persisted SDK session ID: ${this.sdkSessionId}`);
+  }
+
+  static async canResumeProviderSession(
+    sdkSessionId: string,
+    workingDirectory?: string
+  ): Promise<boolean> {
+    try {
+      const info = await getSessionInfo(
+        sdkSessionId,
+        workingDirectory ? { dir: workingDirectory } : undefined
+      );
+      return Boolean(info);
+    } catch {
+      return false;
+    }
+  }
+
+  private shouldRefreshRuntimeSessionBeforePrompt(): boolean {
+    if (!this.runtimeSession) {
+      return true;
+    }
+
+    return Boolean(this.sdkConfig.resumeSessionAt || this.sdkConfig.forkSession);
+  }
+
+  private refreshRuntimeSessionForPrompt(): void {
+    this.createOrResumeRuntimeSession();
   }
 
   /**
@@ -412,96 +768,6 @@ export class SdkSession extends EventEmitter {
   }
 
   /**
-   * Proactively cache session info when query starts
-   * Emits messages so frontend receives the data
-   * Captures query reference to avoid race conditions with finally block
-   */
-  private async cacheSessionInfo(): Promise<void> {
-    // Capture query reference to avoid race condition where currentQuery
-    // becomes null in the finally block before Promise.allSettled completes
-    const query = this.currentQuery;
-    if (!query) {
-      console.log('[SDK-Session] cacheSessionInfo: No query available');
-      return;
-    }
-
-    console.log('[SDK-Session] cacheSessionInfo: Fetching session info...');
-
-    const [models, accountInfo, mcpStatus, commands] = await Promise.allSettled([
-      query.supportedModels(),
-      query.accountInfo(),
-      query.mcpServerStatus(),
-      query.supportedCommands(),
-    ]);
-
-    // Emit models or error
-    if (models.status === 'fulfilled') {
-      console.log('[SDK-Session] Models loaded:', models.value.length);
-      this.cachedModels = models.value;
-      this.emit('message', {
-        jsonrpc: '2.0',
-        method: 'session/supported_models',
-        params: { models: models.value },
-      });
-    } else {
-      console.log('[SDK-Session] Models failed:', models.reason);
-      this.emit('message', {
-        jsonrpc: '2.0',
-        method: 'session/supported_models',
-        params: { error: models.reason?.message || 'Failed to load models' },
-      });
-    }
-
-    // Emit account info or error
-    if (accountInfo.status === 'fulfilled') {
-      this.cachedAccountInfo = accountInfo.value;
-      this.emit('message', {
-        jsonrpc: '2.0',
-        method: 'session/account_info',
-        params: accountInfo.value,
-      });
-    } else {
-      this.emit('message', {
-        jsonrpc: '2.0',
-        method: 'session/account_info',
-        params: { error: accountInfo.reason?.message || 'Failed to load account info' },
-      });
-    }
-
-    // Emit MCP status or error
-    if (mcpStatus.status === 'fulfilled') {
-      this.cachedMcpStatus = mcpStatus.value;
-      this.emit('message', {
-        jsonrpc: '2.0',
-        method: 'session/mcp_status',
-        params: { servers: mcpStatus.value },
-      });
-    } else {
-      this.emit('message', {
-        jsonrpc: '2.0',
-        method: 'session/mcp_status',
-        params: { error: mcpStatus.reason?.message || 'Failed to load MCP status' },
-      });
-    }
-
-    // Emit commands or error
-    if (commands.status === 'fulfilled') {
-      this.cachedCommands = commands.value;
-      this.emit('message', {
-        jsonrpc: '2.0',
-        method: 'session/supported_commands',
-        params: { commands: commands.value },
-      });
-    } else {
-      this.emit('message', {
-        jsonrpc: '2.0',
-        method: 'session/supported_commands',
-        params: { error: commands.reason?.message || 'Failed to load commands' },
-      });
-    }
-  }
-
-  /**
    * Sends a prompt to the agent, optionally with image attachments
    */
   async sendPrompt(content: string, images?: import('./agents/types.js').ImageAttachment[]): Promise<void> {
@@ -520,15 +786,19 @@ export class SdkSession extends EventEmitter {
     // Reset per-prompt state
     this.permissionDenials = [];
 
-    // Create new abort controller for this prompt
-    this.abortController = new AbortController();
-
     try {
-      // Build options from config
-      const options = this.buildOptions();
+      if (this.usesWorkerRuntime()) {
+        await this.ensureWorkerRuntime();
+      } else if (this.shouldRefreshRuntimeSessionBeforePrompt()) {
+        this.refreshRuntimeSessionForPrompt();
+      }
+
+      if (!this.usesWorkerRuntime() && !this.runtimeSession) {
+        this.createOrResumeRuntimeSession();
+      }
 
       // Build the prompt: plain string or SDKUserMessage with image content blocks
-      let prompt: string | AsyncIterable<SDKUserMessage>;
+      let prompt: string | SDKUserMessage;
       if (images && images.length > 0) {
         type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
         // Build a MessageParam with text + image content blocks
@@ -561,34 +831,42 @@ export class SdkSession extends EventEmitter {
             content: contentBlocks,
           },
           parent_tool_use_id: null,
-          session_id: this.id,
+          session_id: this.sdkSessionId || this.id,
         };
-
-        // Wrap single message as an async iterable
-        async function* singleMessage() {
-          yield userMessage;
-        }
-        prompt = singleMessage();
+        prompt = userMessage;
       } else {
         prompt = content;
       }
 
-      // Start the query
-      this.currentQuery = sdkQuery({ prompt, options });
+      if (this.usesWorkerRuntime()) {
+        this.workerPromptPromise = new Promise<void>((resolve, reject) => {
+          this.workerPromptResolve = resolve;
+          this.workerPromptReject = reject;
+        });
+        this.workerProcess?.send({
+          type: 'prompt',
+          prompt,
+        });
+        this.hasStartedConversation = true;
+        await this.workerPromptPromise;
+      } else {
+        this.abortController = new AbortController();
 
-      // Proactively cache session info when query starts
-      this.cacheSessionInfo().catch((err) => {
-        console.warn('[SDK-Session] Failed to cache session info:', err);
-      });
+        await this.runtimeSession!.send(prompt);
+        this.hasStartedConversation = true;
+        this.currentStream = this.runtimeSession!.stream();
 
-      // Process messages from the async iterator
-      for await (const message of this.currentQuery) {
-        this.updateActivity();
-        this.processSDKMessage(message);
+        // Process messages from the async iterator
+        for await (const message of this.currentStream) {
+          this.updateActivity();
+          this.processSDKMessage(message);
+        }
       }
 
       // Query completed successfully
       this.isProcessing = false;
+      this.sdkConfig.resumeSessionAt = undefined;
+      this.sdkConfig.forkSession = undefined;
 
     } catch (error) {
       this.isProcessing = false;
@@ -601,8 +879,11 @@ export class SdkSession extends EventEmitter {
       this.emit('error', error);
       throw error;
     } finally {
-      this.currentQuery = null;
+      this.currentStream = null;
       this.abortController = null;
+      this.workerPromptPromise = null;
+      this.workerPromptResolve = null;
+      this.workerPromptReject = null;
     }
   }
 
@@ -615,13 +896,7 @@ export class SdkSession extends EventEmitter {
       const newSessionId = message.session_id;
       if (this.sdkSessionId !== newSessionId) {
         this.sdkSessionId = newSessionId;
-        // Persist SDK session ID to database for resumption
-        if (this.database) {
-          this.database.updateSdkSessionId(this.id, newSessionId);
-          // Also persist current SDK config
-          this.database.updateSdkConfig(this.id, JSON.stringify(this.sdkConfig));
-          console.log(`[SDK-Session] Persisted SDK session ID: ${newSessionId}`);
-        }
+        this.persistRuntimeSessionId();
       }
     }
 
@@ -1118,8 +1393,15 @@ export class SdkSession extends EventEmitter {
    * Interrupt the current query gracefully
    */
   async interrupt(): Promise<void> {
-    if (this.currentQuery) {
+    if (this.usesWorkerRuntime()) {
+      await this.callWorkerRpc<boolean>('interrupt');
+      return;
+    }
+    if (this.currentQuery && this.isProcessing) {
       await this.currentQuery.interrupt();
+    }
+    if (this.currentStream) {
+      await this.currentStream.return?.(undefined);
     }
   }
 
@@ -1127,7 +1409,13 @@ export class SdkSession extends EventEmitter {
    * Set permission mode for the current query
    */
   async setPermissionMode(mode: PermissionMode): Promise<void> {
-    if (this.currentQuery) {
+    if (this.usesWorkerRuntime() && this.hasStartedConversation) {
+      try {
+        await this.callWorkerRpc('setPermissionMode', mode);
+      } catch {
+        // Fall back to updating local config for the next prompt if the runtime cannot mutate live state.
+      }
+    } else if (this.currentQuery && this.hasStartedConversation) {
       await this.currentQuery.setPermissionMode(mode);
     }
     this.sdkConfig.permissionMode = mode;
@@ -1138,7 +1426,13 @@ export class SdkSession extends EventEmitter {
    * Set model for the current query
    */
   async setModel(model?: string): Promise<void> {
-    if (this.currentQuery) {
+    if (this.usesWorkerRuntime() && this.hasStartedConversation) {
+      try {
+        await this.callWorkerRpc('setModel', model);
+      } catch {
+        // Fall back to updating local config for the next prompt if the runtime cannot mutate live state.
+      }
+    } else if (this.currentQuery && this.hasStartedConversation) {
       await this.currentQuery.setModel(model);
     }
     this.sdkConfig.model = model;
@@ -1149,7 +1443,13 @@ export class SdkSession extends EventEmitter {
    * Set max thinking tokens for the current query
    */
   async setMaxThinkingTokens(tokens: number | null): Promise<void> {
-    if (this.currentQuery) {
+    if (this.usesWorkerRuntime() && this.hasStartedConversation) {
+      try {
+        await this.callWorkerRpc('setMaxThinkingTokens', tokens);
+      } catch {
+        // Fall back to updating local config for the next prompt if the runtime cannot mutate live state.
+      }
+    } else if (this.currentQuery && this.hasStartedConversation) {
       await this.currentQuery.setMaxThinkingTokens(tokens);
     }
     this.sdkConfig.maxThinkingTokens = tokens ?? undefined;
@@ -1164,7 +1464,12 @@ export class SdkSession extends EventEmitter {
    * Get supported slash commands/skills
    */
   async getSupportedCommands(): Promise<SlashCommand[]> {
-    if (this.currentQuery) {
+    if (this.usesWorkerRuntime() && this.hasStartedConversation) {
+      const commands = await this.callWorkerRpc<SlashCommand[]>('supportedCommands');
+      this.cachedCommands = commands;
+      return commands;
+    }
+    if (this.currentQuery && this.hasStartedConversation) {
       const commands = await this.currentQuery.supportedCommands();
       this.cachedCommands = commands;
       return commands;
@@ -1179,7 +1484,12 @@ export class SdkSession extends EventEmitter {
    * Get supported models
    */
   async getSupportedModels(): Promise<ModelInfo[]> {
-    if (this.currentQuery) {
+    if (this.usesWorkerRuntime() && this.hasStartedConversation) {
+      const models = await this.callWorkerRpc<ModelInfo[]>('supportedModels');
+      this.cachedModels = models;
+      return models;
+    }
+    if (this.currentQuery && this.hasStartedConversation) {
       const models = await this.currentQuery.supportedModels();
       this.cachedModels = models;
       return models;
@@ -1194,7 +1504,12 @@ export class SdkSession extends EventEmitter {
    * Get account information
    */
   async getAccountInfo(): Promise<AccountInfo> {
-    if (this.currentQuery) {
+    if (this.usesWorkerRuntime() && this.hasStartedConversation) {
+      const accountInfo = await this.callWorkerRpc<AccountInfo>('accountInfo');
+      this.cachedAccountInfo = accountInfo;
+      return accountInfo;
+    }
+    if (this.currentQuery && this.hasStartedConversation) {
       const accountInfo = await this.currentQuery.accountInfo();
       this.cachedAccountInfo = accountInfo;
       return accountInfo;
@@ -1209,7 +1524,12 @@ export class SdkSession extends EventEmitter {
    * Get MCP server status
    */
   async getMcpServerStatus(): Promise<McpServerStatus[]> {
-    if (this.currentQuery) {
+    if (this.usesWorkerRuntime() && this.hasStartedConversation) {
+      const mcpStatus = await this.callWorkerRpc<McpServerStatus[]>('mcpServerStatus');
+      this.cachedMcpStatus = mcpStatus;
+      return mcpStatus;
+    }
+    if (this.currentQuery && this.hasStartedConversation) {
       const mcpStatus = await this.currentQuery.mcpServerStatus();
       this.cachedMcpStatus = mcpStatus;
       return mcpStatus;
@@ -1228,6 +1548,9 @@ export class SdkSession extends EventEmitter {
    * Rewind files to a checkpoint
    */
   async rewindFiles(messageId: string, dryRun = false): Promise<RewindFilesResult> {
+    if (this.usesWorkerRuntime()) {
+      return this.callWorkerRpc<RewindFilesResult>('rewindFiles', messageId, { dryRun });
+    }
     if (!this.currentQuery) {
       throw new Error('No active query - send a prompt first');
     }
@@ -1252,13 +1575,22 @@ export class SdkSession extends EventEmitter {
    * Set MCP servers dynamically
    */
   async setMcpServers(servers: Record<string, McpServerConfig>): Promise<McpSetServersResult> {
-    if (!this.currentQuery) {
-      throw new Error('No active query - send a prompt first');
-    }
-    const result = await this.currentQuery.setMcpServers(servers as Parameters<Query['setMcpServers']>[0]);
-    // Update local config
+    // Update local config first so future turns always see the new MCP set.
     this.sdkConfig.mcpServers = { ...this.sdkConfig.mcpServers, ...servers };
-    return result;
+
+    if (this.usesWorkerRuntime() && this.hasStartedConversation) {
+      return this.callWorkerRpc<McpSetServersResult>('setMcpServers', servers as Record<string, unknown>);
+    }
+
+    if (!this.currentQuery || !this.hasStartedConversation) {
+      return {
+        added: Object.keys(servers),
+        removed: [],
+        errors: {},
+      };
+    }
+
+    return this.currentQuery.setMcpServers(servers as Parameters<Query['setMcpServers']>[0]);
   }
 
   // ===========================================================================
@@ -1333,6 +1665,14 @@ export class SdkSession extends EventEmitter {
 
     pending.resolve(result);
     this.pendingPermissions.delete(toolCallId);
+    if (this.usesWorkerRuntime()) {
+      await this.ensureWorkerRuntime();
+      this.workerProcess?.send({
+        type: 'permission_response',
+        toolUseId: toolCallId,
+        result,
+      });
+    }
   }
 
   /**
@@ -1352,18 +1692,39 @@ export class SdkSession extends EventEmitter {
     });
 
     this.pendingPermissions.delete(toolCallId);
+    if (this.usesWorkerRuntime()) {
+      await this.ensureWorkerRuntime();
+      this.workerProcess?.send({
+        type: 'permission_response',
+        toolUseId: toolCallId,
+        result: {
+          behavior: 'deny',
+          message: 'Permission request cancelled',
+          interrupt: true,
+          toolUseID: toolCallId,
+        },
+      });
+    }
   }
 
   /**
    * Cancels the current prompt
    */
   async cancelPrompt(): Promise<void> {
+    if (this.usesWorkerRuntime()) {
+      await this.ensureWorkerRuntime();
+      this.workerProcess?.send({ type: 'interrupt' });
+    }
     if (this.abortController) {
       this.abortController.abort();
     }
 
     if (this.currentQuery) {
-      this.currentQuery.close();
+      await this.currentQuery.interrupt();
+    }
+
+    if (this.currentStream) {
+      await this.currentStream.return?.(undefined);
     }
 
     // Cancel all pending permissions
@@ -1378,6 +1739,7 @@ export class SdkSession extends EventEmitter {
     this.pendingPermissions.clear();
 
     this.isProcessing = false;
+    this.currentStream = null;
   }
 
   // ===========================================================================
@@ -1405,7 +1767,6 @@ export class SdkSession extends EventEmitter {
       const idle = Date.now() - this.lastActivityTime;
       if (idle >= this.config.sessionIdleTimeoutMs) {
         this.emit('idle');
-        this.terminate();
       }
     }, this.config.sessionIdleTimeoutMs);
   }
@@ -1422,6 +1783,20 @@ export class SdkSession extends EventEmitter {
 
     // Cancel any active prompt
     await this.cancelPrompt();
+
+    if (this.workerProcess) {
+      this.workerProcess.send({ type: 'close' });
+      this.workerProcess = null;
+      this.workerReady = null;
+      this.pendingWorkerRpc.clear();
+    }
+
+    if (this.runtimeSession) {
+      this.runtimeSession.close();
+      this.runtimeSession = null;
+      this.currentQuery = null;
+      this.currentStream = null;
+    }
 
     if (this.idleTimer) {
       clearTimeout(this.idleTimer);
@@ -1449,17 +1824,19 @@ export class SdkSession extends EventEmitter {
     lastResult: SessionResult | null;
     workingDirectory: string | undefined;
   } {
+    const effectiveSdkSessionId = this.sdkSessionId || this.sdkConfig.resume || null;
+
     return {
       id: this.id,
       agent: this.agentType,
       authMode: this.sessionConfig.auth.mode,
-      running: !this.isShuttingDown,
+      running: this.isProcessing,
       pendingRequests: this.pendingPermissions.size,
       lastActivityTime: this.lastActivityTime,
       idleMs: Date.now() - this.lastActivityTime,
-      acpSessionId: this.sdkSessionId, // Backward compat
-      sdkSessionId: this.sdkSessionId, // Explicit field
-      isResumable: !this.isShuttingDown && !!this.sdkSessionId,
+      acpSessionId: effectiveSdkSessionId, // Backward compat
+      sdkSessionId: effectiveSdkSessionId, // Explicit field
+      isResumable: !this.isShuttingDown && !!effectiveSdkSessionId,
       config: this.sdkConfig,
       lastResult: this.lastResult,
       workingDirectory: this.workingDir,

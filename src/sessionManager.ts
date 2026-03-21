@@ -90,31 +90,47 @@ export class SessionManager {
       return;
     }
 
-    const activeSessions = this.database.getActiveSessions();
-    this.logger.info(`Found ${activeSessions.length} active sessions in database`);
+    const resumableSessions = this.database.getResumableSessions();
+    this.logger.info(`Found ${resumableSessions.length} resumable sessions in database`);
 
     let endedCount = 0;
     let sdkResumableCount = 0;
+    let invalidResumeCount = 0;
 
-    for (const sessionRecord of activeSessions) {
+    for (const sessionRecord of resumableSessions) {
       // Claude SDK sessions with sdk_session_id can be resumed
       if (sessionRecord.sdk_session_id && sessionRecord.agent === 'claude_sdk') {
-        this.database.markSdkSessionsIdle();
-        sdkResumableCount++;
+        const canResume = await SdkSession.canResumeProviderSession(
+          sessionRecord.sdk_session_id,
+          sessionRecord.working_directory || undefined
+        );
+
+        if (canResume) {
+          this.database.updateSessionStatus(sessionRecord.id, 'idle', Date.now(), null);
+          sdkResumableCount++;
+        } else {
+          this.database.endSession(sessionRecord.id, Date.now());
+          this.database.markNonResumable(sessionRecord.id);
+          invalidResumeCount++;
+        }
       }
       // Pi SDK sessions with pi_session_path can be resumed
       else if (sessionRecord.pi_session_path && sessionRecord.agent === 'pi_sdk') {
-        this.database.markSdkSessionsIdle();
+        this.database.updateSessionStatus(sessionRecord.id, 'idle', Date.now(), null);
         sdkResumableCount++;
       } else {
         // Sessions without resumption data can't be resumed
         this.database.endSession(sessionRecord.id, Date.now());
+        this.database.markNonResumable(sessionRecord.id);
         endedCount++;
       }
     }
 
     if (endedCount > 0) {
       this.logger.info(`Marked ${endedCount} sessions as ended`);
+    }
+    if (invalidResumeCount > 0) {
+      this.logger.info(`Downgraded ${invalidResumeCount} Claude sessions to history-only because provider resume metadata no longer resolves`);
     }
     this.logger.info(`Kept ${sdkResumableCount} SDK sessions as idle (resumable)`);
   }
@@ -156,6 +172,19 @@ export class SessionManager {
   private async restoreClaudeSdkSession(sessionId: string, sessionRecord: SessionRecord): Promise<SdkSession> {
     if (!sessionRecord.sdk_session_id) {
       throw new Error(`Session ${sessionId} has no SDK session ID`);
+    }
+
+    const canResume = await SdkSession.canResumeProviderSession(
+      sessionRecord.sdk_session_id,
+      sessionRecord.working_directory || undefined
+    );
+
+    if (!canResume) {
+      if (this.database) {
+        this.database.endSession(sessionId, Date.now());
+        this.database.markNonResumable(sessionId);
+      }
+      throw new Error(`Claude provider session can no longer be resumed for ${sessionId}`);
     }
 
     // Parse stored SDK config
@@ -710,39 +739,19 @@ export class SessionManager {
     }
 
     // Set up event handlers
-    session.on('exit', () => {
-      this.sessions.delete(id);
-      if (this.database) {
-        this.database.endSession(id, Date.now());
-      }
-    });
-
-    session.on('idle', () => {
-      this.logger.info(`Session ${id} idle`);
-      if (this.database) {
-        this.database.updateSessionStatus(id, 'idle', Date.now(), null);
-      }
-    });
-
-    session.on('error', (err: Error) => {
-      this.logger.error({ err }, `Session ${id} error`);
-    });
-
+    this.setupSdkSessionEventHandlers(session, id);
     session.on('stderr', (line: string) => {
       this.logger.error(`Session ${id} stderr: ${line}`);
     });
 
-    // Set up activity tracking
-    session.on('activity', () => {
-      if (this.database) {
-        this.database.updateSessionActivity(id, Date.now());
-      }
-    });
-
-    // Start the session
-    await session.start();
-
     this.sessions.set(id, session);
+    // Start the session
+    try {
+      await session.start();
+    } catch (error) {
+      this.sessions.delete(id);
+      throw error;
+    }
     return session;
   }
 
@@ -795,11 +804,14 @@ export class SessionManager {
 
     // Set up event handlers
     this.setupPiSessionEventHandlers(session, id);
-
-    // Start the session
-    await session.start();
-
     this.sessions.set(id, session);
+    // Start the session
+    try {
+      await session.start();
+    } catch (error) {
+      this.sessions.delete(id);
+      throw error;
+    }
     return session;
   }
 
