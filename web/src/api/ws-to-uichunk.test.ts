@@ -55,6 +55,21 @@ describe('WsToUIChunkTranslator', () => {
     ])
   })
 
+  it('backfills finalized assistant text when assistant_message arrives without usable deltas', () => {
+    const translator = new WsToUIChunkTranslator()
+
+    const chunks = translator.translateSdkEvent('assistant_message', {
+      content: [{ type: 'text', text: 'Hi! How can I help you today?' }],
+    })
+
+    expect(chunks).toMatchObject([
+      { type: 'start' },
+      { type: 'text-start', id: 'block-1' },
+      { type: 'text-delta', id: 'block-1', delta: 'Hi! How can I help you today?' },
+      { type: 'text-end', id: 'block-1' },
+    ])
+  })
+
   it('emits error chunk without finish on prompt_error (no double-terminal)', () => {
     const translator = new WsToUIChunkTranslator()
 

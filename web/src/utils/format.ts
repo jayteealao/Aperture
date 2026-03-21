@@ -23,6 +23,29 @@ export function formatDateTime(timestamp: string | number | Date): string {
   return `${formatDate(date)} ${formatTime(date)}`
 }
 
+export function formatMessageTimestamp(timestamp: string | number | Date): string {
+  const date = new Date(timestamp)
+  const now = new Date()
+
+  if (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  ) {
+    return date.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
+
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 export function formatRelativeTime(timestamp: string | number | Date): string {
   const date = new Date(timestamp)
   const now = new Date()

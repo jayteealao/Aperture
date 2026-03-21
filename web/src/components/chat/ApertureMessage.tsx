@@ -15,6 +15,7 @@ import {
 } from '@/components/ai-elements/reasoning'
 import type { ApertureUIMessage } from '@/utils/ui-message'
 import { getMessageTimestamp } from '@/utils/ui-message'
+import { formatMessageTimestamp } from '@/utils/format'
 import { ApertureToolPart } from './ApertureToolPart'
 
 const SAFE_URL_PROTOCOLS = new Set(['http:', 'https:', 'data:', 'blob:'])
@@ -85,7 +86,7 @@ export const ApertureMessage = memo(function ApertureMessage({
 
         {timestamp && (
           <div className="mt-2 text-2xs opacity-50">
-            {new Date(timestamp).toLocaleTimeString()}
+            {formatMessageTimestamp(timestamp)}
           </div>
         )}
       </MessageContent>

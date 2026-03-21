@@ -16,7 +16,7 @@ import { InputField } from '@/components/ui/input-field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import type { AgentType, AuthMode, Session } from '@/api/types'
-import { History, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 
 // ── AddSessionDialog ───────────────────────────────────────────────────────
 // Focused dialog: only agent type + auth. Repo is already known from the
@@ -252,15 +252,13 @@ export default function WorkspaceView() {
   const liveWorkspaceSessions = workspaceSessions.filter(
     (session) =>
       session.status.running ||
-      !!session.status.sdkSessionId ||
-      !!session.status.piSessionPath,
+      !!session.status.isResumable,
   )
 
   const historicalWorkspaceSessions = workspaceSessions.filter(
     (session) =>
       !session.status.running &&
-      !session.status.sdkSessionId &&
-      !session.status.piSessionPath,
+      !session.status.isResumable,
   )
 
   const handleSessionCreated = () => {
@@ -272,92 +270,60 @@ export default function WorkspaceView() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Session grid or empty state */}
-      {liveWorkspaceSessions.length === 0 && historicalWorkspaceSessions.length === 0 ? (
+      {liveWorkspaceSessions.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
-          <button
-            onClick={() => setShowAddSession(true)}
-            className={cn(
-              'flex flex-col items-center justify-center gap-3',
-              'w-48 h-48 rounded-2xl',
-              'border-2 border-dashed border-border',
-              'hover:border-accent/50 hover:bg-accent/5',
-              'text-muted-foreground/60 hover:text-accent',
-              'transition-colors',
+          <div className="flex flex-col items-center justify-center gap-4 text-center">
+            {historicalWorkspaceSessions.length > 0 && (
+              <div className="max-w-sm space-y-1">
+                <p className="text-sm font-medium text-foreground">
+                  No live sessions in this workspace
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Previous sessions have moved into the workspace sidebar. Start a new session to open a live pane here.
+                </p>
+              </div>
             )}
-          >
-            <Plus size={28} />
-            <span className="text-sm font-medium">New session</span>
-          </button>
+            <button
+              onClick={() => setShowAddSession(true)}
+              className={cn(
+                'flex flex-col items-center justify-center gap-3',
+                'w-48 h-48 rounded-2xl',
+                'border-2 border-dashed border-border',
+                'hover:border-accent/50 hover:bg-accent/5',
+                'text-muted-foreground/60 hover:text-accent',
+                'transition-colors',
+              )}
+            >
+              <Plus size={28} />
+              <span className="text-sm font-medium">New session</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="flex-1 flex flex-col min-h-0">
-          {liveWorkspaceSessions.length > 0 && (
-            <div className="flex gap-3 p-3 overflow-x-auto min-h-0">
-              {liveWorkspaceSessions.map((session) => (
-                <div
-                  key={session.id}
-                  className="min-w-[480px] flex-1 flex flex-col rounded-xl border border-border bg-card overflow-hidden"
-                >
-                  <WorkspaceChatPane sessionId={session.id} />
-                </div>
-              ))}
-              <button
-                onClick={() => setShowAddSession(true)}
-                className={cn(
-                  'min-w-[140px] w-36 shrink-0 flex flex-col items-center justify-center gap-2',
-                  'rounded-xl border-2 border-dashed border-border',
-                  'hover:border-accent/50 hover:bg-accent/5',
-                  'text-muted-foreground/50 hover:text-accent',
-                  'transition-colors',
-                )}
+          <div className="flex flex-1 gap-3 p-3 overflow-x-auto min-h-0">
+            {liveWorkspaceSessions.map((session) => (
+              <div
+                key={session.id}
+                className="min-w-[480px] flex-1 h-full min-h-0 flex flex-col rounded-xl border border-border bg-card overflow-hidden"
               >
-                <Plus size={20} />
-                <span className="text-xs font-medium">New session</span>
-              </button>
-            </div>
-          )}
-
-          {historicalWorkspaceSessions.length > 0 && (
-            <div className="px-3 pb-3">
-              <div className="rounded-xl border border-border bg-card/80 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <History size={16} />
-                  <span>Previous Sessions</span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Older sessions without live resume metadata are kept as history and won&apos;t auto-connect.
-                </p>
-                <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                  {historicalWorkspaceSessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-mono text-xs text-foreground">
-                          {session.id.slice(0, 8)}
-                        </span>
-                        <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                          History only
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {session.agent === 'claude_sdk' ? 'Claude SDK' : 'Pi SDK'}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                {liveWorkspaceSessions.length === 0 && (
-                  <div className="mt-4">
-                    <Button onClick={() => setShowAddSession(true)}>
-                      <Plus size={16} />
-                      New Session
-                    </Button>
-                  </div>
-                )}
+                <WorkspaceChatPane sessionId={session.id} />
               </div>
-            </div>
-          )}
+            ))}
+            <button
+              onClick={() => setShowAddSession(true)}
+              className={cn(
+                'min-w-[140px] w-36 h-full shrink-0 flex flex-col items-center justify-center gap-2',
+                'rounded-xl border-2 border-dashed border-border',
+                'hover:border-accent/50 hover:bg-accent/5',
+                'text-muted-foreground/50 hover:text-accent',
+                'transition-colors',
+              )}
+            >
+              <Plus size={20} />
+              <span className="text-xs font-medium">New session</span>
+            </button>
+          </div>
         </div>
       )}
 

@@ -192,6 +192,45 @@ export class WsToUIChunkTranslator {
         this.ensureStarted(chunks)
         const content = (payload as { content?: Array<Record<string, unknown>> }).content ?? []
         for (const block of content) {
+          if (block.type === 'text' && typeof block.text === 'string') {
+            const textBlockId = this.nextBlockId()
+            chunks.push({ type: 'text-start', id: textBlockId })
+            if (block.text.length > 0) {
+              chunks.push({ type: 'text-delta', id: textBlockId, delta: block.text })
+            }
+            chunks.push({ type: 'text-end', id: textBlockId })
+            continue
+          }
+
+          if (block.type === 'thinking' && typeof block.thinking === 'string') {
+            const reasoningBlockId = this.nextBlockId()
+            chunks.push({ type: 'reasoning-start', id: reasoningBlockId })
+            if (block.thinking.length > 0) {
+              chunks.push({
+                type: 'reasoning-delta',
+                id: reasoningBlockId,
+                delta: block.thinking,
+              })
+            }
+            chunks.push({ type: 'reasoning-end', id: reasoningBlockId })
+            continue
+          }
+
+          if (block.type === 'tool_use' && typeof block.id === 'string') {
+            chunks.push({
+              type: 'tool-input-start',
+              toolCallId: block.id,
+              toolName: typeof block.name === 'string' ? block.name : 'tool',
+            })
+            chunks.push({
+              type: 'tool-input-available',
+              toolCallId: block.id,
+              toolName: typeof block.name === 'string' ? block.name : 'tool',
+              input: block.input ?? {},
+            })
+            continue
+          }
+
           if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
             if (block.is_error) {
               chunks.push({
