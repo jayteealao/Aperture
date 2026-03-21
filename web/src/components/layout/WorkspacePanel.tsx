@@ -47,7 +47,7 @@ export function WorkspacePanel() {
   return (
     <div
       className={cn(
-        'hidden lg:flex flex-col border-r border-border bg-card/60 shrink-0',
+        'hidden md:flex flex-col border-r border-border bg-card/60 shrink-0',
         'transition-[width] duration-200 ease-out overflow-hidden',
         workspacePanelOpen ? 'w-60' : 'w-0',
       )}
@@ -148,9 +148,20 @@ export function WorkspacePanel() {
                     <p className="px-2 py-2 text-xs text-foreground/40">No previous sessions</p>
                   ) : (
                     historicalSessions.map((session) => (
-                      <div
+                      <button
                         key={session.id}
-                        className="flex items-center gap-2 rounded-lg px-2 py-2 text-muted-foreground"
+                        onClick={() => {
+                          setActiveSession(session.id)
+                          if (activeWorkspaceId) {
+                            navigate(`/workspaces/${activeWorkspaceId}`)
+                          }
+                        }}
+                        className={cn(
+                          'w-full flex items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors',
+                          session.id === activeSessionId
+                            ? 'bg-accent/10 text-accent'
+                            : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+                        )}
                       >
                         <span className="w-2 h-2 rounded-full bg-foreground/20 shrink-0" />
                         <div className="min-w-0 flex-1">
@@ -159,7 +170,7 @@ export function WorkspacePanel() {
                             History only
                           </p>
                         </div>
-                      </div>
+                      </button>
                     ))
                   )}
                 </div>

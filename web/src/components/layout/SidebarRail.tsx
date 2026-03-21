@@ -224,7 +224,7 @@ export function SidebarRail() {
 
   return (
     // Outer <aside> holds the 56px slot in the flex layout — never changes size.
-    <aside className="relative w-14 h-full shrink-0 hidden lg:block">
+    <aside className="relative hidden h-full w-14 shrink-0 md:block">
       {/* Inner expanding panel — absolute so it overlays content on hover */}
       <div
         className={cn(

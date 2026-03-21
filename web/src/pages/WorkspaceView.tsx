@@ -179,6 +179,7 @@ export default function WorkspaceView() {
   const { id } = useParams<{ id: string }>()
   const sessions = useSessionsStore((s) => s.sessions)
   const addSession = useSessionsStore((s) => s.addSession)
+  const activeSessionId = useSessionsStore((s) => s.activeSessionId)
   const { setActiveWorkspaceId, setWorkspacePanelOpen } = useAppStore()
 
   const [showAddSession, setShowAddSession] = useState(false)
@@ -261,6 +262,13 @@ export default function WorkspaceView() {
       !session.status.isResumable,
   )
 
+  const selectedHistoricalSession =
+    historicalWorkspaceSessions.find((session) => session.id === activeSessionId) ?? null
+
+  const visibleWorkspaceSessions = selectedHistoricalSession
+    ? [...liveWorkspaceSessions, selectedHistoricalSession]
+    : liveWorkspaceSessions
+
   const handleSessionCreated = () => {
     setShowAddSession(false)
     // The new session appears automatically — addSession updates the store,
@@ -270,7 +278,7 @@ export default function WorkspaceView() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Session grid or empty state */}
-      {liveWorkspaceSessions.length === 0 ? (
+      {visibleWorkspaceSessions.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center justify-center gap-4 text-center">
             {historicalWorkspaceSessions.length > 0 && (
@@ -302,7 +310,7 @@ export default function WorkspaceView() {
       ) : (
         <div className="flex-1 flex flex-col min-h-0">
           <div className="flex flex-1 gap-3 p-3 overflow-x-auto min-h-0">
-            {liveWorkspaceSessions.map((session) => (
+            {visibleWorkspaceSessions.map((session) => (
               <div
                 key={session.id}
                 className="min-w-[480px] flex-1 h-full min-h-0 flex flex-col rounded-xl border border-border bg-card overflow-hidden"

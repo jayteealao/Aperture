@@ -51,6 +51,31 @@ const STORAGE_KEYS = {
   isConnected: 'aperture:isConnected',
 }
 
+function safeGet(storage: Storage | undefined, key: string): string | null {
+  try {
+    return storage?.getItem(key) ?? null
+  } catch (error) {
+    console.warn(`[AppStore] Failed to read ${key} from storage`, error)
+    return null
+  }
+}
+
+function safeSet(storage: Storage | undefined, key: string, value: string): void {
+  try {
+    storage?.setItem(key, value)
+  } catch (error) {
+    console.warn(`[AppStore] Failed to persist ${key} to storage`, error)
+  }
+}
+
+function safeRemove(storage: Storage | undefined, key: string): void {
+  try {
+    storage?.removeItem(key)
+  } catch (error) {
+    console.warn(`[AppStore] Failed to remove ${key} from storage`, error)
+  }
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   // Initial state
   gatewayUrl: '',
@@ -66,23 +91,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Actions
   setGatewayUrl: (url) => {
     set({ gatewayUrl: url })
-    localStorage.setItem(STORAGE_KEYS.gatewayUrl, url)
+    safeSet(globalThis.localStorage, STORAGE_KEYS.gatewayUrl, url)
   },
 
   setApiToken: (token) => {
     set({ apiToken: token })
     // Use sessionStorage by default for security
-    sessionStorage.setItem(STORAGE_KEYS.apiToken, token)
+    safeSet(globalThis.sessionStorage, STORAGE_KEYS.apiToken, token)
   },
 
   setConnected: (connected) => {
     set({ isConnected: connected })
-    localStorage.setItem(STORAGE_KEYS.isConnected, String(connected))
+    safeSet(globalThis.localStorage, STORAGE_KEYS.isConnected, String(connected))
   },
 
   setTheme: (theme) => {
     set({ theme })
-    localStorage.setItem(STORAGE_KEYS.theme, theme)
+    safeSet(globalThis.localStorage, STORAGE_KEYS.theme, theme)
   },
 
   toggleTheme: () => {
@@ -103,34 +128,32 @@ export const useAppStore = create<AppState>((set, get) => ({
   setWorkspacePanelOpen: (open) => set({ workspacePanelOpen: open }),
 
   initFromStorage: () => {
-    const gatewayUrl = localStorage.getItem(STORAGE_KEYS.gatewayUrl) || 'http://localhost:8080'
-    const apiToken = sessionStorage.getItem(STORAGE_KEYS.apiToken) || ''
-    const theme = (localStorage.getItem(STORAGE_KEYS.theme) as Theme) || 'dark'
-    const isConnected = localStorage.getItem(STORAGE_KEYS.isConnected) === 'true' && !!apiToken
+    const gatewayUrl = safeGet(globalThis.localStorage, STORAGE_KEYS.gatewayUrl) || 'http://localhost:8080'
+    const apiToken = safeGet(globalThis.sessionStorage, STORAGE_KEYS.apiToken) || ''
+    const theme = (safeGet(globalThis.localStorage, STORAGE_KEYS.theme) as Theme | null) || 'dark'
+    const isConnected = safeGet(globalThis.localStorage, STORAGE_KEYS.isConnected) === 'true' && !!apiToken
 
     set({ gatewayUrl, apiToken, theme, isConnected })
 
     // Configure API client
-    if (gatewayUrl && apiToken) {
-      api.configure(gatewayUrl, apiToken)
-    }
+    api.configure(gatewayUrl, apiToken)
 
     return isConnected
   },
 
   saveToStorage: () => {
     const { gatewayUrl, apiToken, theme, isConnected } = get()
-    localStorage.setItem(STORAGE_KEYS.gatewayUrl, gatewayUrl)
-    sessionStorage.setItem(STORAGE_KEYS.apiToken, apiToken)
-    localStorage.setItem(STORAGE_KEYS.theme, theme)
-    localStorage.setItem(STORAGE_KEYS.isConnected, String(isConnected))
+    safeSet(globalThis.localStorage, STORAGE_KEYS.gatewayUrl, gatewayUrl)
+    safeSet(globalThis.sessionStorage, STORAGE_KEYS.apiToken, apiToken)
+    safeSet(globalThis.localStorage, STORAGE_KEYS.theme, theme)
+    safeSet(globalThis.localStorage, STORAGE_KEYS.isConnected, String(isConnected))
   },
 
   clearStorage: () => {
-    localStorage.removeItem(STORAGE_KEYS.gatewayUrl)
-    localStorage.removeItem(STORAGE_KEYS.theme)
-    localStorage.removeItem(STORAGE_KEYS.isConnected)
-    sessionStorage.removeItem(STORAGE_KEYS.apiToken)
+    safeRemove(globalThis.localStorage, STORAGE_KEYS.gatewayUrl)
+    safeRemove(globalThis.localStorage, STORAGE_KEYS.theme)
+    safeRemove(globalThis.localStorage, STORAGE_KEYS.isConnected)
+    safeRemove(globalThis.sessionStorage, STORAGE_KEYS.apiToken)
     set({
       gatewayUrl: 'http://localhost:8080',
       apiToken: '',

@@ -22,7 +22,7 @@ export function Topbar() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => setSidebarOpen(true)}
-          className="p-2 rounded-lg hover:bg-secondary lg:hidden"
+          className="p-2 rounded-lg hover:bg-secondary md:hidden"
           aria-label="Open menu"
         >
           <Menu size={20} />

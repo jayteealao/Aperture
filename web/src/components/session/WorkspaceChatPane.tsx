@@ -342,16 +342,24 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
   )
   const sendPermissionResponse = useSessionsStore((s) => s.sendPermissionResponse)
   const connectSession = useSessionsStore((s) => s.connectSession)
+  const updateConnection = useSessionsStore((s) => s.updateConnection)
   const removeSession = useSessionsStore((s) => s.removeSession)
   const { initialMessages, persistMessages, reloadMessages } = usePersistedUIMessages(sessionId)
+
+  const shouldConnect = !!session && (session.status.running || !!session.status.isResumable)
 
   // Connect exactly once per sessionId. Ref guards against StrictMode double-invoke.
   const hasConnected = useRef(false)
   useEffect(() => {
     if (hasConnected.current) return
     hasConnected.current = true
-    void connectSession(sessionId)
-  }, [sessionId, connectSession])
+    if (shouldConnect) {
+      void connectSession(sessionId)
+      return
+    }
+
+    updateConnection(sessionId, { status: 'ended', error: null, isStreaming: false })
+  }, [sessionId, connectSession, shouldConnect, updateConnection])
 
   const handleDelete = useCallback(async () => {
     try {

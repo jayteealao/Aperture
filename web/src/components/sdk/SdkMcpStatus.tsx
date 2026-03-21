@@ -21,6 +21,7 @@ const STATUS_CONFIG: Record<
   failed: { variant: 'danger', icon: <AlertCircle size={10} />, label: 'Failed' },
   'needs-auth': { variant: 'warning', icon: <Lock size={10} />, label: 'Auth Required' },
   pending: { variant: 'default', icon: <Clock size={10} />, label: 'Pending' },
+  disabled: { variant: 'default', icon: <AlertCircle size={10} />, label: 'Disabled' },
 }
 
 export function SdkMcpStatus({ mcpStatus, loading, error, onRefresh }: SdkMcpStatusProps) {

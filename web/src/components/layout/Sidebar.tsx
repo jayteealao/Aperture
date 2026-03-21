@@ -37,7 +37,7 @@ export function Sidebar({ className }: SidebarProps) {
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -45,9 +45,9 @@ export function Sidebar({ className }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 flex flex-col lg:hidden',
+          'fixed inset-y-0 left-0 z-50 w-64 flex flex-col md:hidden',
           'bg-card border-r border-border',
-          'transform transition-transform duration-200 ease-out lg:translate-x-0',
+          'transform transition-transform duration-200 ease-out md:translate-x-0',
           !sidebarOpen && '-translate-x-full',
           className
         )}
@@ -65,7 +65,7 @@ export function Sidebar({ className }: SidebarProps) {
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-1.5 rounded-lg hover:bg-secondary lg:hidden"
+            className="p-1.5 rounded-lg hover:bg-secondary md:hidden"
             aria-label="Close sidebar"
           >
             <X size={18} />

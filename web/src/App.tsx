@@ -54,8 +54,13 @@ export default function App() {
   // a fresh load of /workspaces/:id redirects to onboarding before storage
   // state is restored, dropping the original destination.
   useEffect(() => {
-    initFromStorage()
-    setIsHydrated(true)
+    try {
+      initFromStorage()
+    } catch (error) {
+      console.error('[App] Failed to hydrate from storage', error)
+    } finally {
+      setIsHydrated(true)
+    }
 
     // Pre-warm the Shiki singleton so the highlighter engine is ready before
     // the user sees their first code block, preventing FOUC / shimmer flash.
