@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router'
 import { useAppStore } from '@/stores/app'
-import { Menu, Wifi, WifiOff } from 'lucide-react'
+import { Wifi, WifiOff } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 const pageTitles: Record<string, string> = {
@@ -12,21 +12,14 @@ const pageTitles: Record<string, string> = {
 
 export function Topbar() {
   const location = useLocation()
-  const { setSidebarOpen, gatewayUrl, isConnected } = useAppStore()
+  const { gatewayUrl, isConnected } = useAppStore()
 
   // /workspaces/:id pages show "Aperture" — the workspace name is in the page header
   const title = pageTitles[location.pathname] || 'Aperture'
 
   return (
     <header className="h-14 px-4 flex items-center justify-between border-b border-border bg-card">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="p-2 rounded-lg hover:bg-secondary md:hidden"
-          aria-label="Open menu"
-        >
-          <Menu size={20} />
-        </button>
+      <div className="flex min-w-0 items-center gap-3">
         <h1 className="font-semibold text-foreground">{title}</h1>
       </div>
 

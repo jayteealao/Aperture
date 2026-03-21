@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { api } from '@/api/client'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,7 @@ interface WorkspaceWithData extends WorkspaceRecord {
 
 export default function Workspaces() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [workspaces, setWorkspaces] = useState<WorkspaceWithData[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -89,6 +90,12 @@ export default function Workspaces() {
 
     return () => clearInterval(interval)
   }, [loadWorkspaces])
+
+  useEffect(() => {
+    if (searchParams.get('modal') === 'new-workspace') {
+      setShowCreateDialog(true)
+    }
+  }, [searchParams])
 
   const doDeleteWorkspace = async () => {
     if (!deleteWorkspaceTarget) return
@@ -214,9 +221,17 @@ export default function Workspaces() {
       {/* Create Dialog — always mounted so Radix exit animations play */}
       <CreateWorkspaceDialog
         open={showCreateDialog}
-        onClose={() => setShowCreateDialog(false)}
+        onClose={() => {
+          setShowCreateDialog(false)
+          if (searchParams.get('modal') === 'new-workspace') {
+            setSearchParams({}, { replace: true })
+          }
+        }}
         onSuccess={() => {
           setShowCreateDialog(false)
+          if (searchParams.get('modal') === 'new-workspace') {
+            setSearchParams({}, { replace: true })
+          }
           loadWorkspaces(true)
         }}
       />

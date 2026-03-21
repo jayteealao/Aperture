@@ -3,8 +3,8 @@
 // "Add session" only asks for agent type + auth — the repo is the workspace's
 // repoRoot, determined by the workspaceId passed to createSession.
 
-import { useState, useEffect } from 'react'
-import { useParams } from 'react-router'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useParams, useSearchParams } from 'react-router'
 import { cn } from '@/utils/cn'
 import { api } from '@/api/client'
 import { useSessionsStore } from '@/stores/sessions'
@@ -16,7 +16,7 @@ import { InputField } from '@/components/ui/input-field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import type { AgentType, AuthMode, Session } from '@/api/types'
-import { Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 
 // ── AddSessionDialog ───────────────────────────────────────────────────────
 // Focused dialog: only agent type + auth. Repo is already known from the
@@ -177,12 +177,16 @@ function AddSessionDialog({
 
 export default function WorkspaceView() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
   const sessions = useSessionsStore((s) => s.sessions)
   const addSession = useSessionsStore((s) => s.addSession)
   const activeSessionId = useSessionsStore((s) => s.activeSessionId)
+  const setActiveSession = useSessionsStore((s) => s.setActiveSession)
   const { setActiveWorkspaceId, setWorkspacePanelOpen } = useAppStore()
 
   const [showAddSession, setShowAddSession] = useState(false)
+  const mobileScrollRef = useRef<HTMLDivElement | null>(null)
+  const [mobileIndex, setMobileIndex] = useState(0)
 
   // Keep rail + panel in sync when navigating directly to this URL.
   useEffect(() => {
@@ -190,6 +194,12 @@ export default function WorkspaceView() {
     setActiveWorkspaceId(id)
     setWorkspacePanelOpen(true)
   }, [id, setActiveWorkspaceId, setWorkspacePanelOpen])
+
+  useEffect(() => {
+    if (searchParams.get('modal') === 'new-session') {
+      setShowAddSession(true)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (!id) return
@@ -269,15 +279,160 @@ export default function WorkspaceView() {
     ? [...liveWorkspaceSessions, selectedHistoricalSession]
     : liveWorkspaceSessions
 
+  const mobileItems = useMemo(
+    () => [
+      ...visibleWorkspaceSessions.map((session) => ({
+        kind: 'session' as const,
+        key: session.id,
+        session,
+      })),
+      {
+        kind: 'new' as const,
+        key: 'new-session',
+      },
+    ],
+    [visibleWorkspaceSessions],
+  )
+
+  useEffect(() => {
+    if (mobileItems.length <= 1) {
+      setMobileIndex(0)
+      return
+    }
+
+    const activeIndex = visibleWorkspaceSessions.findIndex((session) => session.id === activeSessionId)
+    if (activeIndex >= 0) {
+      setMobileIndex(activeIndex)
+    }
+  }, [activeSessionId, mobileItems.length, visibleWorkspaceSessions])
+
+  const scrollToMobileItem = (nextIndex: number) => {
+    const container = mobileScrollRef.current
+    if (!container) return
+    const clamped = Math.max(0, Math.min(nextIndex, mobileItems.length - 1))
+    const child = container.children.item(clamped) as HTMLElement | null
+    if (!child) return
+    child.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
+    setMobileIndex(clamped)
+    const target = mobileItems[clamped]
+    if (target?.kind === 'session') {
+      setActiveSession(target.session.id)
+    }
+  }
+
+  const handleMobileScroll = () => {
+    const container = mobileScrollRef.current
+    if (!container) return
+    const children = Array.from(container.children) as HTMLElement[]
+    if (children.length === 0) return
+    const viewportCenter = container.scrollLeft + container.clientWidth / 2
+    let bestIndex = 0
+    let bestDistance = Number.POSITIVE_INFINITY
+
+    children.forEach((child, index) => {
+      const center = child.offsetLeft + child.clientWidth / 2
+      const distance = Math.abs(center - viewportCenter)
+      if (distance < bestDistance) {
+        bestDistance = distance
+        bestIndex = index
+      }
+    })
+
+    if (bestIndex !== mobileIndex) {
+      setMobileIndex(bestIndex)
+      const target = mobileItems[bestIndex]
+      if (target?.kind === 'session') {
+        setActiveSession(target.session.id)
+      }
+    }
+  }
+
   const handleSessionCreated = () => {
     setShowAddSession(false)
+    if (searchParams.get('modal') === 'new-session') {
+      setSearchParams({}, { replace: true })
+    }
     // The new session appears automatically — addSession updates the store,
     // workspaceSessions re-derives, and the new pane mounts + auto-connects.
   }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Session grid or empty state */}
+      {/* Mobile session carousel */}
+      <div className="relative flex flex-1 flex-col min-h-0 md:hidden">
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-background to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-background to-transparent" />
+
+          <div
+            ref={mobileScrollRef}
+            onScroll={handleMobileScroll}
+            className="flex flex-1 snap-x snap-mandatory gap-3 overflow-x-auto px-3 py-3 min-h-0 scroll-smooth"
+          >
+            {mobileItems.map((item) =>
+              item.kind === 'session' ? (
+                <div
+                  key={item.key}
+                  className="w-[calc(100vw-1.5rem)] shrink-0 snap-center rounded-xl border border-border bg-card overflow-hidden"
+                >
+                  <WorkspaceChatPane sessionId={item.session.id} />
+                </div>
+              ) : (
+                <button
+                  key={item.key}
+                  onClick={() => setShowAddSession(true)}
+                  className={cn(
+                    'w-[calc(100vw-4rem)] shrink-0 snap-center rounded-2xl border-2 border-dashed border-border',
+                    'flex flex-col items-center justify-center gap-3 bg-card/50 text-muted-foreground/60',
+                    'hover:border-accent/50 hover:bg-accent/5 hover:text-accent transition-colors',
+                  )}
+                >
+                  <Plus size={28} />
+                  <span className="text-sm font-medium">New session</span>
+                </button>
+              ),
+            )}
+          </div>
+
+          {mobileItems.length > 1 && (
+            <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-2"
+                onClick={() => scrollToMobileItem(mobileIndex - 1)}
+                disabled={mobileIndex === 0}
+              >
+                <ChevronLeft size={16} />
+              </Button>
+              <div className="flex items-center gap-2">
+                {mobileItems.map((item, index) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => scrollToMobileItem(index)}
+                    className={cn(
+                      'h-2.5 rounded-full transition-all',
+                      index === mobileIndex ? 'w-6 bg-accent' : 'w-2.5 bg-border',
+                    )}
+                    aria-label={`Go to item ${index + 1}`}
+                  />
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-2"
+                onClick={() => scrollToMobileItem(mobileIndex + 1)}
+                disabled={mobileIndex === mobileItems.length - 1}
+              >
+                <ChevronRight size={16} />
+              </Button>
+            </div>
+          )}
+      </div>
+
+      {/* Desktop session grid or empty state */}
+      <div className="hidden md:flex md:flex-1 md:flex-col md:min-h-0">
       {visibleWorkspaceSessions.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center justify-center gap-4 text-center">
@@ -334,13 +489,19 @@ export default function WorkspaceView() {
           </div>
         </div>
       )}
+      </div>
 
       {/* Add session dialog — scoped to this workspace */}
       {id && (
         <AddSessionDialog
           open={showAddSession}
           workspaceId={id}
-          onClose={() => setShowAddSession(false)}
+          onClose={() => {
+            setShowAddSession(false)
+            if (searchParams.get('modal') === 'new-session') {
+              setSearchParams({}, { replace: true })
+            }
+          }}
           onCreated={handleSessionCreated}
         />
       )}
