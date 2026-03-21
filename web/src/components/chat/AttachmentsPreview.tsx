@@ -1,5 +1,12 @@
 import { usePromptInputAttachments } from '@/components/ai-elements/prompt-input'
-import { Plus, X } from 'lucide-react'
+import {
+  Attachments,
+  Attachment,
+  AttachmentInfo,
+  AttachmentPreview,
+  AttachmentRemove,
+} from '@/components/ai-elements/attachments'
+import { Plus } from 'lucide-react'
 
 /**
  * Renders a thumbnail grid of attached files from PromptInput's internal state.
@@ -16,29 +23,13 @@ export function AttachmentsPreview({ maxFiles }: { maxFiles?: number }) {
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <Attachments variant="grid">
       {files.map((file) => (
-        <div key={file.id} className="relative group">
-          {file.mediaType.startsWith('image/') ? (
-            <img
-              alt={file.filename || 'Attachment'}
-              className="h-16 w-16 rounded-lg object-cover border border-border"
-              src={file.url}
-            />
-          ) : (
-            <div className="h-16 w-16 rounded-lg border border-border flex items-center justify-center text-2xs text-foreground/40 text-center p-1">
-              {file.filename || file.mediaType}
-            </div>
-          )}
-          <button
-            className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-background border border-border opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={() => remove(file.id)}
-            title="Remove attachment"
-            type="button"
-          >
-            <X size={12} />
-          </button>
-        </div>
+        <Attachment key={file.id} data={file} onRemove={() => remove(file.id)}>
+          <AttachmentPreview />
+          <AttachmentInfo className="sr-only" />
+          <AttachmentRemove />
+        </Attachment>
       ))}
       {(maxFiles === undefined || files.length < maxFiles) && (
         <button
@@ -50,6 +41,6 @@ export function AttachmentsPreview({ maxFiles }: { maxFiles?: number }) {
           <Plus size={20} />
         </button>
       )}
-    </div>
+    </Attachments>
   )
 }

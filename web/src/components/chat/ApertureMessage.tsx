@@ -1,13 +1,19 @@
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import {
   isTextUIPart,
   isReasoningUIPart,
   isFileUIPart,
   isToolUIPart,
 } from 'ai'
-import { cn } from '@/utils/cn'
-import { Message, MessageContent } from '@/components/ai-elements/message'
-import { MessageResponse } from '@/components/ai-elements/message'
+import { CopyIcon } from 'lucide-react'
+import {
+  Message,
+  MessageAction,
+  MessageActions,
+  MessageContent,
+  MessageResponse,
+  MessageToolbar,
+} from '@/components/ai-elements/message'
 import {
   Reasoning,
   ReasoningContent,
@@ -16,15 +22,23 @@ import {
 import type { ApertureUIMessage } from '@/utils/ui-message'
 import { getMessageTimestamp } from '@/utils/ui-message'
 import { formatMessageTimestamp } from '@/utils/format'
+import {
+  Attachments,
+  Attachment,
+  AttachmentHoverCard,
+  AttachmentHoverCardContent,
+  AttachmentHoverCardTrigger,
+  AttachmentInfo,
+  AttachmentPreview,
+} from '@/components/ai-elements/attachments'
 import { ApertureToolPart } from './ApertureToolPart'
 
 const SAFE_URL_PROTOCOLS = new Set(['http:', 'https:', 'data:', 'blob:'])
 
-/** Validate URL protocol to prevent javascript: / vbscript: injection */
 export function isSafeUrl(url: string): boolean {
   try {
-    const parsed = new URL(url)
-    return SAFE_URL_PROTOCOLS.has(parsed.protocol)
+    const parsedUrl = new URL(url)
+    return SAFE_URL_PROTOCOLS.has(parsedUrl.protocol)
   } catch {
     return false
   }
@@ -42,10 +56,28 @@ export const ApertureMessage = memo(function ApertureMessage({
   message: ApertureUIMessage
 }) {
   const timestamp = getMessageTimestamp(message)
+  const reasoningParts = useMemo(
+    () => message.parts.filter(isReasoningUIPart),
+    [message.parts],
+  )
+  const reasoningText = reasoningParts.map((part) => part.text).join('\n\n')
+  const hasReasoning = reasoningText.trim().length > 0
+  const isReasoningStreaming = reasoningParts.some((part) => part.state === 'streaming')
+  const textContent = message.parts
+    .filter(isTextUIPart)
+    .map((part) => part.text)
+    .join('\n\n')
 
   return (
     <Message from={message.role}>
       <MessageContent>
+        {hasReasoning && (
+          <Reasoning isStreaming={isReasoningStreaming}>
+            <ReasoningTrigger />
+            <ReasoningContent>{reasoningText}</ReasoningContent>
+          </Reasoning>
+        )}
+
         {message.parts.map((part, index) => {
           const key = `${message.id}-${index}`
 
@@ -61,19 +93,11 @@ export const ApertureMessage = memo(function ApertureMessage({
           }
 
           if (isReasoningUIPart(part)) {
-            return (
-              <Reasoning
-                key={key}
-                isStreaming={part.state === 'streaming'}
-              >
-                <ReasoningTrigger />
-                <ReasoningContent>{part.text}</ReasoningContent>
-              </Reasoning>
-            )
+            return null
           }
 
           if (isFileUIPart(part)) {
-            return <FilePart key={key} part={part} />
+            return <MessageAttachment key={key} part={part} />
           }
 
           if (isToolUIPart(part)) {
@@ -89,37 +113,52 @@ export const ApertureMessage = memo(function ApertureMessage({
             {formatMessageTimestamp(timestamp)}
           </div>
         )}
+
+        {message.role === 'assistant' && textContent.trim().length > 0 && (
+          <MessageToolbar className="mt-1">
+            <div />
+            <MessageActions>
+              <MessageAction
+                label="Copy message"
+                onClick={() => void navigator.clipboard.writeText(textContent)}
+                tooltip="Copy response"
+              >
+                <CopyIcon className="size-3" />
+              </MessageAction>
+            </MessageActions>
+          </MessageToolbar>
+        )}
       </MessageContent>
     </Message>
   )
 })
 
-/** Renders a file attachment (image or download link) with URL sanitization. */
-function FilePart({ part }: { part: { mediaType: string; url: string; filename?: string } }) {
+function MessageAttachment({
+  part,
+}: {
+  part: { mediaType: string; url: string; filename?: string }
+}) {
   if (!isSafeUrl(part.url)) {
     return null
   }
 
-  if (part.mediaType.startsWith('image/')) {
-    return (
-      <img
-        alt={part.filename || 'Attachment'}
-        className={cn(
-          'max-h-48 max-w-[280px] rounded-lg object-contain',
-          'border border-border',
-        )}
-        src={part.url}
-      />
-    )
-  }
-
   return (
-    <a
-      className="text-sm underline underline-offset-4"
-      download={part.filename}
-      href={part.url}
-    >
-      {part.filename || part.mediaType}
-    </a>
+    <Attachments variant="grid">
+      <Attachment data={{ ...part, id: `${part.filename ?? part.url}-attachment`, type: 'file' }}>
+        <AttachmentHoverCard>
+          <AttachmentHoverCardTrigger asChild>
+            <div className="size-full cursor-default">
+              <AttachmentPreview />
+            </div>
+          </AttachmentHoverCardTrigger>
+          <AttachmentHoverCardContent align="start">
+            <div className="space-y-2">
+              <AttachmentPreview className="h-48 w-full rounded-md" />
+              <AttachmentInfo showMediaType />
+            </div>
+          </AttachmentHoverCardContent>
+        </AttachmentHoverCard>
+      </Attachment>
+    </Attachments>
   )
 }
