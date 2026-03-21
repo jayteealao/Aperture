@@ -1,5 +1,5 @@
 // Workspace detail view at /workspaces/:id.
-// Sessions shown are scoped to this workspace (matched by workingDirectory).
+// Sessions shown are scoped to this workspace by canonical workspaceId.
 // "Add session" only asks for agent type + auth — the repo is the workspace's
 // repoRoot, determined by the workspaceId passed to createSession.
 
@@ -7,7 +7,6 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router'
 import { cn } from '@/utils/cn'
 import { api } from '@/api/client'
-import { useWorkspaces } from '@/hooks/useWorkspaces'
 import { useSessionsStore } from '@/stores/sessions'
 import { useAppStore } from '@/stores/app'
 import { WorkspaceChatPane } from '@/components/session/WorkspaceChatPane'
@@ -17,7 +16,7 @@ import { InputField } from '@/components/ui/input-field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import type { AgentType, AuthMode, Session } from '@/api/types'
-import { Plus } from 'lucide-react'
+import { History, Plus } from 'lucide-react'
 
 // ── AddSessionDialog ───────────────────────────────────────────────────────
 // Focused dialog: only agent type + auth. Repo is already known from the
@@ -178,8 +177,8 @@ function AddSessionDialog({
 
 export default function WorkspaceView() {
   const { id } = useParams<{ id: string }>()
-  const { workspaces } = useWorkspaces()
   const sessions = useSessionsStore((s) => s.sessions)
+  const addSession = useSessionsStore((s) => s.addSession)
   const { setActiveWorkspaceId, setWorkspacePanelOpen } = useAppStore()
 
   const [showAddSession, setShowAddSession] = useState(false)
@@ -191,17 +190,78 @@ export default function WorkspaceView() {
     setWorkspacePanelOpen(true)
   }, [id, setActiveWorkspaceId, setWorkspacePanelOpen])
 
-  const workspace = workspaces.find((w) => w.id === id) ?? null
+  useEffect(() => {
+    if (!id) return
+
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const response = await api.listWorkspaceCheckouts(id)
+        const sessionIds = Array.from(
+          new Set(
+            response.checkouts
+              .map((checkout) => checkout.sessionId)
+              .filter((sessionId): sessionId is string => !!sessionId),
+          ),
+        )
+
+        const existingById = new Map(sessions.map((session) => [session.id, session]))
+        const missingOrStale = sessionIds.filter((sessionId) => {
+          const existing = existingById.get(sessionId)
+          return !existing || existing.workspaceId !== id
+        })
+
+        if (missingOrStale.length === 0) {
+          return
+        }
+
+        const loadedSessions = await Promise.all(
+          missingOrStale.map(async (sessionId) => {
+            try {
+              return await api.getSession(sessionId)
+            } catch {
+              return null
+            }
+          }),
+        )
+
+        for (const session of loadedSessions) {
+          if (!session || cancelled) continue
+          await addSession({
+            ...session,
+            workspaceId: session.workspaceId ?? id,
+          })
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn('[WorkspaceView] Failed to hydrate workspace sessions from checkouts', error)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [id, sessions, addSession])
 
   const workspaceSessions = id
-    ? sessions.filter((s) =>
-        s.workspaceId === id ||
-        (s.workspaceId == null &&
-          s.status?.workingDirectory != null &&
-          workspace != null &&
-          s.status.workingDirectory.startsWith(workspace.repoRoot)),
-      )
+    ? sessions.filter((s) => s.workspaceId === id)
     : []
+
+  const liveWorkspaceSessions = workspaceSessions.filter(
+    (session) =>
+      session.status.running ||
+      !!session.status.sdkSessionId ||
+      !!session.status.piSessionPath,
+  )
+
+  const historicalWorkspaceSessions = workspaceSessions.filter(
+    (session) =>
+      !session.status.running &&
+      !session.status.sdkSessionId &&
+      !session.status.piSessionPath,
+  )
 
   const handleSessionCreated = () => {
     setShowAddSession(false)
@@ -212,7 +272,7 @@ export default function WorkspaceView() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Session grid or empty state */}
-      {workspaceSessions.length === 0 ? (
+      {liveWorkspaceSessions.length === 0 && historicalWorkspaceSessions.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <button
             onClick={() => setShowAddSession(true)}
@@ -230,29 +290,74 @@ export default function WorkspaceView() {
           </button>
         </div>
       ) : (
-        <div className="flex-1 flex gap-3 p-3 overflow-x-auto min-h-0">
-          {workspaceSessions.map((session) => (
-            <div
-              key={session.id}
-              className="min-w-[480px] flex-1 flex flex-col rounded-xl border border-border bg-card overflow-hidden"
-            >
-              <WorkspaceChatPane sessionId={session.id} />
+        <div className="flex-1 flex flex-col min-h-0">
+          {liveWorkspaceSessions.length > 0 && (
+            <div className="flex gap-3 p-3 overflow-x-auto min-h-0">
+              {liveWorkspaceSessions.map((session) => (
+                <div
+                  key={session.id}
+                  className="min-w-[480px] flex-1 flex flex-col rounded-xl border border-border bg-card overflow-hidden"
+                >
+                  <WorkspaceChatPane sessionId={session.id} />
+                </div>
+              ))}
+              <button
+                onClick={() => setShowAddSession(true)}
+                className={cn(
+                  'min-w-[140px] w-36 shrink-0 flex flex-col items-center justify-center gap-2',
+                  'rounded-xl border-2 border-dashed border-border',
+                  'hover:border-accent/50 hover:bg-accent/5',
+                  'text-muted-foreground/50 hover:text-accent',
+                  'transition-colors',
+                )}
+              >
+                <Plus size={20} />
+                <span className="text-xs font-medium">New session</span>
+              </button>
             </div>
-          ))}
-          {/* Add-session pane */}
-          <button
-            onClick={() => setShowAddSession(true)}
-            className={cn(
-              'min-w-[140px] w-36 shrink-0 flex flex-col items-center justify-center gap-2',
-              'rounded-xl border-2 border-dashed border-border',
-              'hover:border-accent/50 hover:bg-accent/5',
-              'text-muted-foreground/50 hover:text-accent',
-              'transition-colors',
-            )}
-          >
-            <Plus size={20} />
-            <span className="text-xs font-medium">New session</span>
-          </button>
+          )}
+
+          {historicalWorkspaceSessions.length > 0 && (
+            <div className="px-3 pb-3">
+              <div className="rounded-xl border border-border bg-card/80 p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <History size={16} />
+                  <span>Previous Sessions</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Older sessions without live resume metadata are kept as history and won&apos;t auto-connect.
+                </p>
+                <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {historicalWorkspaceSessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className="rounded-lg border border-border/70 bg-background/40 px-3 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-mono text-xs text-foreground">
+                          {session.id.slice(0, 8)}
+                        </span>
+                        <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          History only
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {session.agent === 'claude_sdk' ? 'Claude SDK' : 'Pi SDK'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                {liveWorkspaceSessions.length === 0 && (
+                  <div className="mt-4">
+                    <Button onClick={() => setShowAddSession(true)}>
+                      <Plus size={16} />
+                      New Session
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
