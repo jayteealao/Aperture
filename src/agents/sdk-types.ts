@@ -202,6 +202,7 @@ export interface SdkSessionConfig {
   // Advanced
   additionalDirectories?: string[];
   settingSources?: ('user' | 'project' | 'local')[];
+  extraArgs?: Record<string, unknown>;
 }
 
 // =============================================================================

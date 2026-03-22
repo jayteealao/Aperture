@@ -43,6 +43,12 @@ import {
   unstable_v2_createSession,
   unstable_v2_resumeSession,
 } from '@anthropic-ai/claude-agent-sdk';
+import {
+  captureRepoBaselineSnapshot,
+  computeCompletedTurnDiff,
+  disposeRepoBaselineSnapshot,
+  type RepoBaselineSnapshot,
+} from './git-diff.js';
 
 // Pending permission request from SDK
 interface PendingPermission {
@@ -53,6 +59,7 @@ interface PendingPermission {
   signal: AbortSignal;
   options?: PermissionOption[];
   context?: PermissionContext;
+  sdkSuggestions?: SDKPermissionUpdate[];
 }
 
 // SDK WebSocket message (first-class, no JSON-RPC wrapper)
@@ -98,6 +105,17 @@ interface ClaudeV2SessionWithQuery extends ClaudeV2Session {
 interface WorkerRpcPending {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
+}
+
+interface ActiveTurnState {
+  userMessageRecordId: string;
+  promptText: string;
+  checkpointId: string | null;
+  providerSessionId: string | null;
+  workingDirectory: string | null;
+  startedAt: number;
+  baseline: RepoBaselineSnapshot | null;
+  lastAssistantMessageId: string | null;
 }
 
 type SdkWorkerMessage =
@@ -170,6 +188,7 @@ export class SdkSession extends EventEmitter {
   private permissionDenials: PermissionDenial[] = [];
   private lastResult: SessionResult | null = null;
   private messageUuids: Map<string, string> = new Map();
+  private activeTurn: ActiveTurnState | null = null;
 
   // Cached session info (persists after query completes)
   private cachedModels: ModelInfo[] | null = null;
@@ -284,6 +303,10 @@ export class SdkSession extends EventEmitter {
       allowDangerouslySkipPermissions: this.sdkConfig.allowDangerouslySkipPermissions,
       plugins: this.sdkConfig.plugins,
       betas: this.sdkConfig.betas,
+      extraArgs: {
+        ...(this.sdkConfig.extraArgs || {}),
+        'replay-user-messages': null,
+      },
     };
   }
 
@@ -437,6 +460,7 @@ export class SdkSession extends EventEmitter {
       signal: new AbortController().signal,
       options: permissionOptions,
       context,
+      sdkSuggestions: message.suggestions,
     });
 
     this.emit('permission_request', {
@@ -516,6 +540,10 @@ export class SdkSession extends EventEmitter {
 
       // File checkpointing
       enableFileCheckpointing: this.sdkConfig.enableFileCheckpointing ?? true,
+      extraArgs: {
+        ...(this.sdkConfig.extraArgs || {}),
+        'replay-user-messages': null,
+      } as Options['extraArgs'],
 
       // Permissions
       permissionMode: this.sdkConfig.permissionMode,
@@ -670,6 +698,7 @@ export class SdkSession extends EventEmitter {
           signal,
           options: permissionOptions,
           context,
+          sdkSuggestions: suggestions,
         });
 
         // Handle abort
@@ -781,10 +810,20 @@ export class SdkSession extends EventEmitter {
 
     this.isProcessing = true;
     this.updateActivity();
-    this.persistUserPrompt(content, images);
+    const userMessageRecordId = this.persistUserPrompt(content, images);
 
     // Reset per-prompt state
     this.permissionDenials = [];
+    this.activeTurn = {
+      userMessageRecordId,
+      promptText: content,
+      checkpointId: null,
+      providerSessionId: this.sdkSessionId,
+      workingDirectory: this.workingDir || null,
+      startedAt: Date.now(),
+      baseline: this.workingDir ? await captureRepoBaselineSnapshot(this.workingDir) : null,
+      lastAssistantMessageId: null,
+    };
 
     try {
       if (this.usesWorkerRuntime()) {
@@ -871,6 +910,8 @@ export class SdkSession extends EventEmitter {
     } catch (error) {
       this.isProcessing = false;
 
+      await this.disposeActiveTurn();
+
       if (error instanceof Error && error.name === 'AbortError') {
         // Cancelled by user, not an error
         return;
@@ -898,11 +939,17 @@ export class SdkSession extends EventEmitter {
         this.sdkSessionId = newSessionId;
         this.persistRuntimeSessionId();
       }
+      if (this.activeTurn) {
+        this.activeTurn.providerSessionId = newSessionId;
+      }
     }
 
     // Store message UUID for checkpointing
     if ('uuid' in message && message.uuid) {
       this.messageUuids.set(message.uuid, message.type);
+      if (message.type === 'user' && this.activeTurn && !this.activeTurn.checkpointId) {
+        this.activeTurn.checkpointId = message.uuid;
+      }
     }
 
     switch (message.type) {
@@ -1064,6 +1111,9 @@ export class SdkSession extends EventEmitter {
     });
 
     this.persistAssistantMessage(message.uuid, contentBlocks, message.parent_tool_use_id);
+    if (this.activeTurn) {
+      this.activeTurn.lastAssistantMessageId = message.uuid || null;
+    }
 
     // Emit first-class SDK message with all content blocks
     this.emitSdkMessage('assistant_message', {
@@ -1251,6 +1301,7 @@ export class SdkSession extends EventEmitter {
 
       // Also emit legacy format
       this.emitSessionUpdate('prompt_complete', payload);
+      void this.persistTurnDiffSummary(false);
     } else {
       const payload = {
         subtype: message.subtype,
@@ -1269,6 +1320,7 @@ export class SdkSession extends EventEmitter {
 
       // Also emit legacy format
       this.emitSessionUpdate('prompt_error', payload);
+      void this.persistTurnDiffSummary(true);
     }
   }
 
@@ -1313,9 +1365,10 @@ export class SdkSession extends EventEmitter {
   private persistUserPrompt(
     content: string,
     images?: import('./agents/types.js').ImageAttachment[]
-  ): void {
+  ): string {
+    const messageId = randomUUID();
     if (!this.database) {
-      return;
+      return messageId;
     }
 
     const contentBlocks: Array<Record<string, unknown>> = [];
@@ -1334,7 +1387,7 @@ export class SdkSession extends EventEmitter {
     }
 
     this.database.saveMessage({
-      id: randomUUID(),
+      id: messageId,
       session_id: this.id,
       role: 'user',
       content,
@@ -1343,6 +1396,7 @@ export class SdkSession extends EventEmitter {
         contentBlocks: contentBlocks.length > 0 ? contentBlocks : [{ type: 'text', text: content }],
       }),
     });
+    return messageId;
   }
 
   private persistAssistantMessage(
@@ -1383,6 +1437,63 @@ export class SdkSession extends EventEmitter {
       claudeSessionId: this.sdkSessionId,
       timestamp: Date.now(),
     });
+  }
+
+  private async disposeActiveTurn(): Promise<void> {
+    if (!this.activeTurn) {
+      return;
+    }
+    await disposeRepoBaselineSnapshot(this.activeTurn.baseline);
+    this.activeTurn = null;
+  }
+
+  private async persistTurnDiffSummary(partial: boolean): Promise<void> {
+    if (!this.database || !this.activeTurn || !this.workingDir) {
+      await this.disposeActiveTurn();
+      return;
+    }
+
+    try {
+      const assistantMessageId =
+        this.database.getLatestAssistantMessageId(this.id, this.activeTurn.startedAt) ||
+        this.activeTurn.lastAssistantMessageId;
+
+      if (!assistantMessageId) {
+        return;
+      }
+
+      const completed = await computeCompletedTurnDiff(this.workingDir, this.activeTurn.baseline);
+      if (!completed || completed.files.length === 0) {
+        return;
+      }
+
+      this.database.saveTurnDiffSummary({
+        id: randomUUID(),
+        session_id: this.id,
+        user_message_id: this.activeTurn.userMessageRecordId,
+        assistant_message_id: assistantMessageId,
+        checkpoint_id: this.activeTurn.checkpointId,
+        provider_session_id: this.activeTurn.providerSessionId,
+        working_directory: this.activeTurn.workingDirectory || this.workingDir,
+        turn_started_at: this.activeTurn.startedAt,
+        turn_completed_at: Date.now(),
+        git_base_head: this.activeTurn.baseline?.headSha || null,
+        git_head_at_completion: completed.headSha,
+        file_count: completed.files.length,
+        additions: completed.additions,
+        deletions: completed.deletions,
+        files_json: JSON.stringify(completed.files),
+        patch_text: completed.patchText,
+        metadata: JSON.stringify({
+          partial,
+          promptText: this.activeTurn.promptText,
+        }),
+      });
+    } catch (error) {
+      console.error('[SDK-Session] Failed to persist turn diff summary:', error);
+    } finally {
+      await this.disposeActiveTurn();
+    }
   }
 
   // ===========================================================================
@@ -1648,18 +1759,34 @@ export class SdkSession extends EventEmitter {
     }
 
     let result: PermissionResult;
+    const updatedInput = answers && Object.keys(answers).length > 0 ? answers : undefined;
 
-    if (optionId === 'allow' || optionId === 'allow_always' || optionId.startsWith('suggestion_')) {
+    if (optionId === 'allow') {
       result = {
         behavior: 'allow',
-        toolUseID: toolCallId,
-        ...(answers && { updatedInput: answers }),
+        ...(updatedInput && { updatedInput }),
+      };
+    } else if (optionId === 'allow_always') {
+      result = {
+        behavior: 'allow',
+        ...(updatedInput && { updatedInput }),
+        ...(pending.sdkSuggestions?.length ? { updatedPermissions: pending.sdkSuggestions } : {}),
+      };
+    } else if (optionId.startsWith('suggestion_')) {
+      const suggestionIndex = Number.parseInt(optionId.slice('suggestion_'.length), 10);
+      const selectedSuggestion = Number.isNaN(suggestionIndex)
+        ? undefined
+        : pending.sdkSuggestions?.[suggestionIndex];
+
+      result = {
+        behavior: 'allow',
+        ...(updatedInput && { updatedInput }),
+        ...(selectedSuggestion ? { updatedPermissions: [selectedSuggestion] } : {}),
       };
     } else {
       result = {
         behavior: 'deny',
         message: 'User denied permission',
-        toolUseID: toolCallId,
       };
     }
 
@@ -1688,7 +1815,6 @@ export class SdkSession extends EventEmitter {
       behavior: 'deny',
       message: 'Permission request cancelled',
       interrupt: true,
-      toolUseID: toolCallId,
     });
 
     this.pendingPermissions.delete(toolCallId);
@@ -1701,7 +1827,6 @@ export class SdkSession extends EventEmitter {
           behavior: 'deny',
           message: 'Permission request cancelled',
           interrupt: true,
-          toolUseID: toolCallId,
         },
       });
     }
@@ -1728,12 +1853,11 @@ export class SdkSession extends EventEmitter {
     }
 
     // Cancel all pending permissions
-    for (const [toolCallId, pending] of this.pendingPermissions) {
+    for (const [, pending] of this.pendingPermissions) {
       pending.resolve({
         behavior: 'deny',
         message: 'Prompt cancelled',
         interrupt: true,
-        toolUseID: toolCallId,
       });
     }
     this.pendingPermissions.clear();

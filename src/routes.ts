@@ -12,7 +12,7 @@ import type {
 } from './agents/index.js';
 import { IMAGE_LIMITS } from './agents/types.js';
 import type { CredentialStore } from './credentials.js';
-import type { ApertureDatabase, MessageRecord, SessionRecord } from './database.js';
+import type { ApertureDatabase, MessageRecord, SessionRecord, TurnDiffSummaryRecord } from './database.js';
 import { SdkSession, type SdkWsMessage } from './sdk-session.js';
 import { PiSession, type PiWsMessage } from './pi-session.js';
 import { checkReadiness } from './claudeInstaller.js';
@@ -165,6 +165,44 @@ function messageRecordToResponse(message: MessageRecord) {
     role: message.role,
     content: contentBlocks ?? message.content,
     timestamp: new Date(message.timestamp).toISOString(),
+  };
+}
+
+function turnDiffSummaryRecordToResponse(summary: TurnDiffSummaryRecord) {
+  let files: Array<{ path: string; additions: number; deletions: number }> = [];
+  let metadata: Record<string, unknown> | null = null;
+
+  try {
+    files = JSON.parse(summary.files_json) as Array<{ path: string; additions: number; deletions: number }>;
+  } catch {
+    files = [];
+  }
+
+  if (summary.metadata) {
+    try {
+      metadata = JSON.parse(summary.metadata) as Record<string, unknown>;
+    } catch {
+      metadata = null;
+    }
+  }
+
+  return {
+    id: summary.id,
+    sessionId: summary.session_id,
+    userMessageId: summary.user_message_id ?? undefined,
+    assistantMessageId: summary.assistant_message_id,
+    checkpointId: summary.checkpoint_id ?? undefined,
+    providerSessionId: summary.provider_session_id ?? undefined,
+    workingDirectory: summary.working_directory,
+    turnStartedAt: new Date(summary.turn_started_at).toISOString(),
+    turnCompletedAt: new Date(summary.turn_completed_at).toISOString(),
+    gitBaseHead: summary.git_base_head ?? undefined,
+    gitHeadAtCompletion: summary.git_head_at_completion ?? undefined,
+    fileCount: summary.file_count,
+    additions: summary.additions,
+    deletions: summary.deletions,
+    files,
+    metadata,
   };
 }
 
@@ -457,6 +495,75 @@ export async function registerRoutes(
         total,
         limit,
         offset,
+      };
+    }
+  );
+
+  fastify.get<{ Params: { id: string } }>(
+    '/v1/sessions/:id/turn-diffs',
+    async (request, reply) => {
+      if (!database) {
+        return reply.code(503).send({ error: 'Turn diff persistence not enabled' });
+      }
+
+      const sessionRecord = database.getSession(request.params.id);
+      if (!sessionRecord) {
+        return reply.code(404).send({ error: 'Session not found' });
+      }
+
+      const summaries = database.getTurnDiffSummaries(request.params.id);
+      return {
+        summaries: summaries.map(turnDiffSummaryRecordToResponse),
+        total: summaries.length,
+      };
+    }
+  );
+
+  fastify.get<{ Params: { id: string; assistantMessageId: string } }>(
+    '/v1/sessions/:id/turn-diffs/:assistantMessageId',
+    async (request, reply) => {
+      if (!database) {
+        return reply.code(503).send({ error: 'Turn diff persistence not enabled' });
+      }
+
+      const summary = database.getTurnDiffSummaryByAssistantMessageId(
+        request.params.id,
+        request.params.assistantMessageId
+      );
+      if (!summary) {
+        return reply.code(404).send({ error: 'Turn diff summary not found' });
+      }
+
+      return turnDiffSummaryRecordToResponse(summary);
+    }
+  );
+
+  fastify.get<{ Params: { id: string; assistantMessageId: string }; Querystring: { path?: string } }>(
+    '/v1/sessions/:id/turn-diffs/:assistantMessageId/patch',
+    async (request, reply) => {
+      if (!database) {
+        return reply.code(503).send({ error: 'Turn diff persistence not enabled' });
+      }
+
+      const summary = database.getTurnDiffSummaryByAssistantMessageId(
+        request.params.id,
+        request.params.assistantMessageId
+      );
+      if (!summary) {
+        return reply.code(404).send({ error: 'Turn diff summary not found' });
+      }
+
+      let patchText = summary.patch_text;
+      const filePath = request.query.path?.replace(/\\/g, '/');
+      if (filePath) {
+        const sections = patchText.split(/^diff --git /m);
+        const matched = sections.find((section) => section.startsWith(`a/${filePath} b/${filePath}`));
+        patchText = matched ? `diff --git ${matched}` : '';
+      }
+
+      return {
+        assistantMessageId: summary.assistant_message_id,
+        patch: patchText,
       };
     }
   );

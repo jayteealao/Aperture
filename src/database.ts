@@ -40,6 +40,32 @@ export interface SessionEventRecord {
   timestamp: number;
 }
 
+export interface TurnDiffSummaryFileRecord {
+  path: string;
+  additions: number;
+  deletions: number;
+}
+
+export interface TurnDiffSummaryRecord {
+  id: string;
+  session_id: string;
+  user_message_id: string | null;
+  assistant_message_id: string;
+  checkpoint_id: string | null;
+  provider_session_id: string | null;
+  working_directory: string;
+  turn_started_at: number;
+  turn_completed_at: number;
+  git_base_head: string | null;
+  git_head_at_completion: string | null;
+  file_count: number;
+  additions: number;
+  deletions: number;
+  files_json: string;
+  patch_text: string;
+  metadata: string | null;
+}
+
 export interface WorkspaceRecord {
   id: string;
   name: string;
@@ -648,6 +674,70 @@ export class ApertureDatabase {
     const stmt = this.db.prepare('SELECT * FROM managed_repos WHERE id = ?');
     const result = stmt.get(id) as ManagedRepoRecord | undefined;
     return result || null;
+  }
+
+  // ==================== Turn Diff Summary Methods ====================
+
+  saveTurnDiffSummary(summary: TurnDiffSummaryRecord): void {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO turn_diff_summaries
+      (id, session_id, user_message_id, assistant_message_id, checkpoint_id, provider_session_id, working_directory, turn_started_at, turn_completed_at, git_base_head, git_head_at_completion, file_count, additions, deletions, files_json, patch_text, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      summary.id,
+      summary.session_id,
+      summary.user_message_id,
+      summary.assistant_message_id,
+      summary.checkpoint_id,
+      summary.provider_session_id,
+      summary.working_directory,
+      summary.turn_started_at,
+      summary.turn_completed_at,
+      summary.git_base_head,
+      summary.git_head_at_completion,
+      summary.file_count,
+      summary.additions,
+      summary.deletions,
+      summary.files_json,
+      summary.patch_text,
+      summary.metadata
+    );
+  }
+
+  getTurnDiffSummaries(sessionId: string): TurnDiffSummaryRecord[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM turn_diff_summaries
+      WHERE session_id = ?
+      ORDER BY turn_completed_at ASC
+    `);
+    return stmt.all(sessionId) as TurnDiffSummaryRecord[];
+  }
+
+  getTurnDiffSummaryByAssistantMessageId(
+    sessionId: string,
+    assistantMessageId: string
+  ): TurnDiffSummaryRecord | null {
+    const stmt = this.db.prepare(`
+      SELECT * FROM turn_diff_summaries
+      WHERE session_id = ? AND assistant_message_id = ?
+      LIMIT 1
+    `);
+    const result = stmt.get(sessionId, assistantMessageId) as TurnDiffSummaryRecord | undefined;
+    return result || null;
+  }
+
+  getLatestAssistantMessageId(sessionId: string, sinceTimestamp: number = 0): string | null {
+    const stmt = this.db.prepare(`
+      SELECT id
+      FROM messages
+      WHERE session_id = ? AND role = 'assistant' AND timestamp >= ?
+      ORDER BY timestamp DESC
+      LIMIT 1
+    `);
+    const result = stmt.get(sessionId, sinceTimestamp) as { id: string } | undefined;
+    return result?.id || null;
   }
 
   /**
