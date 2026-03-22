@@ -1,4 +1,5 @@
 export { ApertureMessage, isSafeUrl } from './ApertureMessage'
+export { ApertureToolGroup } from './ApertureToolGroup'
 export { ApertureToolPart } from './ApertureToolPart'
 export { AttachmentsPreview } from './AttachmentsPreview'
 export { ChatErrorBoundary } from './ChatErrorBoundary'

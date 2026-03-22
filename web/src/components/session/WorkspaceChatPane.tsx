@@ -22,6 +22,7 @@ import {
   ConversationEmptyState,
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation'
+import { Message, MessageContent } from '@/components/ai-elements/message'
 import { Shimmer } from '@/components/ai-elements/shimmer'
 import {
   PromptInput,
@@ -39,17 +40,21 @@ import {
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
 import {
   ApertureMessage,
+  ApertureToolGroup,
   AttachmentsPreview,
   ChatErrorBoundary,
   ConnectionStatus,
   PermissionRequest,
 } from '@/components/chat'
+import { buildConversationRenderItems } from '@/components/chat/conversation-grouping'
+import type { ToolPartUnion } from '@/components/chat/ApertureToolPart'
 import { useChat } from '@ai-sdk/react'
 import { api } from '@/api/client'
 import { useSessionsStore } from '@/stores/sessions'
 import { usePersistedUIMessages } from '@/hooks/usePersistedUIMessages'
 import { ApertureWebSocketTransport } from '@/api/chat-transport'
 import { submitChatMessage } from '@/utils/chat-submit'
+import { formatMessageTimestamp } from '@/utils/format'
 import type { ApertureUIMessage } from '@/utils/ui-message'
 import type { ConnectionState, Session } from '@/api/types'
 import { IMAGE_LIMITS } from '@/api/types'
@@ -181,6 +186,7 @@ function WorkspaceChatPaneReady({
 
   const isConnected = connection?.status === 'connected'
   const isInFlight = status === 'streaming' || status === 'submitted'
+  const renderedConversationItems = useMemo(() => buildConversationRenderItems(messages), [messages])
   const hasPendingPermission = pendingPermissions.length > 0
   const activityLabel = hasPendingPermission
     ? 'Awaiting approval'
@@ -373,7 +379,17 @@ function WorkspaceChatPaneReady({
                 description="Type a message below"
               />
             ) : (
-              messages.map((msg) => <ApertureMessage key={msg.id} message={msg} />)
+              renderedConversationItems.map((item) =>
+                item.kind === 'message' ? (
+                  <ApertureMessage key={item.key} message={item.message} />
+                ) : (
+                  <GroupedToolMessages
+                    key={item.key}
+                    parts={item.parts}
+                    timestamp={item.timestamp}
+                  />
+                ),
+              )
             )}
             {status === 'submitted' && !hasPendingPermission && (
               <div className="flex max-w-full items-center gap-2 text-sm text-foreground/40">
@@ -436,6 +452,27 @@ function WorkspaceChatPaneReady({
         </PromptInput>
       </div>
     </div>
+  )
+}
+
+function GroupedToolMessages({
+  parts,
+  timestamp,
+}: {
+  parts: ToolPartUnion[]
+  timestamp: string | null
+}) {
+  return (
+    <Message from="assistant">
+      <MessageContent>
+        <ApertureToolGroup parts={parts} />
+        {timestamp && (
+          <div className="mt-2 text-2xs opacity-50">
+            {formatMessageTimestamp(timestamp)}
+          </div>
+        )}
+      </MessageContent>
+    </Message>
   )
 }
 

@@ -31,7 +31,8 @@ import {
   AttachmentInfo,
   AttachmentPreview,
 } from '@/components/ai-elements/attachments'
-import { ApertureToolPart } from './ApertureToolPart'
+import { ApertureToolGroup, canGroupToolParts } from './ApertureToolGroup'
+import { ApertureToolPart, type ToolPartUnion } from './ApertureToolPart'
 
 const SAFE_URL_PROTOCOLS = new Set(['http:', 'https:', 'data:', 'blob:'])
 
@@ -42,6 +43,84 @@ export function isSafeUrl(url: string): boolean {
   } catch {
     return false
   }
+}
+
+export type RenderedMessagePart =
+  | { kind: 'text'; key: string; part: Extract<ApertureUIMessage['parts'][number], { type: 'text' }> }
+  | { kind: 'file'; key: string; part: Extract<ApertureUIMessage['parts'][number], { type: 'file' }> }
+  | { kind: 'tool'; key: string; part: ToolPartUnion }
+  | { kind: 'tool-group'; key: string; parts: ToolPartUnion[] }
+
+export function buildRenderedMessageParts(message: ApertureUIMessage): RenderedMessagePart[] {
+  const items: RenderedMessagePart[] = []
+
+  for (let index = 0; index < message.parts.length; index += 1) {
+    const part = message.parts[index]
+    const key = `${message.id}-${index}`
+
+    if (isReasoningUIPart(part)) {
+      continue
+    }
+
+    if (isTextUIPart(part)) {
+      items.push({ kind: 'text', key, part })
+      continue
+    }
+
+    if (isFileUIPart(part)) {
+      items.push({ kind: 'file', key, part })
+      continue
+    }
+
+    if (isToolUIPart(part)) {
+      const toolRun: ToolPartUnion[] = [part]
+      let cursor = index + 1
+
+      while (cursor < message.parts.length) {
+        const nextPart = message.parts[cursor]
+        if (!isToolUIPart(nextPart)) {
+          break
+        }
+
+        toolRun.push(nextPart)
+        cursor += 1
+      }
+
+      let subrunStart = 0
+      while (subrunStart < toolRun.length) {
+        const subrun: ToolPartUnion[] = [toolRun[subrunStart]]
+        let subrunCursor = subrunStart + 1
+
+        while (
+          subrunCursor < toolRun.length &&
+          canGroupToolParts([subrun[0], toolRun[subrunCursor]])
+        ) {
+          subrun.push(toolRun[subrunCursor])
+          subrunCursor += 1
+        }
+
+        if (canGroupToolParts(subrun)) {
+          items.push({
+            kind: 'tool-group',
+            key: `${subrun[0].toolCallId}-group`,
+            parts: subrun,
+          })
+        } else {
+          items.push({
+            kind: 'tool',
+            key: subrun[0].toolCallId,
+            part: subrun[0],
+          })
+        }
+
+        subrunStart = subrunCursor
+      }
+
+      index = cursor - 1
+    }
+  }
+
+  return items
 }
 
 /**
@@ -67,6 +146,7 @@ export const ApertureMessage = memo(function ApertureMessage({
     .filter(isTextUIPart)
     .map((part) => part.text)
     .join('\n\n')
+  const renderedParts = useMemo(() => buildRenderedMessageParts(message), [message])
 
   return (
     <Message from={message.role}>
@@ -88,33 +168,40 @@ export const ApertureMessage = memo(function ApertureMessage({
           </Reasoning>
         )}
 
-        {message.parts.map((part, index) => {
-          const key = `${message.id}-${index}`
-
-          if (isTextUIPart(part)) {
+        {renderedParts.map((item) => {
+          if (item.kind === 'text') {
             return (
               <MessageResponse
-                key={key}
-                isAnimating={part.state === 'streaming'}
+                key={item.key}
+                isAnimating={item.part.state === 'streaming'}
               >
-                {part.text}
+                {item.part.text}
               </MessageResponse>
             )
           }
 
-          if (isReasoningUIPart(part)) {
-            return null
+          if (item.kind === 'file') {
+            return <MessageAttachment key={item.key} part={item.part} />
           }
 
-          if (isFileUIPart(part)) {
-            return <MessageAttachment key={key} part={part} />
+          if (item.kind === 'tool-group') {
+            return (
+              <ApertureToolGroup
+                key={item.key}
+                parts={item.parts}
+              />
+            )
           }
 
-          if (isToolUIPart(part)) {
-            return <ApertureToolPart key={part.toolCallId} part={part} />
+          if (item.kind === 'tool') {
+            return (
+              <ApertureToolPart
+                key={item.key}
+                part={item.part}
+              />
+            )
           }
 
-          // Unknown part type — skip silently
           return null
         })}
 

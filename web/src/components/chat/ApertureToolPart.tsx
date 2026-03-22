@@ -3,7 +3,7 @@ import { getToolName } from 'ai'
 import { Tool, ToolContent, ToolHeader, ToolOutput } from '@/components/ai-elements/tool'
 import { ToolInputDisplay } from '@/components/sdk/ToolInputDisplay'
 
-type ToolPartUnion = ToolUIPart | DynamicToolUIPart
+export type ToolPartUnion = ToolUIPart | DynamicToolUIPart
 
 /**
  * Renders a single tool invocation part using ai-elements Tool chrome
@@ -12,12 +12,18 @@ type ToolPartUnion = ToolUIPart | DynamicToolUIPart
  * We bypass ai-elements' ToolInput (which only renders JSON.stringify CodeBlock)
  * in favor of ToolInputDisplay which has per-tool formatting.
  */
-export function ApertureToolPart({ part }: { part: ToolPartUnion }) {
+export function ApertureToolPart({
+  part,
+  defaultOpen = false,
+}: {
+  part: ToolPartUnion
+  defaultOpen?: boolean
+}) {
   // Use AI SDK's getToolName() — handles both static (tool-{NAME}) and dynamic-tool parts
   const toolName = getToolName(part)
 
   return (
-    <Tool defaultOpen={part.state !== 'output-available'}>
+    <Tool defaultOpen={defaultOpen}>
       {part.type === 'dynamic-tool' ? (
         <ToolHeader
           state={part.state}
