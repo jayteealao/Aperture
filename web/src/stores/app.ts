@@ -22,6 +22,11 @@ interface AppState {
   // Workspace rail state
   activeWorkspaceId: string | null
   workspacePanelOpen: boolean
+  mobileCarousel: {
+    visible: boolean
+    count: number
+    index: number
+  }
 
   // Actions
   setGatewayUrl: (url: string) => void
@@ -37,6 +42,7 @@ interface AppState {
   toggleSdkPanel: () => void
   setActiveWorkspaceId: (id: string | null) => void
   setWorkspacePanelOpen: (open: boolean) => void
+  setMobileCarousel: (state: { visible: boolean; count: number; index: number }) => void
 
   // Initialization
   initFromStorage: () => boolean
@@ -87,6 +93,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   sdkPanelOpen: true,
   activeWorkspaceId: null,
   workspacePanelOpen: false,
+  mobileCarousel: {
+    visible: false,
+    count: 0,
+    index: 0,
+  },
 
   // Actions
   setGatewayUrl: (url) => {
@@ -126,6 +137,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setActiveWorkspaceId: (id) => set({ activeWorkspaceId: id }),
   setWorkspacePanelOpen: (open) => set({ workspacePanelOpen: open }),
+  setMobileCarousel: (mobileCarousel) => set({ mobileCarousel }),
 
   initFromStorage: () => {
     const gatewayUrl = safeGet(globalThis.localStorage, STORAGE_KEYS.gatewayUrl) || 'http://localhost:8080'

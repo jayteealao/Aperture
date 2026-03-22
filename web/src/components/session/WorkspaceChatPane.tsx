@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { MoreHorizontal, Trash2, Info, Copy } from 'lucide-react'
+import { MoreHorizontal, Trash2, Info, Copy, ChevronDown, ChevronUp } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
@@ -113,6 +113,39 @@ function WorkspaceChatPaneReady({
     })
   }, [connection?.status, reloadMessages, setMessages])
 
+  const previousStreamingRef = useRef<boolean>(false)
+  const previousPendingPermissionCountRef = useRef<number>(pendingPermissions.length)
+  useEffect(() => {
+    const wasStreaming = previousStreamingRef.current
+    const hasStreaming = Boolean(connection?.isStreaming)
+    const previousPendingCount = previousPendingPermissionCountRef.current
+    const hasPendingPermissions = pendingPermissions.length > 0
+
+    previousStreamingRef.current = hasStreaming
+    previousPendingPermissionCountRef.current = pendingPermissions.length
+
+    if (connection?.status !== 'connected') {
+      return
+    }
+
+    const permissionResolved = previousPendingCount > 0 && !hasPendingPermissions
+    const promptSettled = wasStreaming && !hasStreaming
+
+    if (!permissionResolved && !promptSettled) {
+      return
+    }
+
+    void reloadMessages().then((nextMessages) => {
+      setMessages(nextMessages)
+    })
+  }, [
+    connection?.isStreaming,
+    connection?.status,
+    pendingPermissions.length,
+    reloadMessages,
+    setMessages,
+  ])
+
   const handleAddUserMessage = useCallback(
     async (content: string) => {
       const next: ApertureUIMessage = {
@@ -148,11 +181,20 @@ function WorkspaceChatPaneReady({
 
   const isConnected = connection?.status === 'connected'
   const isInFlight = status === 'streaming' || status === 'submitted'
+  const hasPendingPermission = pendingPermissions.length > 0
+  const activityLabel = hasPendingPermission
+    ? 'Awaiting approval'
+    : status === 'streaming'
+      ? 'Agent active'
+      : status === 'submitted'
+        ? 'Starting'
+        : null
   const agentLabel = session.agent === 'claude_sdk' ? 'SDK' : 'Pi'
   const agentVariant = (session.agent === 'claude_sdk' ? 'accent' : 'secondary') as 'accent' | 'secondary'
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
+  const [mobileHeaderCollapsed, setMobileHeaderCollapsed] = useState(true)
 
   const handleCopyId = useCallback(() => {
     void navigator.clipboard.writeText(session.id)
@@ -160,23 +202,23 @@ function WorkspaceChatPaneReady({
   }, [session.id])
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex h-full min-h-0 max-w-full flex-1 flex-col overflow-x-hidden">
       {/* Compact pane header */}
-      <div className="px-3 py-2 border-b border-border flex items-center justify-between shrink-0">
+      <div className="hidden shrink-0 items-center justify-between border-b border-border px-3 py-2 sm:flex">
         <div className="flex items-center gap-2 min-w-0">
           <ConnectionStatus status={connection?.status ?? 'disconnected'} />
           <span className="font-mono text-xs text-foreground truncate">
             {session.id.slice(0, 8)}
           </span>
           <Badge variant={agentVariant} size="sm">{agentLabel}</Badge>
+          {activityLabel && (
+            <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="size-2 shrink-0 rounded-full bg-accent animate-pulse" />
+              <Shimmer>{activityLabel}</Shimmer>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {status === 'streaming' && (
-            <Badge variant="accent" size="sm" className="animate-pulse">live</Badge>
-          )}
-          {status === 'submitted' && (
-            <Badge variant="outline" size="sm">sending</Badge>
-          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -208,9 +250,81 @@ function WorkspaceChatPaneReady({
         </div>
       </div>
 
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-2 py-1.5 sm:hidden">
+        <div className="flex min-w-0 items-center gap-2">
+          <ConnectionStatus status={connection?.status ?? 'disconnected'} />
+          <span className="font-mono text-xs text-foreground truncate">
+            {session.id.slice(0, 8)}
+          </span>
+          <Badge variant={agentVariant} size="sm">{agentLabel}</Badge>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+            onClick={() => setMobileHeaderCollapsed((value) => !value)}
+            aria-label={mobileHeaderCollapsed ? 'Expand session controls' : 'Collapse session controls'}
+          >
+            {mobileHeaderCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                aria-label="Session actions"
+              >
+                <MoreHorizontal size={14} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => setShowInfo((v) => !v)}>
+                <Info size={14} className="mr-2" />
+                Session info
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleCopyId}>
+                <Copy size={14} className="mr-2" />
+                Copy session ID
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-danger focus:text-danger"
+              >
+                <Trash2 size={14} className="mr-2" />
+                Delete session
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {activityLabel && (
+        <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-3 py-1.5 text-xs text-muted-foreground sm:hidden">
+          <span className="size-2 shrink-0 rounded-full bg-accent animate-pulse" />
+          <Shimmer>{activityLabel}</Shimmer>
+        </div>
+      )}
+
       {/* Session info panel — inline below header */}
+      {showInfo && !mobileHeaderCollapsed && (
+        <div className="border-b border-border bg-secondary/30 px-3 py-2 text-xs space-y-1 shrink-0 sm:hidden">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">ID</span>
+            <span className="font-mono text-foreground">{session.id}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Agent</span>
+            <span className="text-foreground">{session.agent}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Status</span>
+            <span className="text-foreground">{connection?.status ?? 'disconnected'}</span>
+          </div>
+        </div>
+      )}
+
       {showInfo && (
-        <div className="px-3 py-2 border-b border-border bg-secondary/30 text-xs space-y-1 shrink-0">
+        <div className="hidden shrink-0 space-y-1 border-b border-border bg-secondary/30 px-3 py-2 text-xs sm:block">
           <div className="flex justify-between">
             <span className="text-muted-foreground">ID</span>
             <span className="font-mono text-foreground">{session.id}</span>
@@ -252,7 +366,7 @@ function WorkspaceChatPaneReady({
       {/* Messages — scrolls inside the pane, not the page */}
       <ChatErrorBoundary>
         <Conversation className="scrollbar-thin flex-1 min-h-0">
-          <ConversationContent className="px-3">
+          <ConversationContent className="max-w-full overflow-x-hidden px-3">
             {messages.length === 0 ? (
               <ConversationEmptyState
                 title="Start a conversation"
@@ -261,8 +375,9 @@ function WorkspaceChatPaneReady({
             ) : (
               messages.map((msg) => <ApertureMessage key={msg.id} message={msg} />)
             )}
-            {status === 'submitted' && (
-              <div className="flex items-center gap-2 text-sm text-foreground/40">
+            {status === 'submitted' && !hasPendingPermission && (
+              <div className="flex max-w-full items-center gap-2 text-sm text-foreground/40">
+                <span className="size-2 shrink-0 rounded-full bg-accent animate-pulse" />
                 <Shimmer>Thinking...</Shimmer>
               </div>
             )}
@@ -375,7 +490,7 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
 
   if (!session || initialMessages === null) {
     return (
-      <div className="flex flex-col flex-1 min-h-0 items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center text-sm text-muted-foreground">
         Loading...
       </div>
     )

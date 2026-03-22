@@ -72,8 +72,18 @@ export const ApertureMessage = memo(function ApertureMessage({
     <Message from={message.role}>
       <MessageContent>
         {hasReasoning && (
-          <Reasoning isStreaming={isReasoningStreaming}>
-            <ReasoningTrigger />
+          <Reasoning className="w-full max-w-full" isStreaming={isReasoningStreaming}>
+            <ReasoningTrigger
+              getThinkingMessage={(streaming, duration) => {
+                if (streaming) {
+                  return <span>Thinking...</span>
+                }
+                if (typeof duration === 'number') {
+                  return <span>Thought for {duration}s</span>
+                }
+                return <span>Thinking</span>
+              }}
+            />
             <ReasoningContent>{reasoningText}</ReasoningContent>
           </Reasoning>
         )}

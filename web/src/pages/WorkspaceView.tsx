@@ -16,7 +16,7 @@ import { InputField } from '@/components/ui/input-field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import type { AgentType, AuthMode, Session } from '@/api/types'
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 
 // ── AddSessionDialog ───────────────────────────────────────────────────────
 // Focused dialog: only agent type + auth. Repo is already known from the
@@ -182,7 +182,7 @@ export default function WorkspaceView() {
   const addSession = useSessionsStore((s) => s.addSession)
   const activeSessionId = useSessionsStore((s) => s.activeSessionId)
   const setActiveSession = useSessionsStore((s) => s.setActiveSession)
-  const { setActiveWorkspaceId, setWorkspacePanelOpen } = useAppStore()
+  const { setActiveWorkspaceId, setWorkspacePanelOpen, setMobileCarousel } = useAppStore()
 
   const [showAddSession, setShowAddSession] = useState(false)
   const mobileScrollRef = useRef<HTMLDivElement | null>(null)
@@ -295,16 +295,50 @@ export default function WorkspaceView() {
   )
 
   useEffect(() => {
+    setMobileCarousel({
+      visible: mobileItems.length > 1,
+      count: mobileItems.length,
+      index: mobileIndex,
+    })
+
+    return () => {
+      setMobileCarousel({ visible: false, count: 0, index: 0 })
+    }
+  }, [mobileIndex, mobileItems.length, setMobileCarousel])
+
+  useEffect(() => {
+    const handlePrev = () => scrollToMobileItem(mobileIndex - 1)
+    const handleNext = () => scrollToMobileItem(mobileIndex + 1)
+    const handleSelect = (event: Event) => {
+      const detail = (event as CustomEvent<number>).detail
+      if (typeof detail === 'number') {
+        scrollToMobileItem(detail)
+      }
+    }
+
+    window.addEventListener('aperture:mobile-carousel-prev', handlePrev)
+    window.addEventListener('aperture:mobile-carousel-next', handleNext)
+    window.addEventListener('aperture:mobile-carousel-select', handleSelect as EventListener)
+
+    return () => {
+      window.removeEventListener('aperture:mobile-carousel-prev', handlePrev)
+      window.removeEventListener('aperture:mobile-carousel-next', handleNext)
+      window.removeEventListener('aperture:mobile-carousel-select', handleSelect as EventListener)
+    }
+  }, [mobileIndex, mobileItems.length])
+
+  useEffect(() => {
     if (mobileItems.length <= 1) {
       setMobileIndex(0)
       return
     }
 
     const activeIndex = visibleWorkspaceSessions.findIndex((session) => session.id === activeSessionId)
-    if (activeIndex >= 0) {
+    const isOnNewItem = mobileIndex === mobileItems.length - 1
+    if (activeIndex >= 0 && !isOnNewItem) {
       setMobileIndex(activeIndex)
     }
-  }, [activeSessionId, mobileItems.length, visibleWorkspaceSessions])
+  }, [activeSessionId, mobileIndex, mobileItems.length, visibleWorkspaceSessions])
 
   const scrollToMobileItem = (nextIndex: number) => {
     const container = mobileScrollRef.current
@@ -345,7 +379,7 @@ export default function WorkspaceView() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Mobile session carousel */}
-      <div className="relative flex flex-1 flex-col min-h-0 md:hidden">
+        <div className="relative flex flex-1 flex-col min-h-0 md:hidden">
           <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-gradient-to-r from-background to-transparent" />
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-gradient-to-l from-background to-transparent" />
 
@@ -358,7 +392,7 @@ export default function WorkspaceView() {
               item.kind === 'session' ? (
                 <div
                   key={item.key}
-                  className="h-full w-full shrink-0 snap-start overflow-hidden"
+                  className="flex h-full w-full shrink-0 snap-start overflow-hidden"
                 >
                   <WorkspaceChatPane sessionId={item.session.id} />
                 </div>
@@ -379,42 +413,6 @@ export default function WorkspaceView() {
             )}
           </div>
 
-          {mobileItems.length > 1 && (
-            <div className="flex items-center justify-between gap-3 border-t border-border bg-background/80 px-3 pb-2 pt-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="px-2"
-                onClick={() => scrollToMobileItem(mobileIndex - 1)}
-                disabled={mobileIndex === 0}
-              >
-                <ChevronLeft size={16} />
-              </Button>
-              <div className="flex items-center gap-2">
-                {mobileItems.map((item, index) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => scrollToMobileItem(index)}
-                    className={cn(
-                      'h-2.5 rounded-full transition-all',
-                      index === mobileIndex ? 'w-6 bg-accent' : 'w-2.5 bg-border',
-                    )}
-                    aria-label={`Go to item ${index + 1}`}
-                  />
-                ))}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="px-2"
-                onClick={() => scrollToMobileItem(mobileIndex + 1)}
-                disabled={mobileIndex === mobileItems.length - 1}
-              >
-                <ChevronRight size={16} />
-              </Button>
-            </div>
-          )}
       </div>
 
       {/* Desktop session grid or empty state */}

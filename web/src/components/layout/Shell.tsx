@@ -21,6 +21,7 @@ export function Shell() {
     setWorkspacePanelOpen,
     setActiveWorkspaceId,
     activeWorkspaceId,
+    mobileCarousel,
     gatewayUrl,
     apiToken,
   } = useAppStore()
@@ -87,9 +88,57 @@ export function Shell() {
       <WorkspacePanel />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />
-        <main className="flex-1 overflow-hidden pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0">
+        <main className="flex-1 overflow-hidden">
           <Outlet />
         </main>
+        <MobileBottomBar
+          openSheet={mobileSheet}
+          carousel={mobileCarousel}
+          onOpenWorkspaces={() => setMobileSheet('workspaces')}
+          onOpenSessions={() => setMobileSheet('sessions')}
+          onOpenSettings={() => {
+            setMobileSheet(null)
+            navigate('/settings')
+          }}
+          onOpenCredentials={() => {
+            setMobileSheet(null)
+            navigate('/credentials')
+          }}
+          onOpenHelp={() => {
+            setMobileSheet(null)
+            navigate('/help')
+          }}
+          onCloseSheet={() => setMobileSheet(null)}
+          onPrimaryAction={
+            mobileSheet === 'workspaces'
+              ? () => {
+                  navigate('/workspaces?modal=new-workspace')
+                  setMobileSheet(null)
+                }
+              : mobileSheet === 'sessions' && activeWorkspaceId
+                ? () => {
+                    navigate(`/workspaces/${activeWorkspaceId}?modal=new-session`)
+                    setMobileSheet(null)
+                  }
+                : undefined
+          }
+          primaryActionLabel={
+            mobileSheet === 'workspaces'
+              ? 'New'
+              : mobileSheet === 'sessions' && activeWorkspaceId
+                ? 'New'
+              : undefined
+          }
+          onCarouselPrev={() => {
+            window.dispatchEvent(new CustomEvent('aperture:mobile-carousel-prev'))
+          }}
+          onCarouselNext={() => {
+            window.dispatchEvent(new CustomEvent('aperture:mobile-carousel-next'))
+          }}
+          onCarouselSelect={(index) => {
+            window.dispatchEvent(new CustomEvent('aperture:mobile-carousel-select', { detail: index }))
+          }}
+        />
       </div>
       <MobileNavSheet
         kind="workspaces"
@@ -139,44 +188,6 @@ export function Shell() {
             : undefined
         }
         primaryActionLabel={activeWorkspaceId ? 'New' : undefined}
-      />
-      <MobileBottomBar
-        openSheet={mobileSheet}
-        onOpenWorkspaces={() => setMobileSheet('workspaces')}
-        onOpenSessions={() => setMobileSheet('sessions')}
-        onOpenSettings={() => {
-          setMobileSheet(null)
-          navigate('/settings')
-        }}
-        onOpenCredentials={() => {
-          setMobileSheet(null)
-          navigate('/credentials')
-        }}
-        onOpenHelp={() => {
-          setMobileSheet(null)
-          navigate('/help')
-        }}
-        onCloseSheet={() => setMobileSheet(null)}
-        onPrimaryAction={
-          mobileSheet === 'workspaces'
-            ? () => {
-                navigate('/workspaces?modal=new-workspace')
-                setMobileSheet(null)
-              }
-            : mobileSheet === 'sessions' && activeWorkspaceId
-              ? () => {
-                  navigate(`/workspaces/${activeWorkspaceId}?modal=new-session`)
-                  setMobileSheet(null)
-                }
-              : undefined
-        }
-        primaryActionLabel={
-          mobileSheet === 'workspaces'
-            ? 'New'
-            : mobileSheet === 'sessions' && activeWorkspaceId
-              ? 'New'
-              : undefined
-        }
       />
       <CommandPalette
         open={commandPaletteOpen}

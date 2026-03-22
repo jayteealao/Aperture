@@ -84,7 +84,7 @@ export function CodeHighlight({ code, language, className, style }: CodeHighligh
     return (
       <pre
         className={cn(
-          'm-0 overflow-x-auto rounded-lg bg-muted px-3 py-3 font-mono text-xs text-foreground',
+          'm-0 max-w-full overflow-x-auto rounded-lg bg-muted px-3 py-3 font-mono text-xs text-foreground',
           className
         )}
         style={style}
@@ -97,7 +97,7 @@ export function CodeHighlight({ code, language, className, style }: CodeHighligh
   return (
     <div
       className={cn(
-        '[&_.shiki]:m-0 [&_.shiki]:overflow-x-auto [&_.shiki]:rounded-lg [&_.shiki]:px-3 [&_.shiki]:py-3 [&_.shiki]:text-xs [&_.shiki]:leading-relaxed',
+        'max-w-full [&_.shiki]:m-0 [&_.shiki]:max-w-full [&_.shiki]:overflow-x-auto [&_.shiki]:rounded-lg [&_.shiki]:px-3 [&_.shiki]:py-3 [&_.shiki]:text-xs [&_.shiki]:leading-relaxed',
         className
       )}
       dangerouslySetInnerHTML={{ __html: html }}

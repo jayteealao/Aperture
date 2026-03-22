@@ -164,9 +164,11 @@ export function PermissionRequest({
       className="border-l-4 border-l-warning"
       state={approvalState}
     >
-      <ConfirmationTitle className="flex items-center gap-2 font-medium text-foreground">
+      <ConfirmationTitle className="flex min-w-0 max-w-full items-start gap-2 font-medium text-foreground">
         <AlertCircle className="shrink-0 text-warning" size={16} />
-        Approve {toolName || 'this request'}?
+        <span className="min-w-0 break-words">
+          Approve {toolName || 'this request'}?
+        </span>
       </ConfirmationTitle>
 
       <ConfirmationRequest>
@@ -183,16 +185,20 @@ export function PermissionRequest({
       </ConfirmationRequest>
 
       <ConfirmationAccepted>
-        <div className="flex items-center gap-2 text-sm text-success">
+        <div className="flex min-w-0 max-w-full items-center gap-2 text-sm text-success">
           <CheckIcon size={14} />
-          <span>{selectedOption?.name || 'Approved'}</span>
+          <span className="min-w-0 break-words">
+            {selectedOption?.name || 'Approved'}
+          </span>
         </div>
       </ConfirmationAccepted>
 
       <ConfirmationRejected>
-        <div className="flex items-center gap-2 text-sm text-warning">
+        <div className="flex min-w-0 max-w-full items-center gap-2 text-sm text-warning">
           <XIcon size={14} />
-          <span>{selectedOption?.name || 'Rejected'}</span>
+          <span className="min-w-0 break-words">
+            {selectedOption?.name || 'Rejected'}
+          </span>
         </div>
       </ConfirmationRejected>
 

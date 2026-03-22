@@ -39,11 +39,11 @@ function BashDisplay({ input }: { input: Record<string, unknown> }) {
   const description = input.description as string | undefined
 
   return (
-    <div>
+    <div className="min-w-0 max-w-full">
       {description && (
-        <div className="flex items-center gap-2 mb-2 text-xs text-foreground/40">
+        <div className="mb-2 flex min-w-0 max-w-full items-center gap-2 text-xs text-foreground/40">
           <Terminal size={12} />
-          <span>{description}</span>
+          <span className="min-w-0 break-words">{description}</span>
         </div>
       )}
       <div className="rounded-lg overflow-hidden">
@@ -59,9 +59,9 @@ function BashDisplay({ input }: { input: Record<string, unknown> }) {
 
 function FileDisplay({ path }: { path: string }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 max-w-full items-center gap-2">
       <File size={14} className="text-foreground/40 shrink-0" />
-      <code className="text-[10px] font-mono text-muted-foreground truncate">
+      <code className="min-w-0 max-w-full truncate text-[10px] font-mono text-muted-foreground">
         {path}
       </code>
     </div>
@@ -74,10 +74,10 @@ function WriteDisplay({ input }: { input: Record<string, unknown> }) {
   const preview = content ? truncate(content, 300) : undefined
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
+    <div className="min-w-0 max-w-full space-y-2">
+      <div className="flex min-w-0 max-w-full items-center gap-2">
         <File size={14} className="text-foreground/40 shrink-0" />
-        <code className="text-[10px] font-mono text-muted-foreground truncate">
+        <code className="min-w-0 max-w-full truncate text-[10px] font-mono text-muted-foreground">
           {filePath}
         </code>
       </div>
@@ -101,10 +101,10 @@ function EditDisplay({ input }: { input: Record<string, unknown> }) {
   const newString = input.new_string as string | undefined
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
+    <div className="min-w-0 max-w-full space-y-2">
+      <div className="flex min-w-0 max-w-full items-center gap-2">
         <PenLine size={14} className="text-foreground/40 shrink-0" />
-        <code className="text-[10px] font-mono text-muted-foreground truncate">
+        <code className="min-w-0 max-w-full truncate text-[10px] font-mono text-muted-foreground">
           {filePath}
         </code>
       </div>
@@ -115,7 +115,7 @@ function EditDisplay({ input }: { input: Record<string, unknown> }) {
               <div className="px-2 py-1 text-2xs font-medium text-danger border-b border-border">
                 − Remove
               </div>
-              <pre className="p-2 text-[10px] overflow-x-auto text-muted-foreground">
+              <pre className="max-w-full overflow-x-auto p-2 text-[10px] text-muted-foreground">
                 {truncate(oldString, 150)}
               </pre>
             </div>
@@ -125,7 +125,7 @@ function EditDisplay({ input }: { input: Record<string, unknown> }) {
               <div className="px-2 py-1 text-2xs font-medium text-success border-b border-border">
                 + Add
               </div>
-              <pre className="p-2 text-[10px] overflow-x-auto text-muted-foreground">
+              <pre className="max-w-full overflow-x-auto p-2 text-[10px] text-muted-foreground">
                 {truncate(newString, 150)}
               </pre>
             </div>
@@ -141,12 +141,12 @@ function SearchDisplay({ input }: { input: Record<string, unknown> }) {
   const path = input.path as string | undefined
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 max-w-full items-center gap-2">
       <Search size={14} className="text-foreground/40 shrink-0" />
-      <div className="text-[10px] overflow-hidden">
+      <div className="min-w-0 max-w-full overflow-hidden text-[10px]">
         <code className="font-mono text-accent">{pattern}</code>
         {path && (
-          <span className="text-foreground/40"> in {path}</span>
+          <span className="break-all text-foreground/40"> in {path}</span>
         )}
       </div>
     </div>
@@ -157,9 +157,9 @@ function WebFetchDisplay({ input }: { input: Record<string, unknown> }) {
   const url = input.url as string
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 max-w-full items-center gap-2">
       <Globe size={14} className="text-foreground/40 shrink-0" />
-      <code className="text-[10px] font-mono text-accent truncate">
+      <code className="min-w-0 max-w-full truncate text-[10px] font-mono text-accent">
         {url}
       </code>
     </div>
@@ -170,9 +170,9 @@ function WebSearchDisplay({ input }: { input: Record<string, unknown> }) {
   const query = input.query as string
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 max-w-full items-center gap-2">
       <Search size={14} className="text-foreground/40 shrink-0" />
-      <span className="text-[10px] text-muted-foreground">
+      <span className="min-w-0 break-words text-[10px] text-muted-foreground">
         Searching: <span className="text-accent font-medium">{query}</span>
       </span>
     </div>
@@ -184,7 +184,7 @@ function TaskDisplay({ input }: { input: Record<string, unknown> }) {
   const description = input.description as string | undefined
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
       <Bot size={14} className="text-foreground/40 shrink-0" />
       {subagentType && (
         <Badge variant="default" size="sm" className="text-2xs">
@@ -192,7 +192,9 @@ function TaskDisplay({ input }: { input: Record<string, unknown> }) {
         </Badge>
       )}
       {description && (
-        <span className="text-[10px] text-muted-foreground">{description}</span>
+        <span className="min-w-0 break-words text-[10px] text-muted-foreground">
+          {description}
+        </span>
       )}
     </div>
   )
