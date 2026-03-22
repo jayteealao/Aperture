@@ -311,11 +311,46 @@ export class ApertureDatabase {
   getDiscoverableSessions(): SessionRecord[] {
     const stmt = this.db.prepare(`
       SELECT * FROM sessions
-      WHERE status = 'active'
-         OR (status = 'idle' AND is_resumable = 1)
+      WHERE (
+        status = 'active'
+        AND (
+          agent NOT IN ('claude_sdk', 'pi_sdk')
+          OR sdk_session_id IS NOT NULL
+          OR pi_session_path IS NOT NULL
+        )
+      )
+      OR (
+        status = 'idle'
+        AND is_resumable = 1
+        AND (
+          agent NOT IN ('claude_sdk', 'pi_sdk')
+          OR sdk_session_id IS NOT NULL
+          OR pi_session_path IS NOT NULL
+        )
+      )
       ORDER BY last_activity_at DESC
     `);
     return stmt.all() as SessionRecord[];
+  }
+
+  /**
+   * End SDK session rows that never acquired provider resume metadata.
+   * These are placeholder/orphan rows that cannot be restored and should not
+   * remain discoverable after a crash or failed startup.
+   */
+  cleanupOrphanSdkSessions(timestamp: number = Date.now()): number {
+    const stmt = this.db.prepare(`
+      UPDATE sessions
+      SET status = 'ended',
+          ended_at = ?,
+          is_resumable = 0
+      WHERE status IN ('active', 'idle')
+        AND agent IN ('claude_sdk', 'pi_sdk')
+        AND sdk_session_id IS NULL
+        AND pi_session_path IS NULL
+    `);
+    const result = stmt.run(timestamp);
+    return result.changes;
   }
 
   /**

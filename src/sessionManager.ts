@@ -90,6 +90,11 @@ export class SessionManager {
       return;
     }
 
+    const orphanedCount = this.database.cleanupOrphanSdkSessions(Date.now());
+    if (orphanedCount > 0) {
+      this.logger.info(`Ended ${orphanedCount} orphaned SDK sessions without provider resume metadata`);
+    }
+
     const resumableSessions = this.database.getResumableSessions();
     this.logger.info(`Found ${resumableSessions.length} resumable sessions in database`);
 
@@ -728,7 +733,7 @@ export class SessionManager {
         user_id: null,
         sdk_session_id: null, // Will be updated when SDK returns session_id
         sdk_config: options.sdk ? JSON.stringify(options.sdk) : null,
-        is_resumable: 1, // SDK sessions start as potentially resumable
+        is_resumable: 0, // Becomes resumable only after provider session metadata is persisted
         working_directory: sessionCwd || null,
         workspace_id: options.workspaceId || null,
         pi_session_path: null,
@@ -750,6 +755,7 @@ export class SessionManager {
       await session.start();
     } catch (error) {
       this.sessions.delete(id);
+      this.database?.deleteSession(id);
       throw error;
     }
     return session;
@@ -792,7 +798,7 @@ export class SessionManager {
         user_id: null,
         sdk_session_id: null,
         sdk_config: options.pi ? JSON.stringify(options.pi) : null,
-        is_resumable: 1, // Pi SDK sessions start as potentially resumable
+        is_resumable: 0, // Becomes resumable only after provider session metadata is persisted
         working_directory: sessionCwd || null,
         workspace_id: options.workspaceId || null,
         pi_session_path: null, // Will be updated when Pi SDK creates session file
@@ -810,6 +816,7 @@ export class SessionManager {
       await session.start();
     } catch (error) {
       this.sessions.delete(id);
+      this.database?.deleteSession(id);
       throw error;
     }
     return session;

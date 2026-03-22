@@ -27,6 +27,7 @@ function createSessionRecord(overrides: Partial<SessionRecord> = {}): SessionRec
 
 function createDatabase(record: SessionRecord) {
   return {
+    cleanupOrphanSdkSessions: vi.fn(() => 0),
     getResumableSessions: vi.fn(() => [record]),
     updateSessionStatus: vi.fn(),
     endSession: vi.fn(),
@@ -60,6 +61,7 @@ describe('SessionManager Claude restore lifecycle', () => {
 
     await manager.restoreSessions();
 
+    expect(database.cleanupOrphanSdkSessions).toHaveBeenCalledWith(expect.any(Number));
     expect(canResumeSpy).toHaveBeenCalledWith(
       'claude-session-1',
       'C:\\Users\\jayte\\.aperture\\workspaces\\Crumb\\session-1'
@@ -82,6 +84,23 @@ describe('SessionManager Claude restore lifecycle', () => {
     expect(database.endSession).toHaveBeenCalledWith('session-1', expect.any(Number));
     expect(database.markNonResumable).toHaveBeenCalledWith('session-1');
     expect(database.updateSessionStatus).not.toHaveBeenCalled();
+  });
+
+  it('cleans up orphan SDK rows without provider resume metadata before restore', async () => {
+    const record = createSessionRecord();
+    const database = createDatabase(record);
+    database.cleanupOrphanSdkSessions = vi.fn(() => 1);
+    const logger = createLogger();
+    const manager = new SessionManager({} as never, logger as never, database as never);
+
+    vi.spyOn(SdkSession, 'canResumeProviderSession').mockResolvedValue(true);
+
+    await manager.restoreSessions();
+
+    expect(database.cleanupOrphanSdkSessions).toHaveBeenCalledWith(expect.any(Number));
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('Ended 1 orphaned SDK sessions without provider resume metadata')
+    );
   });
 
   it('marks a session history-only and throws when a direct restore is attempted after provider resume stops resolving', async () => {

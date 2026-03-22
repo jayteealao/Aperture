@@ -197,3 +197,85 @@ describe('ApertureDatabase - Managed Repos', () => {
     });
   });
 });
+
+describe('ApertureDatabase - Session Discovery', () => {
+  let db: ApertureDatabase;
+
+  beforeEach(() => {
+    db = new ApertureDatabase(':memory:');
+    db.migrate(migrationsDir);
+  });
+
+  function createSessionRow(overrides: Partial<Parameters<ApertureDatabase['saveSession']>[0]> = {}) {
+    return {
+      id: randomUUID(),
+      agent: 'claude_sdk',
+      auth_mode: 'oauth',
+      acp_session_id: null,
+      created_at: Date.now(),
+      last_activity_at: Date.now(),
+      ended_at: null,
+      status: 'idle' as const,
+      metadata: null,
+      user_id: null,
+      sdk_session_id: null,
+      sdk_config: null,
+      is_resumable: 0,
+      working_directory: null,
+      workspace_id: null,
+      pi_session_path: null,
+      ...overrides,
+    };
+  }
+
+  it('does not return idle Claude sessions without provider session metadata as discoverable', () => {
+    const orphan = createSessionRow({
+      status: 'idle',
+      is_resumable: 1,
+      sdk_session_id: null,
+      id: 'orphan-claude',
+    });
+    const valid = createSessionRow({
+      status: 'idle',
+      is_resumable: 1,
+      sdk_session_id: 'sdk-session-1',
+      id: 'valid-claude',
+    });
+
+    db.saveSession(orphan);
+    db.saveSession(valid);
+
+    const discoverableIds = db.getDiscoverableSessions().map((session) => session.id);
+    expect(discoverableIds).toContain('valid-claude');
+    expect(discoverableIds).not.toContain('orphan-claude');
+  });
+
+  it('marks orphan SDK sessions ended and non-resumable during cleanup', () => {
+    const orphan = createSessionRow({
+      id: 'orphan-sdk',
+      status: 'idle',
+      is_resumable: 1,
+      sdk_session_id: null,
+      pi_session_path: null,
+    });
+    const valid = createSessionRow({
+      id: 'valid-sdk',
+      status: 'idle',
+      is_resumable: 1,
+      sdk_session_id: 'sdk-session-2',
+    });
+
+    db.saveSession(orphan);
+    db.saveSession(valid);
+
+    expect(db.cleanupOrphanSdkSessions(12345)).toBe(1);
+
+    const orphanRow = db.getSession('orphan-sdk');
+    const validRow = db.getSession('valid-sdk');
+    expect(orphanRow?.status).toBe('ended');
+    expect(orphanRow?.ended_at).toBe(12345);
+    expect(orphanRow?.is_resumable).toBe(0);
+    expect(validRow?.status).toBe('idle');
+    expect(validRow?.is_resumable).toBe(1);
+  });
+});
