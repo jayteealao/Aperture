@@ -22,6 +22,7 @@ import {
 import type { ApertureUIMessage } from '@/utils/ui-message'
 import { getMessageTimestamp } from '@/utils/ui-message'
 import { formatMessageTimestamp } from '@/utils/format'
+import type { TurnDiffSummary } from '@/api/types'
 import {
   Attachments,
   Attachment,
@@ -33,6 +34,7 @@ import {
 } from '@/components/ai-elements/attachments'
 import { ApertureToolGroup, canGroupToolParts } from './ApertureToolGroup'
 import { ApertureToolPart, type ToolPartUnion } from './ApertureToolPart'
+import { TurnDiffCard } from './TurnDiffCard'
 
 const SAFE_URL_PROTOCOLS = new Set(['http:', 'https:', 'data:', 'blob:'])
 
@@ -131,8 +133,12 @@ export function buildRenderedMessageParts(message: ApertureUIMessage): RenderedM
  */
 export const ApertureMessage = memo(function ApertureMessage({
   message,
+  sessionId,
+  turnDiffSummary,
 }: {
   message: ApertureUIMessage
+  sessionId?: string
+  turnDiffSummary?: TurnDiffSummary | null
 }) {
   const timestamp = getMessageTimestamp(message)
   const reasoningParts = useMemo(
@@ -209,6 +215,10 @@ export const ApertureMessage = memo(function ApertureMessage({
           <div className="mt-2 text-2xs opacity-50">
             {formatMessageTimestamp(timestamp)}
           </div>
+        )}
+
+        {message.role === 'assistant' && sessionId && turnDiffSummary && turnDiffSummary.fileCount > 0 && (
+          <TurnDiffCard sessionId={sessionId} summary={turnDiffSummary} />
         )}
 
         {message.role === 'assistant' && textContent.trim().length > 0 && (

@@ -136,6 +136,41 @@ export interface MessagesResponse {
   offset: number
 }
 
+export interface TurnDiffFileSummary {
+  path: string
+  additions: number
+  deletions: number
+}
+
+export interface TurnDiffSummary {
+  id: string
+  sessionId: string
+  userMessageId?: string
+  assistantMessageId: string
+  checkpointId?: string
+  providerSessionId?: string
+  workingDirectory: string
+  turnStartedAt: string
+  turnCompletedAt: string
+  gitBaseHead?: string
+  gitHeadAtCompletion?: string
+  fileCount: number
+  additions: number
+  deletions: number
+  files: TurnDiffFileSummary[]
+  metadata?: Record<string, unknown> | null
+}
+
+export interface TurnDiffSummariesResponse {
+  summaries: TurnDiffSummary[]
+  total: number
+}
+
+export interface TurnDiffPatchResponse {
+  assistantMessageId: string
+  patch: string
+}
+
 // Message types for the chat
 export interface ContentBlock {
   type: 'text' | 'tool_use' | 'tool_result' | 'thinking' | 'image'

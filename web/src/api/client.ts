@@ -12,6 +12,9 @@ import type {
   HealthResponse,
   ReadyResponse,
   MessagesResponse,
+  TurnDiffSummariesResponse,
+  TurnDiffSummary,
+  TurnDiffPatchResponse,
   JsonRpcMessage,
   CreateWorkspaceRequest,
   WorkspaceRecord,
@@ -147,6 +150,27 @@ class ApertureClient {
     return this.request<ConnectSessionResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/connect`, {
       method: 'POST',
     })
+  }
+
+  async listTurnDiffSummaries(sessionId: string): Promise<TurnDiffSummariesResponse> {
+    return this.request<TurnDiffSummariesResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/turn-diffs`)
+  }
+
+  async getTurnDiffSummary(sessionId: string, assistantMessageId: string): Promise<TurnDiffSummary> {
+    return this.request<TurnDiffSummary>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/turn-diffs/${encodeURIComponent(assistantMessageId)}`
+    )
+  }
+
+  async getTurnDiffPatch(
+    sessionId: string,
+    assistantMessageId: string,
+    filePath?: string
+  ): Promise<TurnDiffPatchResponse> {
+    const suffix = filePath ? `?path=${encodeURIComponent(filePath)}` : ''
+    return this.request<TurnDiffPatchResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/turn-diffs/${encodeURIComponent(assistantMessageId)}/patch${suffix}`
+    )
   }
 
   // Credentials

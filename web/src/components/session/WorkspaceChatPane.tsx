@@ -56,7 +56,7 @@ import { ApertureWebSocketTransport } from '@/api/chat-transport'
 import { submitChatMessage } from '@/utils/chat-submit'
 import { formatMessageTimestamp } from '@/utils/format'
 import type { ApertureUIMessage } from '@/utils/ui-message'
-import type { ConnectionState, Session } from '@/api/types'
+import type { ConnectionState, Session, TurnDiffSummary } from '@/api/types'
 import { IMAGE_LIMITS } from '@/api/types'
 
 // ── WorkspaceChatPaneReady ─────────────────────────────────────────────────
@@ -71,6 +71,8 @@ function WorkspaceChatPaneReady({
   initialMessages,
   persistMessages,
   reloadMessages,
+  turnDiffSummaryByAssistantMessageId,
+  reloadTurnDiffSummaries,
   sendPermissionResponse,
   onDelete,
 }: {
@@ -81,6 +83,8 @@ function WorkspaceChatPaneReady({
   initialMessages: ApertureUIMessage[]
   persistMessages: (messages: ApertureUIMessage[]) => Promise<void>
   reloadMessages: () => Promise<ApertureUIMessage[]>
+  turnDiffSummaryByAssistantMessageId: Map<string, TurnDiffSummary>
+  reloadTurnDiffSummaries: () => Promise<TurnDiffSummary[]>
   sendPermissionResponse: (
     sessionId: string,
     toolCallId: string,
@@ -116,7 +120,8 @@ function WorkspaceChatPaneReady({
     void reloadMessages().then((nextMessages) => {
       setMessages(nextMessages)
     })
-  }, [connection?.status, reloadMessages, setMessages])
+    void reloadTurnDiffSummaries()
+  }, [connection?.status, reloadMessages, reloadTurnDiffSummaries, setMessages])
 
   const previousStreamingRef = useRef<boolean>(false)
   const previousPendingPermissionCountRef = useRef<number>(pendingPermissions.length)
@@ -143,11 +148,13 @@ function WorkspaceChatPaneReady({
     void reloadMessages().then((nextMessages) => {
       setMessages(nextMessages)
     })
+    void reloadTurnDiffSummaries()
   }, [
     connection?.isStreaming,
     connection?.status,
     pendingPermissions.length,
     reloadMessages,
+    reloadTurnDiffSummaries,
     setMessages,
   ])
 
@@ -381,7 +388,12 @@ function WorkspaceChatPaneReady({
             ) : (
               renderedConversationItems.map((item) =>
                 item.kind === 'message' ? (
-                  <ApertureMessage key={item.key} message={item.message} />
+                  <ApertureMessage
+                    key={item.key}
+                    message={item.message}
+                    sessionId={sessionId}
+                    turnDiffSummary={turnDiffSummaryByAssistantMessageId.get(item.message.id) ?? null}
+                  />
                 ) : (
                   <GroupedToolMessages
                     key={item.key}
@@ -497,8 +509,19 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
   const updateConnection = useSessionsStore((s) => s.updateConnection)
   const removeSession = useSessionsStore((s) => s.removeSession)
   const { initialMessages, persistMessages, reloadMessages } = usePersistedUIMessages(sessionId)
+  const [turnDiffSummaries, setTurnDiffSummaries] = useState<TurnDiffSummary[]>([])
 
   const shouldConnect = !!session && (session.status.running || !!session.status.isResumable)
+  const reloadTurnDiffSummaries = useCallback(async () => {
+    try {
+      const response = await api.listTurnDiffSummaries(sessionId)
+      setTurnDiffSummaries(response.summaries)
+      return response.summaries
+    } catch {
+      setTurnDiffSummaries([])
+      return []
+    }
+  }, [sessionId])
 
   // Connect exactly once per sessionId. Ref guards against StrictMode double-invoke.
   const hasConnected = useRef(false)
@@ -512,6 +535,10 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
 
     updateConnection(sessionId, { status: 'ended', error: null, isStreaming: false })
   }, [sessionId, connectSession, shouldConnect, updateConnection])
+
+  useEffect(() => {
+    void reloadTurnDiffSummaries()
+  }, [reloadTurnDiffSummaries])
 
   const handleDelete = useCallback(async () => {
     try {
@@ -533,6 +560,10 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
     )
   }
 
+  const turnDiffSummaryByAssistantMessageId = new Map(
+    turnDiffSummaries.map((summary) => [summary.assistantMessageId, summary] as const)
+  )
+
   return (
     <WorkspaceChatPaneReady
       connection={connection}
@@ -540,6 +571,8 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
       pendingPermissions={pendingPermissions}
       persistMessages={persistMessages}
       reloadMessages={reloadMessages}
+      turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
+      reloadTurnDiffSummaries={reloadTurnDiffSummaries}
       sendPermissionResponse={sendPermissionResponse}
       session={session}
       sessionId={sessionId}
