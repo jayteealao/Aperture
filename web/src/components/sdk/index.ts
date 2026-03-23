@@ -1,4 +1,6 @@
 export { SdkControlPanel } from './SdkControlPanel'
+export { SdkComposerControls } from './SdkComposerControls'
+export { SdkOverflowMenu } from './SdkOverflowMenu'
 export { SdkSessionHeader } from './SdkSessionHeader'
 export { SdkUsageDisplay } from './SdkUsageDisplay'
 export { SdkAccountInfo } from './SdkAccountInfo'

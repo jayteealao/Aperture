@@ -135,11 +135,15 @@ function handleSessionUpdate(
     }
   } else if (updateType === 'prompt_complete' || updateType === 'prompt_error') {
     get().setStreaming(sessionId, false)
+  } else if (updateType === 'init' && typeof update.config === 'object' && update.config !== null) {
+    get().setSdkConfig(sessionId, update.config as SdkSessionConfig)
   } else if (updateType === 'config_changed') {
     const currentConfig = get().sdkConfig[sessionId] || {}
     const newConfig: SdkSessionConfig = { ...currentConfig }
     if ('model' in update) newConfig.model = update.model as string | undefined
     if ('permissionMode' in update) newConfig.permissionMode = update.permissionMode as PermissionMode
+    if ('maxThinkingTokens' in update) newConfig.maxThinkingTokens = update.maxThinkingTokens as number | undefined
+    if ('effort' in update) newConfig.effort = update.effort as SdkSessionConfig['effort']
     get().setSdkConfig(sessionId, newConfig)
   }
 }

@@ -12,6 +12,7 @@ import type {
   HealthResponse,
   ReadyResponse,
   MessagesResponse,
+  SessionCheckpointsResponse,
   TurnDiffSummariesResponse,
   TurnDiffSummary,
   TurnDiffPatchResponse,
@@ -138,6 +139,12 @@ class ApertureClient {
       method: 'POST',
       body: JSON.stringify({ message }),
     })
+  }
+
+  async getSessionCheckpoints(sessionId: string): Promise<SessionCheckpointsResponse> {
+    return this.request<SessionCheckpointsResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/checkpoints`
+    )
   }
 
   // Get resumable SDK sessions

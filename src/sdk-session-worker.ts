@@ -35,6 +35,10 @@ type WorkerRpcMessage = {
   args?: unknown[];
 };
 
+type WorkerWarmupMessage = {
+  type: 'warmup';
+};
+
 type WorkerControlMessage =
   | { type: 'close' }
   | { type: 'interrupt' };
@@ -44,6 +48,7 @@ type ParentToWorkerMessage =
   | WorkerPromptMessage
   | WorkerPermissionResponseMessage
   | WorkerRpcMessage
+  | WorkerWarmupMessage
   | WorkerControlMessage;
 
 type WorkerToParentMessage =
@@ -63,6 +68,8 @@ type WorkerToParentMessage =
   | { type: 'prompt_failed'; error: string }
   | { type: 'rpc_result'; requestId: number; result: unknown }
   | { type: 'rpc_error'; requestId: number; error: string }
+  | { type: 'warmup_done'; models: unknown[]; commands: unknown[]; accountInfo: unknown | null }
+  | { type: 'warmup_error'; error: string }
   | { type: 'worker_error'; error: string };
 
 type RuntimeSessionWithQuery = SDKSession & {
@@ -87,6 +94,7 @@ const pendingPermissions = new Map<
 
 let runtimeSession: RuntimeSessionWithQuery | null = null;
 let currentStream: AsyncGenerator<SDKMessage, void> | null = null;
+let workerConfig: Record<string, unknown> | null = null;
 
 function send(message: WorkerToParentMessage): void {
   if (process.send) {
@@ -202,10 +210,57 @@ async function handleRpc(requestId: number, method: string, args: unknown[] = []
   }
 }
 
+async function handleWarmup(): Promise<void> {
+  if (!runtimeSession) {
+    throw new Error('Worker runtime not initialized');
+  }
+
+  // Send a dummy prompt to bootstrap the SDK stream
+  await runtimeSession.send('hi');
+  currentStream = runtimeSession.stream();
+
+  let gotInit = false;
+  try {
+    for await (const message of currentStream) {
+      if (message.type === 'system' && (message as Record<string, unknown>).subtype === 'init') {
+        gotInit = true;
+
+        // Grab models, commands, and account info from the active query
+        const query = getCurrentQuery();
+        let models: unknown[] = [];
+        let commands: unknown[] = [];
+        let accountInfo: unknown | null = null;
+
+        if (query) {
+          try { models = (await query.supportedModels?.()) as unknown[] ?? []; } catch { /* ignore */ }
+          try { commands = (await query.supportedCommands?.()) as unknown[] ?? []; } catch { /* ignore */ }
+          try { accountInfo = (await query.accountInfo?.()) ?? null; } catch { /* ignore */ }
+        }
+
+        send({ type: 'warmup_done', models, commands, accountInfo });
+        break;
+      }
+    }
+  } finally {
+    currentStream = null;
+  }
+
+  if (!gotInit) {
+    throw new Error('Warmup stream ended without init message');
+  }
+
+  // Recreate the session fresh so the dummy prompt doesn't pollute real conversations
+  runtimeSession.close();
+  runtimeSession = unstable_v2_createSession(
+    buildSessionOptions(workerConfig ?? {})
+  ) as RuntimeSessionWithQuery;
+}
+
 process.on('message', async (message: ParentToWorkerMessage) => {
   try {
     switch (message.type) {
       case 'init': {
+        workerConfig = message.config;
         const options = buildSessionOptions(message.config);
         runtimeSession = message.resumeId
           ? (unstable_v2_resumeSession(message.resumeId, options) as RuntimeSessionWithQuery)
@@ -219,6 +274,17 @@ process.on('message', async (message: ParentToWorkerMessage) => {
 
       case 'prompt':
         await handlePrompt(message.prompt);
+        break;
+
+      case 'warmup':
+        try {
+          await handleWarmup();
+        } catch (error) {
+          send({
+            type: 'warmup_error',
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
         break;
 
       case 'permission_response': {

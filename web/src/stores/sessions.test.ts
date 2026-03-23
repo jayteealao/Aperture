@@ -358,6 +358,82 @@ describe('useSessionsStore session/update sub-types', () => {
 
     expect(useSessionsStore.getState().connections[sessionId]?.isStreaming).toBe(false)
   })
+
+  it('init seeds sdk config including effort', () => {
+    const sessionId = 'upd-init'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'init',
+            config: {
+              model: 'claude-sonnet',
+              permissionMode: 'plan',
+              maxThinkingTokens: 8000,
+              effort: 'high',
+            },
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().sdkConfig[sessionId]).toEqual({
+      model: 'claude-sonnet',
+      permissionMode: 'plan',
+      maxThinkingTokens: 8000,
+      effort: 'high',
+    })
+  })
+
+  it('config_changed merges effort and thinking token updates', () => {
+    const sessionId = 'upd-config'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+      sdkConfig: {
+        [sessionId]: {
+          model: 'claude-sonnet',
+          permissionMode: 'default',
+        },
+      },
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'config_changed',
+            effort: 'max',
+            maxThinkingTokens: 16000,
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().sdkConfig[sessionId]).toEqual({
+      model: 'claude-sonnet',
+      permissionMode: 'default',
+      effort: 'max',
+      maxThinkingTokens: 16000,
+    })
+  })
 })
 
 describe('useSessionsStore cleanup', () => {

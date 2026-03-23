@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { MoreHorizontal, Trash2, Info, Copy, ChevronDown, ChevronUp } from 'lucide-react'
+import { MoreHorizontal, Trash2, Info, Copy, ChevronDown, ChevronUp, PanelRight, PanelRightClose } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
@@ -27,6 +27,7 @@ import { Shimmer } from '@/components/ai-elements/shimmer'
 import {
   PromptInput,
   PromptInputBody,
+  PromptInputButton,
   PromptInputFooter,
   PromptInputHeader,
   PromptInputSubmit,
@@ -36,6 +37,7 @@ import {
   PromptInputActionMenuTrigger,
   PromptInputActionMenuContent,
   PromptInputActionAddAttachments,
+  usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input'
 import type { PromptInputMessage } from '@/components/ai-elements/prompt-input'
 import {
@@ -53,11 +55,28 @@ import { api } from '@/api/client'
 import { useSessionsStore } from '@/stores/sessions'
 import { usePersistedUIMessages } from '@/hooks/usePersistedUIMessages'
 import { ApertureWebSocketTransport } from '@/api/chat-transport'
+import { wsManager } from '@/api/websocket'
 import { submitChatMessage } from '@/utils/chat-submit'
 import { formatMessageTimestamp } from '@/utils/format'
 import type { ApertureUIMessage } from '@/utils/ui-message'
 import type { ConnectionState, Session, TurnDiffSummary } from '@/api/types'
 import { IMAGE_LIMITS } from '@/api/types'
+import { SdkComposerControls, SdkControlPanel, SdkOverflowMenu } from '@/components/sdk'
+import { cn } from '@/utils/cn'
+
+// ── AttachmentCountBadge ───────────────────────────────────────────────────
+// Reads attachment count from the PromptInput context and renders a small
+// badge. Rendered only when the input is collapsed and attachments exist.
+
+function AttachmentCountBadge() {
+  const { files } = usePromptInputAttachments()
+  if (files.length === 0) return null
+  return (
+    <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold leading-none text-nebula-bg-primary">
+      {files.length}
+    </span>
+  )
+}
 
 // ── WorkspaceChatPaneReady ─────────────────────────────────────────────────
 // Owns the useChat instance. Only rendered once session record and persisted
@@ -173,17 +192,6 @@ function WorkspaceChatPaneReady({
     [setMessages, persistMessages],
   )
 
-  const handleSubmit = useCallback(
-    async (message: PromptInputMessage) => {
-      await submitChatMessage(message, {
-        connection,
-        sendMessage,
-        notifyError: (title, body) => toast.error(title, { description: body }),
-      })
-    },
-    [connection, sendMessage],
-  )
-
   const handleFileError = useCallback(
     (err: { code: string; message: string }) => {
       toast.error('Attachment not added', { description: err.message })
@@ -208,14 +216,108 @@ function WorkspaceChatPaneReady({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
   const [mobileHeaderCollapsed, setMobileHeaderCollapsed] = useState(true)
+  const [sdkSidebarOpen, setSdkSidebarOpen] = useState(false)
+
+  // ── Collapsible input state ──────────────────────────────────────────────
+  const [isInputExpanded, setIsInputExpanded] = useState(true)
+  const [inputValue, setInputValue] = useState('')
+  // Ref keeps a fresh copy of inputValue accessible inside setTimeout callbacks
+  // without stale-closure issues.
+  const inputValueRef = useRef('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    inputValueRef.current = inputValue
+  }, [inputValue])
+
+  // Clean up any pending blur timer on unmount
+  useEffect(() => {
+    return () => {
+      if (blurTimerRef.current) clearTimeout(blurTimerRef.current)
+    }
+  }, [])
+
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      inputValueRef.current = e.target.value
+      setInputValue(e.target.value)
+    },
+    [],
+  )
+
+  // Expand and focus the textarea (used by click-to-expand and toggle)
+  const expandAndFocus = useCallback(() => {
+    setIsInputExpanded(true)
+    // Small delay so the grid animation begins before we attempt focus
+    setTimeout(() => textareaRef.current?.focus(), 10)
+  }, [])
+
+  // Toggle button handler
+  const handleToggleExpand = useCallback(() => {
+    setIsInputExpanded((prev) => {
+      if (!prev) {
+        setTimeout(() => textareaRef.current?.focus(), 10)
+      }
+      return !prev
+    })
+  }, [])
+
+  // Triggered when the collapsed preview text is clicked
+  const handleExpand = useCallback(() => {
+    expandAndFocus()
+  }, [expandAndFocus])
+
+  // Auto-expand on textarea focus
+  const handleTextareaFocus = useCallback(() => {
+    if (blurTimerRef.current) {
+      clearTimeout(blurTimerRef.current)
+      blurTimerRef.current = null
+    }
+    setIsInputExpanded(true)
+  }, [])
+
+  // Auto-collapse on textarea blur if input is empty.
+  // 150ms delay prevents collapsing when focus shifts to toolbar buttons.
+  const handleTextareaBlur = useCallback(() => {
+    blurTimerRef.current = setTimeout(() => {
+      blurTimerRef.current = null
+      if (inputValueRef.current.trim() === '') {
+        setIsInputExpanded(false)
+      }
+    }, 150)
+  }, [])
 
   const handleCopyId = useCallback(() => {
     void navigator.clipboard.writeText(session.id)
     toast.success('Session ID copied')
   }, [session.id])
 
+  const handleStop = useCallback(() => {
+    wsManager.send(sessionId, { type: 'interrupt' })
+    stop()
+  }, [sessionId, stop])
+
+  const handleSubmit = useCallback(
+    async (message: PromptInputMessage) => {
+      // Clear and collapse on submit
+      setInputValue('')
+      inputValueRef.current = ''
+      setIsInputExpanded(false)
+
+      await submitChatMessage(message, {
+        connection,
+        sendMessage,
+        notifyError: (title, body) => toast.error(title, { description: body }),
+      })
+    },
+    [connection, sendMessage],
+  )
+
   return (
-    <div className="flex h-full min-h-0 max-w-full flex-1 flex-col overflow-x-hidden">
+    <div className="flex h-full min-h-0 max-w-full flex-1 overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       {/* Compact pane header */}
       <div className="hidden shrink-0 items-center justify-between border-b border-border px-3 py-2 sm:flex">
         <div className="flex items-center gap-2 min-w-0">
@@ -232,6 +334,16 @@ function WorkspaceChatPaneReady({
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          {session.agent === 'claude_sdk' && (
+            <button
+              type="button"
+              className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              aria-label={sdkSidebarOpen ? 'Close SDK sidebar' : 'Open SDK sidebar'}
+              onClick={() => setSdkSidebarOpen((value) => !value)}
+            >
+              {sdkSidebarOpen ? <PanelRightClose size={14} /> : <PanelRight size={14} />}
+            </button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -437,32 +549,104 @@ function WorkspaceChatPaneReady({
           onError={handleFileError}
           onSubmit={handleSubmit}
         >
-          <PromptInputHeader>
-            <AttachmentsPreview maxFiles={IMAGE_LIMITS.MAX_COUNT} />
-          </PromptInputHeader>
-          <PromptInputBody>
-            <PromptInputTextarea
-              disabled={!isConnected}
-              placeholder={isConnected ? 'Message...' : 'Connecting...'}
-            />
-          </PromptInputBody>
+          {/* ── Collapsible section: attachments preview + textarea ─────── */}
+          {/* Uses the CSS grid trick for smooth zero-height animation.      */}
+          {/* The inner flex-col div ensures correct header/body stacking.   */}
+          <div
+            className={cn(
+              'w-full grid transition-[grid-template-rows] duration-200 ease-in-out',
+              isInputExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+            )}
+          >
+            <div className="flex min-h-0 flex-col overflow-hidden">
+              <PromptInputHeader>
+                <AttachmentsPreview maxFiles={IMAGE_LIMITS.MAX_COUNT} />
+              </PromptInputHeader>
+              <PromptInputBody>
+                <PromptInputTextarea
+                  ref={textareaRef}
+                  disabled={!isConnected}
+                  placeholder={isConnected ? 'Message...' : 'Connecting...'}
+                  value={inputValue}
+                  onChange={handleInputChange}
+                  onFocus={handleTextareaFocus}
+                  onBlur={handleTextareaBlur}
+                />
+              </PromptInputBody>
+            </div>
+          </div>
+
+          {/* ── Footer toolbar: always visible ──────────────────────────── */}
           <PromptInputFooter>
-            <PromptInputTools>
-              <PromptInputActionMenu>
-                <PromptInputActionMenuTrigger />
-                <PromptInputActionMenuContent>
-                  <PromptInputActionAddAttachments />
-                </PromptInputActionMenuContent>
-              </PromptInputActionMenu>
+            {/* Left side: toggle + attachment + model + collapsed preview */}
+            <PromptInputTools className="min-w-0 flex-1">
+              {/* Collapse / expand toggle */}
+              <PromptInputButton
+                onClick={handleToggleExpand}
+                aria-label={isInputExpanded ? 'Collapse input' : 'Expand input'}
+                aria-expanded={isInputExpanded}
+                tooltip={{ content: isInputExpanded ? 'Collapse' : 'Expand', side: 'top' }}
+              >
+                {isInputExpanded
+                  ? <ChevronDown className="size-4" />
+                  : <ChevronUp className="size-4" />}
+              </PromptInputButton>
+
+              {/* Add files — with attachment count badge when collapsed */}
+              <div className="relative">
+                <PromptInputActionMenu>
+                  <PromptInputActionMenuTrigger />
+                  <PromptInputActionMenuContent>
+                    <PromptInputActionAddAttachments />
+                  </PromptInputActionMenuContent>
+                </PromptInputActionMenu>
+                {!isInputExpanded && <AttachmentCountBadge />}
+              </div>
+
+              {/* Model selector — always visible */}
+              <SdkComposerControls
+                connected={isConnected}
+                sessionId={sessionId}
+                variant="toolbar"
+              />
+
+              {/* Collapsed text preview — fills remaining space, click to expand */}
+              {!isInputExpanded && (
+                <button
+                  type="button"
+                  className="min-h-8 min-w-0 flex-1 truncate px-1 text-left text-sm opacity-50 hover:opacity-70 transition-opacity"
+                  onClick={handleExpand}
+                  aria-label="Expand message input"
+                >
+                  {inputValue.trim() !== '' ? inputValue : 'Message...'}
+                </button>
+              )}
             </PromptInputTools>
-            <PromptInputSubmit
-              disabled={!isConnected && !isInFlight}
-              onStop={stop}
-              status={status}
-            />
+
+            {/* Right side: overflow settings + submit */}
+            <div className="flex shrink-0 items-center gap-1">
+              <SdkOverflowMenu connected={isConnected} sessionId={sessionId} />
+              <PromptInputSubmit
+                disabled={!isConnected && !isInFlight}
+                onStop={handleStop}
+                status={status}
+              />
+            </div>
           </PromptInputFooter>
         </PromptInput>
       </div>
+      </div>
+
+      {session.agent === 'claude_sdk' && (
+        <div className="hidden h-full shrink-0 md:flex">
+          <SdkControlPanel
+            connected={isConnected}
+            isOpen={sdkSidebarOpen}
+            onToggle={() => setSdkSidebarOpen((value) => !value)}
+            sessionId={sessionId}
+          />
+        </div>
+      )}
     </div>
   )
 }

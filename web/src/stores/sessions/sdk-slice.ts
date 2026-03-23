@@ -28,6 +28,7 @@ interface SdkErrorState {
   commands?: string
   mcpStatus?: string
   accountInfo?: string
+  checkpoints?: string
 }
 
 export interface SdkSlice {

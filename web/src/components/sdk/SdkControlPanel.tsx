@@ -1,22 +1,19 @@
 // SDK Control Panel - Main collapsible right panel for SDK session controls
 
+import { useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { PanelSection } from '@/components/ui/PanelSection'
 import { useSdkSession } from '@/hooks/useSdkSession'
-import { SdkSessionHeader } from './SdkSessionHeader'
 import { SdkUsageDisplay } from './SdkUsageDisplay'
 import { SdkAccountInfo } from './SdkAccountInfo'
-import { SdkConfigControls } from './SdkConfigControls'
 import { SdkMcpStatus } from './SdkMcpStatus'
 import { SdkCheckpoints } from './SdkCheckpoints'
 import { SdkCommandsList } from './SdkCommandsList'
 import {
   PanelRightClose,
   PanelRight,
-  Settings2,
   Activity,
   User,
-  Sliders,
   Server,
   History,
   Terminal,
@@ -24,35 +21,43 @@ import {
 
 interface SdkControlPanelProps {
   sessionId: string
-  isStreaming: boolean
+  connected: boolean
   isOpen: boolean
   onToggle: () => void
 }
 
-export function SdkControlPanel({ sessionId, isStreaming, isOpen, onToggle }: SdkControlPanelProps) {
+export function SdkControlPanel({ sessionId, connected, isOpen, onToggle }: SdkControlPanelProps) {
 
   const {
     isSdkSession,
-    config,
     usage,
     accountInfo,
-    models,
     commands,
     mcpStatus,
     checkpoints,
     loading,
     errors,
     rewindResult,
-    setModel,
-    setPermissionMode,
-    interrupt,
-    setThinkingTokens,
-    updateConfig,
     getCommands,
     getMcpStatus,
+    getAccountInfo,
+    getCheckpoints,
     rewindFiles,
     clearRewindResult,
   } = useSdkSession(sessionId)
+  const hasLoadedRef = useRef(false)
+
+  useEffect(() => {
+    if (!isOpen || !connected || !isSdkSession || hasLoadedRef.current) {
+      return
+    }
+
+    hasLoadedRef.current = true
+    getCommands()
+    getMcpStatus()
+    getAccountInfo()
+    void getCheckpoints()
+  }, [connected, getAccountInfo, getCheckpoints, getCommands, getMcpStatus, isOpen, isSdkSession])
 
   // Don't render for non-SDK sessions
   if (!isSdkSession) {
@@ -94,19 +99,6 @@ export function SdkControlPanel({ sessionId, isStreaming, isOpen, onToggle }: Sd
 
       {/* Sections */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
-        <PanelSection title="Session" icon={Settings2} defaultOpen>
-          <SdkSessionHeader
-            config={config}
-            models={models}
-            loading={loading}
-            errors={errors}
-            isStreaming={isStreaming}
-            onModelChange={setModel}
-            onPermissionModeChange={setPermissionMode}
-            onInterrupt={interrupt}
-          />
-        </PanelSection>
-
         <PanelSection title="Usage" icon={Activity} defaultOpen>
           <SdkUsageDisplay usage={usage} />
         </PanelSection>
@@ -116,14 +108,6 @@ export function SdkControlPanel({ sessionId, isStreaming, isOpen, onToggle }: Sd
             accountInfo={accountInfo}
             loading={loading.accountInfo || false}
             error={errors.accountInfo}
-          />
-        </PanelSection>
-
-        <PanelSection title="Configuration" icon={Sliders}>
-          <SdkConfigControls
-            config={config}
-            onThinkingTokensChange={setThinkingTokens}
-            onConfigUpdate={updateConfig}
           />
         </PanelSection>
 

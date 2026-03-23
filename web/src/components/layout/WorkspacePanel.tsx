@@ -10,6 +10,11 @@ import { useSessionsStore } from '@/stores/sessions'
 import { useWorkspaces } from '@/hooks/useWorkspaces'
 import { StatusDot } from '@/components/ui/status-dot'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import type { Session } from '@/api/types'
+
+function compareSessionCreatedAt(left: Session, right: Session) {
+  return (left.createdAt ?? 0) - (right.createdAt ?? 0)
+}
 
 // ── WorkspacePanel ─────────────────────────────────────────────────────────
 
@@ -30,7 +35,7 @@ export function WorkspacePanel() {
     activeWorkspaceId
       ? sessions.filter((s) => s.workspaceId === activeWorkspaceId)
       : sessions
-  )
+  ).slice().sort(compareSessionCreatedAt)
 
   const liveSessions = workspaceSessions.filter(
     (session) => session.status.running || !!session.status.isResumable,

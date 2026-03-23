@@ -3,7 +3,9 @@
 import { useCallback } from 'react'
 import { useSessionsStore } from '@/stores/sessions'
 import { wsManager } from '@/api/websocket'
+import { api } from '@/api/client'
 import type {
+  ClaudeEffort,
   PermissionMode,
   SdkSessionConfig,
   McpServerConfig,
@@ -78,6 +80,13 @@ export function useSdkSession(sessionId: string | null) {
     [sendSdkMessage]
   )
 
+  const setEffort = useCallback(
+    (effort: ClaudeEffort | undefined) => {
+      sendSdkMessage({ type: 'update_config', config: { effort } })
+    },
+    [sendSdkMessage]
+  )
+
   const updateConfig = useCallback(
     (configUpdates: Partial<SdkSessionConfig>) => {
       sendSdkMessage({ type: 'update_config', config: configUpdates })
@@ -120,6 +129,24 @@ export function useSdkSession(sessionId: string | null) {
     sendSdkMessage({ type: 'get_account_info' })
   }, [sessionId, sendSdkMessage, setSdkLoading])
 
+  const getCheckpoints = useCallback(async () => {
+    if (!sessionId) {
+      return
+    }
+
+    setSdkLoading(sessionId, { checkpoints: true })
+    try {
+      const response = await api.getSessionCheckpoints(sessionId)
+      useSessionsStore.getState().setSdkCheckpoints(sessionId, response.checkpoints)
+      useSessionsStore.getState().setSdkLoading(sessionId, { checkpoints: false })
+    } catch (error) {
+      useSessionsStore.getState().setSdkLoading(sessionId, { checkpoints: false })
+      useSessionsStore.getState().setSdkErrors(sessionId, {
+        checkpoints: error instanceof Error ? error.message : 'Failed to load checkpoints',
+      })
+    }
+  }, [sessionId, setSdkLoading])
+
   const rewindFiles = useCallback(
     (messageId: string, dryRun = false) => {
       if (sessionId) {
@@ -159,12 +186,14 @@ export function useSdkSession(sessionId: string | null) {
     setPermissionMode,
     interrupt,
     setThinkingTokens,
+    setEffort,
     updateConfig,
     getModels,
     getCommands,
     getMcpStatus,
     setMcpServers,
     getAccountInfo,
+    getCheckpoints,
     rewindFiles,
     clearRewindResult,
   }

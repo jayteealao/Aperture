@@ -11,6 +11,8 @@ export type PermissionMode =
   | 'plan'
   | 'dontAsk';
 
+export type ClaudeEffort = 'low' | 'medium' | 'high' | 'max';
+
 // Hook event types from SDK
 export type HookEvent =
   | 'PreToolUse'
@@ -171,6 +173,7 @@ export interface SdkSessionConfig {
   maxBudgetUsd?: number;
   maxTurns?: number;
   maxThinkingTokens?: number;
+  effort?: ClaudeEffort;
 
   // Model selection
   model?: string;

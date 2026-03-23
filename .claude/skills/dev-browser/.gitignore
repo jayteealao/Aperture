@@ -1,0 +1,7 @@
+node_modules/
+
+# Browser profile data — may contain session cookies and credentials
+profiles/
+
+# Temporary working files: screenshots, logs, diagnostic scripts
+tmp/

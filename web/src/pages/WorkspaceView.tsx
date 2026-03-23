@@ -18,6 +18,10 @@ import { toast } from 'sonner'
 import type { AgentType, AuthMode, Session } from '@/api/types'
 import { Plus } from 'lucide-react'
 
+function compareSessionCreatedAt(left: Session, right: Session) {
+  return (left.createdAt ?? 0) - (right.createdAt ?? 0)
+}
+
 // ── AddSessionDialog ───────────────────────────────────────────────────────
 // Focused dialog: only agent type + auth. Repo is already known from the
 // workspace context — showing a RepoSelector here would be misleading.
@@ -87,7 +91,13 @@ function AddSessionDialog({
         },
         workspaceId,
       })
-      const nextSession = { id: session.id, agent: session.agent, status: session.status, workspaceId: session.workspaceId ?? workspaceId }
+      const nextSession = {
+        id: session.id,
+        agent: session.agent,
+        createdAt: session.createdAt,
+        status: session.status,
+        workspaceId: session.workspaceId ?? workspaceId,
+      }
       await addSession(nextSession)
       toast.success('Session created', { description: `Session ${session.id.slice(0, 8)} ready` })
       onCreated(nextSession)
@@ -256,9 +266,11 @@ export default function WorkspaceView() {
     }
   }, [id, sessions, addSession])
 
-  const workspaceSessions = id
-    ? sessions.filter((s) => s.workspaceId === id)
-    : []
+  const workspaceSessions = useMemo(
+    () =>
+      (id ? sessions.filter((s) => s.workspaceId === id) : []).slice().sort(compareSessionCreatedAt),
+    [id, sessions],
+  )
 
   const liveWorkspaceSessions = workspaceSessions.filter(
     (session) =>

@@ -68,6 +68,7 @@ export interface SessionStatus {
 export interface Session {
   id: string
   agent: AgentType
+  createdAt: number
   status: SessionStatus
   workspaceId?: string
 }
@@ -119,6 +120,7 @@ export interface ListResumableSessionsResponse {
 export interface ConnectSessionResponse {
   id: string
   agent: AgentType
+  createdAt: number
   status: SessionStatus
   restored: boolean
   workspaceId?: string
@@ -324,6 +326,7 @@ export type OutboundMessage =
   | GetAccountInfoMessage
   | GetSupportedModelsMessage
   | GetSupportedCommandsMessage
+  | GetCheckpointsMessage
   | UpdateConfigMessage
   | PiOutboundMessage
 
@@ -500,6 +503,8 @@ export type PermissionMode =
   | 'plan'
   | 'dontAsk'
 
+export type ClaudeEffort = 'low' | 'medium' | 'high' | 'max'
+
 export type HookEvent =
   | 'PreToolUse'
   | 'PostToolUse'
@@ -632,6 +637,7 @@ export interface SdkSessionConfig {
   maxBudgetUsd?: number
   maxTurns?: number
   maxThinkingTokens?: number
+  effort?: ClaudeEffort
 
   // Model selection
   model?: string
@@ -738,6 +744,10 @@ export interface RewindFilesResult {
   deletions?: number
 }
 
+export interface SessionCheckpointsResponse {
+  checkpoints: string[]
+}
+
 // Permission Update Types
 export type PermissionBehavior = 'allow' | 'deny' | 'ask'
 
@@ -836,6 +846,10 @@ export interface GetSupportedModelsMessage {
 
 export interface GetSupportedCommandsMessage {
   type: 'get_supported_commands'
+}
+
+export interface GetCheckpointsMessage {
+  type: 'get_checkpoints'
 }
 
 export interface UpdateConfigMessage {

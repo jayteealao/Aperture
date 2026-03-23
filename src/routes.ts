@@ -123,6 +123,7 @@ function sessionRecordToResponse(record: SessionRecord, database?: ApertureDatab
   return {
     id: record.id,
     agent: record.agent as AgentType,
+    createdAt: record.created_at,
     workspaceId: resolveWorkspaceIdForRecord(record, database),
     status: sessionRecordToStatus(record),
   };
@@ -139,6 +140,7 @@ function buildSessionResponse(
   return {
     id: session.id,
     agent: session.agentType,
+    createdAt: record?.created_at ?? Date.now(),
     status: session.getStatus(),
     restored,
     workspaceId,
@@ -1324,9 +1326,44 @@ export async function registerRoutes(
                 });
               }
             }
+          } else if (obj.type === 'get_checkpoints') {
+            if (isSdkSession(session)) {
+              sendJson({
+                jsonrpc: '2.0',
+                method: 'session/checkpoints',
+                params: { checkpoints: session.getCheckpointMessageIds() },
+              });
+            }
           } else if (obj.type === 'update_config' && obj.config) {
             if (isSdkSession(session)) {
-              session.updateConfig(obj.config as Partial<SdkSessionConfig>);
+              const nextConfig = obj.config as Partial<SdkSessionConfig>;
+
+              if ('permissionMode' in nextConfig && nextConfig.permissionMode !== undefined) {
+                await session.setPermissionMode(nextConfig.permissionMode);
+              }
+
+              if ('model' in nextConfig) {
+                await session.setModel(nextConfig.model);
+              }
+
+              if ('maxThinkingTokens' in nextConfig) {
+                await session.setMaxThinkingTokens(nextConfig.maxThinkingTokens ?? null);
+              }
+
+              if ('effort' in nextConfig) {
+                await session.setEffort(nextConfig.effort);
+              }
+
+              const passthroughConfig = { ...nextConfig };
+              delete passthroughConfig.permissionMode;
+              delete passthroughConfig.model;
+              delete passthroughConfig.maxThinkingTokens;
+              delete passthroughConfig.effort;
+
+              if (Object.keys(passthroughConfig).length > 0) {
+                session.updateConfig(passthroughConfig);
+              }
+
               sendJson({
                 jsonrpc: '2.0',
                 method: 'session/config_updated',

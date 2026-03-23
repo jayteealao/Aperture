@@ -8,6 +8,7 @@ import type { ApertureDatabase, MessageRecord } from './database.js';
 import type { AgentType, SessionConfig } from './agents/index.js';
 import type {
   SdkSessionConfig,
+  ClaudeEffort,
   PermissionMode,
   McpServerConfig,
   McpServerStatus,
@@ -135,6 +136,8 @@ type SdkWorkerMessage =
   | { type: 'prompt_failed'; error: string }
   | { type: 'rpc_result'; requestId: number; result: unknown }
   | { type: 'rpc_error'; requestId: number; error: string }
+  | { type: 'warmup_done'; models: unknown[]; commands: unknown[]; accountInfo: unknown | null }
+  | { type: 'warmup_error'; error: string }
   | { type: 'worker_error'; error: string };
 
 /**
@@ -174,6 +177,8 @@ export class SdkSession extends EventEmitter {
   private workerPromptReject: ((error: Error) => void) | null = null;
   private workerRpcId = 0;
   private pendingWorkerRpc: Map<number, WorkerRpcPending> = new Map();
+  private workerWarmupResolve: (() => void) | null = null;
+  private workerWarmupReject: ((error: Error) => void) | null = null;
   private abortController: AbortController | null = null;
   private currentQuery: Query | null = null;
   private currentStream: AsyncGenerator<SDKMessage, void> | null = null;
@@ -271,10 +276,13 @@ export class SdkSession extends EventEmitter {
           sessionId: this.id,
           agentType: 'claude_sdk',
           config: {
+            ...this.sdkConfig,
             permissionMode: this.sdkConfig.permissionMode || 'default',
             model: this.sdkConfig.model,
             maxTurns: this.sdkConfig.maxTurns,
             maxBudgetUsd: this.sdkConfig.maxBudgetUsd,
+            maxThinkingTokens: this.sdkConfig.maxThinkingTokens,
+            effort: this.sdkConfig.effort,
             enableFileCheckpointing: this.sdkConfig.enableFileCheckpointing ?? true,
           },
         },
@@ -282,6 +290,12 @@ export class SdkSession extends EventEmitter {
     };
     this.emit('message', initMessage);
     this.emit('session_update', initMessage.params);
+
+    // Run warmup in background — don't block session start, but pre-fetch
+    // models/commands/accountInfo so they're available before the first prompt
+    this.warmup().catch((err) => {
+      console.log(`[SDK-Session] Warmup error: ${err instanceof Error ? err.message : String(err)}`);
+    });
   }
 
   private buildWorkerConfig(): Record<string, unknown> {
@@ -292,6 +306,7 @@ export class SdkSession extends EventEmitter {
       permissionMode: this.sdkConfig.permissionMode,
       systemPrompt: this.sdkConfig.systemPrompt,
       maxThinkingTokens: this.sdkConfig.maxThinkingTokens,
+      effort: this.sdkConfig.effort,
       mcpServers: this.sdkConfig.mcpServers,
       additionalDirectories: this.sdkConfig.additionalDirectories,
       settingSources: this.sdkConfig.settingSources,
@@ -438,6 +453,21 @@ export class SdkSession extends EventEmitter {
         break;
       }
 
+      case 'warmup_done':
+        this.cachedModels = message.models as ModelInfo[];
+        this.cachedCommands = message.commands as SlashCommand[];
+        this.cachedAccountInfo = message.accountInfo as AccountInfo | null;
+        this.workerWarmupResolve?.();
+        this.workerWarmupResolve = null;
+        this.workerWarmupReject = null;
+        break;
+
+      case 'warmup_error':
+        this.workerWarmupReject?.(new Error(message.error));
+        this.workerWarmupResolve = null;
+        this.workerWarmupReject = null;
+        break;
+
       case 'worker_error':
         this.emit('error', new Error(message.error));
         break;
@@ -555,6 +585,7 @@ export class SdkSession extends EventEmitter {
       maxBudgetUsd: this.sdkConfig.maxBudgetUsd,
       maxTurns: this.sdkConfig.maxTurns,
       maxThinkingTokens: this.sdkConfig.maxThinkingTokens,
+      effort: this.sdkConfig.effort,
 
       // Model
       model: this.sdkConfig.model,
@@ -614,6 +645,109 @@ export class SdkSession extends EventEmitter {
         this.sdkSessionId = resumedSessionId;
         this.persistRuntimeSessionId();
       }
+    }
+  }
+
+  /**
+   * Warmup: sends a dummy prompt to bootstrap the SDK, fetching models,
+   * commands, and account info before the user's first real prompt.
+   * After warmup, recreates a fresh session so the dummy doesn't pollute history.
+   */
+  private async warmup(): Promise<void> {
+    // Skip warmup for resumed sessions — they already have an active conversation
+    if (this.sdkConfig.resume || this.sdkSessionId) {
+      return;
+    }
+
+    if (this.usesWorkerRuntime()) {
+      await this.warmupViaWorker();
+    } else {
+      await this.warmupDirect();
+    }
+
+    // Emit cached data so frontend gets it immediately
+    this.emitWarmupData();
+  }
+
+  private async warmupDirect(): Promise<void> {
+    if (!this.runtimeSession) {
+      return;
+    }
+
+    try {
+      // Send a dummy prompt to bootstrap the stream
+      await this.runtimeSession.send('hi');
+      const stream = this.runtimeSession.stream();
+
+      let gotInit = false;
+      for await (const message of stream) {
+        if (message.type === 'system' && (message as Record<string, unknown>).subtype === 'init') {
+          gotInit = true;
+
+          // Grab models, commands, and account info from the active query
+          const query = this.runtimeSession.query;
+          if (query) {
+            try { this.cachedModels = await query.supportedModels() as ModelInfo[]; } catch { /* ignore */ }
+            try { this.cachedCommands = await query.supportedCommands() as SlashCommand[]; } catch { /* ignore */ }
+            try { this.cachedAccountInfo = await query.accountInfo() as AccountInfo; } catch { /* ignore */ }
+          }
+
+          break;
+        }
+      }
+
+      if (!gotInit) {
+        console.log('[SDK-Session] Warmup stream ended without init message');
+      }
+    } catch (error) {
+      // Suppress AbortError and log others
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.log(`[SDK-Session] Warmup failed: ${error.message}`);
+      }
+    }
+
+    // Recreate a fresh session so the dummy prompt doesn't pollute real conversations
+    this.createOrResumeRuntimeSession();
+  }
+
+  private async warmupViaWorker(): Promise<void> {
+    await this.ensureWorkerRuntime();
+
+    const warmupPromise = new Promise<void>((resolve, reject) => {
+      this.workerWarmupResolve = resolve;
+      this.workerWarmupReject = reject;
+    });
+
+    this.workerProcess?.send({ type: 'warmup' });
+
+    try {
+      await warmupPromise;
+    } catch (error) {
+      console.log(`[SDK-Session] Worker warmup failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private emitWarmupData(): void {
+    if (this.cachedModels) {
+      this.emit('message', {
+        jsonrpc: '2.0',
+        method: 'session/supported_models',
+        params: { models: this.cachedModels },
+      });
+    }
+    if (this.cachedCommands) {
+      this.emit('message', {
+        jsonrpc: '2.0',
+        method: 'session/supported_commands',
+        params: { commands: this.cachedCommands },
+      });
+    }
+    if (this.cachedAccountInfo) {
+      this.emit('message', {
+        jsonrpc: '2.0',
+        method: 'session/account_info',
+        params: { accountInfo: this.cachedAccountInfo },
+      });
     }
   }
 
@@ -1565,6 +1699,14 @@ export class SdkSession extends EventEmitter {
     }
     this.sdkConfig.maxThinkingTokens = tokens ?? undefined;
     this.emitSessionUpdate('config_changed', { maxThinkingTokens: tokens });
+  }
+
+  /**
+   * Set effort for subsequent prompts
+   */
+  async setEffort(effort?: ClaudeEffort): Promise<void> {
+    this.sdkConfig.effort = effort;
+    this.emitSessionUpdate('config_changed', { effort });
   }
 
   // ===========================================================================
