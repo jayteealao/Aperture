@@ -191,9 +191,9 @@ export function WorkspacePanel() {
       <div className="p-2 border-t border-border shrink-0">
         <button
           onClick={() => {
-            // Navigate to the workspace view where AddSessionDialog lives
+            // Navigate to the workspace view and open the AddSessionDialog via modal param
             if (activeWorkspaceId) {
-              navigate(`/workspaces/${activeWorkspaceId}`)
+              navigate(`/workspaces/${activeWorkspaceId}?modal=new-session`)
             } else {
               navigate('/workspaces')
             }
