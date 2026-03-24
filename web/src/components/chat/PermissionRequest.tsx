@@ -1,12 +1,9 @@
-import { AlertCircle, CheckIcon, XIcon } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { AlertCircle } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import {
   Confirmation,
-  ConfirmationAccepted,
   ConfirmationActions,
   ConfirmationAction,
-  ConfirmationRejected,
   ConfirmationRequest,
   ConfirmationTitle,
 } from '@/components/ai-elements/confirmation'
@@ -53,7 +50,6 @@ export function PermissionRequest({
   onRespond,
   onAddUserMessage,
 }: PermissionRequestProps) {
-  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null)
   const toolCall = permission.toolCall as {
     name?: string
     title?: string
@@ -61,13 +57,6 @@ export function PermissionRequest({
   }
   const options = permission.options as PermissionOption[]
   const toolName = toolCall?.name || toolCall?.title
-  const selectedOption = useMemo(
-    () => options.find((option) => option.optionId === selectedOptionId) ?? null,
-    [options, selectedOptionId],
-  )
-  const approvalState = selectedOptionId
-    ? (selectedOption?.kind?.includes('allow') ? 'approval-responded' : 'output-denied')
-    : 'approval-requested'
   const isAskUserQuestion =
     toolName === 'AskUserQuestion' && isAskUserQuestionInput(toolCall.rawInput)
 
@@ -96,7 +85,6 @@ export function PermissionRequest({
         .join('\n')
       // Await persistence before sending the permission response (RS-1 fix)
       await onAddUserMessage(`My answers:\n${answerText}`)
-      setSelectedOptionId(allowOption.optionId)
       onRespond(permission.toolCallId, allowOption.optionId, answers)
     }
 
@@ -144,6 +132,9 @@ export function PermissionRequest({
   // Normal permission — use ai-elements Confirmation for consistent styling.
   // Always in "approval-requested" state: the component unmounts when the user
   // responds because sendPermissionResponse removes it from the store.
+  // We do NOT use local selectedOptionId state here — if the WebSocket send
+  // fails (e.g. WS is reconnecting), we must keep buttons visible so the user
+  // can retry rather than showing a stuck "responded" confirmation.
   //
   // ST-1 fix: Icon is placed inside ConfirmationTitle (a flex row) rather than
   // as a direct sibling of the content div — avoids fighting Confirmation's
@@ -153,16 +144,9 @@ export function PermissionRequest({
   // option in the options array. Rendering one here would duplicate it.
   return (
     <Confirmation
-      approval={
-        selectedOptionId
-          ? {
-              id: permission.toolCallId,
-              approved: Boolean(selectedOption?.kind?.includes('allow')),
-            }
-          : { id: permission.toolCallId }
-      }
+      approval={{ id: permission.toolCallId }}
       className="border-l-4 border-l-warning"
-      state={approvalState}
+      state="approval-requested"
     >
       <ConfirmationTitle className="flex min-w-0 max-w-full items-start gap-2 font-medium text-foreground">
         <AlertCircle className="shrink-0 text-warning" size={16} />
@@ -184,33 +168,12 @@ export function PermissionRequest({
         )}
       </ConfirmationRequest>
 
-      <ConfirmationAccepted>
-        <div className="flex min-w-0 max-w-full items-center gap-2 text-sm text-success">
-          <CheckIcon size={14} />
-          <span className="min-w-0 break-words">
-            {selectedOption?.name || 'Approved'}
-          </span>
-        </div>
-      </ConfirmationAccepted>
-
-      <ConfirmationRejected>
-        <div className="flex min-w-0 max-w-full items-center gap-2 text-sm text-warning">
-          <XIcon size={14} />
-          <span className="min-w-0 break-words">
-            {selectedOption?.name || 'Rejected'}
-          </span>
-        </div>
-      </ConfirmationRejected>
-
       <ConfirmationActions>
         {/* CR-3 fix: If the server sends no options (malformed), render a single
             dismiss button so the user can always unblock the session. */}
         {options.length === 0 ? (
           <ConfirmationAction
-            onClick={() => {
-              setSelectedOptionId('__dismiss__')
-              onRespond(permission.toolCallId, null)
-            }}
+            onClick={() => onRespond(permission.toolCallId, null)}
             variant="outline"
           >
             Dismiss
@@ -219,10 +182,7 @@ export function PermissionRequest({
           options.map((option) => (
             <ConfirmationAction
               key={option.optionId}
-              onClick={() => {
-                setSelectedOptionId(option.optionId)
-                onRespond(permission.toolCallId, option.optionId)
-              }}
+              onClick={() => onRespond(permission.toolCallId, option.optionId)}
               variant={option.kind?.includes('allow') ? 'default' : 'outline'}
             >
               {option.name}
