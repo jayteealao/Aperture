@@ -3,6 +3,13 @@
   "version": "1.1.0",
   "description": "Production-ready WebSocket + HTTP gateway for Claude SDK and Pi Coding Agent SDK",
   "main": "dist/index.js",
+  "bin": {
+    "aperture": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "web/dist/"
+  ],
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -33,6 +40,7 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.80",
+    "@anthropic-ai/sdk": "^0.80.0",
     "@fastify/cors": "^9.0.1",
     "@fastify/rate-limit": "^9.1.0",
     "@fastify/static": "^7.0.4",
