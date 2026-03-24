@@ -423,6 +423,7 @@ export class SessionManager {
         working_directory: status.workingDirectory || null,
         workspace_id: null,
         pi_session_path: 'piSessionPath' in session ? session.piSessionPath : null,
+        title: '',
       };});
     }
 
@@ -737,6 +738,7 @@ export class SessionManager {
         working_directory: sessionCwd || null,
         workspace_id: options.workspaceId || null,
         pi_session_path: null,
+        title: '',
       });
 
       // Now that session row exists, link the managed repo to it
@@ -802,6 +804,7 @@ export class SessionManager {
         working_directory: sessionCwd || null,
         workspace_id: options.workspaceId || null,
         pi_session_path: null, // Will be updated when Pi SDK creates session file
+        title: '',
       });
 
       // Now that session row exists, link the managed repo to it

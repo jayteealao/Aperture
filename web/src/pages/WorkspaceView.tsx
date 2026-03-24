@@ -99,7 +99,7 @@ function AddSessionDialog({
         workspaceId: session.workspaceId ?? workspaceId,
       }
       await addSession(nextSession)
-      toast.success('Session created', { description: `Session ${session.id.slice(0, 8)} ready` })
+      toast.success('Session created', { description: `${session.title || 'New Session'} ready` })
       onCreated(nextSession)
     } catch (err) {
       toast.error('Failed to create session', {

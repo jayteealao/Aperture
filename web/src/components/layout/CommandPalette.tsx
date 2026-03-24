@@ -107,7 +107,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     sessions.slice(0, 5).forEach((session) => {
       items.push({
         id: `session-${session.id}`,
-        title: `Switch to ${session.id.slice(0, 8)}`,
+        title: `Switch to ${session.title || `New Session (${session.id.slice(0, 6)})`}`,
         subtitle: session.agent,
         icon: <MessageSquare size={18} />,
         action: () => {

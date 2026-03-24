@@ -111,6 +111,7 @@ export function WorkspacePanel() {
                               navigate(`/workspaces/${activeWorkspaceId}`)
                             }
                           }}
+                          title={session.title ? undefined : session.id}
                           className={cn(
                             'w-full flex items-center gap-2 px-2 py-2 rounded-lg text-sm transition-colors',
                             isActive
@@ -119,8 +120,8 @@ export function WorkspacePanel() {
                           )}
                         >
                           <StatusDot status={conn?.status ?? 'disconnected'} />
-                          <span className="truncate font-mono text-xs flex-1 text-left">
-                            {session.id.slice(0, 8)}
+                          <span className="truncate text-xs flex-1 text-left">
+                            {session.title || 'New Session'}
                           </span>
                           {conn?.isStreaming && (
                             <span className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
@@ -161,6 +162,7 @@ export function WorkspacePanel() {
                             navigate(`/workspaces/${activeWorkspaceId}`)
                           }
                         }}
+                        title={session.title ? undefined : session.id}
                         className={cn(
                           'w-full flex items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors',
                           session.id === activeSessionId
@@ -170,7 +172,7 @@ export function WorkspacePanel() {
                       >
                         <span className="w-2 h-2 rounded-full bg-foreground/20 shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-mono text-xs">{session.id.slice(0, 8)}</p>
+                          <p className="truncate text-xs">{session.title || 'New Session'}</p>
                           <p className="text-[10px] uppercase tracking-wide text-foreground/35">
                             History only
                           </p>

@@ -3,7 +3,7 @@
 // Each instance owns its own useChat state, WebSocket connection, and scroll
 // position. They are fully independent of each other.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { MoreHorizontal, Trash2, Info, Copy, ChevronDown, ChevronUp, PanelRight, PanelRightClose } from 'lucide-react'
+import { MoreHorizontal, Trash2, Info, Copy, ChevronDown, ChevronUp, PanelRight, PanelRightClose, Pencil } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
@@ -75,6 +75,77 @@ function AttachmentCountBadge() {
     <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold leading-none text-nebula-bg-primary">
       {files.length}
     </span>
+  )
+}
+
+// ── EditableTitle ─────────────────────────────────────────────────────────
+// Click-to-edit inline session title. Shows title or fallback, enters edit
+// mode on click, commits on Enter/blur, cancels on Escape.
+
+function EditableTitle({
+  title,
+  fallback,
+  onRename,
+}: {
+  title: string | undefined
+  fallback: string
+  onRename: (title: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const startEditing = useCallback(() => {
+    setDraft(title || '')
+    setEditing(true)
+    setTimeout(() => inputRef.current?.select(), 0)
+  }, [title])
+
+  const commit = useCallback(() => {
+    setEditing(false)
+    const trimmed = draft.trim()
+    if (trimmed && trimmed !== (title || '')) {
+      onRename(trimmed)
+    }
+  }, [draft, title, onRename])
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        commit()
+      } else if (e.key === 'Escape') {
+        setEditing(false)
+      }
+    },
+    [commit],
+  )
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none border-b border-accent px-0.5 py-0 font-sans"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={handleKeyDown}
+        maxLength={100}
+        autoFocus
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className="group flex min-w-0 items-center gap-1 text-xs text-foreground truncate hover:text-accent transition-colors"
+      onClick={startEditing}
+      title="Click to rename"
+    >
+      <span className="truncate">{title || fallback}</span>
+      <Pencil size={10} className="shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" />
+    </button>
   )
 }
 
@@ -289,6 +360,15 @@ function WorkspaceChatPaneReady({
     }, 150)
   }, [])
 
+  const handleRename = useCallback(
+    (title: string) => {
+      // Optimistic update — store reflects immediately, server confirms async
+      useSessionsStore.getState().updateSessionTitle(sessionId, title)
+      wsManager.send(sessionId, { type: 'rename_session', title })
+    },
+    [sessionId],
+  )
+
   const handleCopyId = useCallback(() => {
     void navigator.clipboard.writeText(session.id)
     toast.success('Session ID copied')
@@ -322,9 +402,11 @@ function WorkspaceChatPaneReady({
       <div className="hidden shrink-0 items-center justify-between border-b border-border px-3 py-2 sm:flex">
         <div className="flex items-center gap-2 min-w-0">
           <ConnectionStatus status={connection?.status ?? 'disconnected'} />
-          <span className="font-mono text-xs text-foreground truncate">
-            {session.id.slice(0, 8)}
-          </span>
+          <EditableTitle
+            title={session.title}
+            fallback="New Session"
+            onRename={handleRename}
+          />
           <Badge variant={agentVariant} size="sm">{agentLabel}</Badge>
           {activityLabel && (
             <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -378,8 +460,8 @@ function WorkspaceChatPaneReady({
       <div className="flex shrink-0 items-center justify-between border-b border-border px-2 py-1.5 sm:hidden">
         <div className="flex min-w-0 items-center gap-2">
           <ConnectionStatus status={connection?.status ?? 'disconnected'} />
-          <span className="font-mono text-xs text-foreground truncate">
-            {session.id.slice(0, 8)}
+          <span className="text-xs text-foreground truncate">
+            {session.title || 'New Session'}
           </span>
           <Badge variant={agentVariant} size="sm">{agentLabel}</Badge>
         </div>
@@ -483,7 +565,7 @@ function WorkspaceChatPaneReady({
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={onDelete}
         title="Delete session"
-        description={`Delete session ${session.id.slice(0, 8)}? This removes the session and its message history. This cannot be undone.`}
+        description={`Delete "${session.title || 'New Session'}"? This removes the session and its message history. This cannot be undone.`}
         confirmText="Delete"
         variant="danger"
       />

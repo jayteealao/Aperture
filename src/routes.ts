@@ -124,6 +124,7 @@ function sessionRecordToResponse(record: SessionRecord, database?: ApertureDatab
     id: record.id,
     agent: record.agent as AgentType,
     createdAt: record.created_at,
+    title: record.title || undefined,
     workspaceId: resolveWorkspaceIdForRecord(record, database),
     status: sessionRecordToStatus(record),
   };
@@ -141,6 +142,7 @@ function buildSessionResponse(
     id: session.id,
     agent: session.agentType,
     createdAt: record?.created_at ?? Date.now(),
+    title: record?.title || undefined,
     status: session.getStatus(),
     restored,
     workspaceId,
@@ -1214,6 +1216,24 @@ export async function registerRoutes(
             } else if (isPiSession(session) && obj.provider && obj.modelId) {
               await session.setModel(obj.provider as string, obj.modelId as string);
             }
+          } else if (obj.type === 'rename_session' && typeof obj.title === 'string') {
+            const title = String(obj.title).substring(0, 100);
+            if (database) {
+              database.updateSessionTitle(sessionId, title);
+            }
+            // Sync title to SDK backend
+            if (isSdkSession(session) && session.sdkSessionId) {
+              try {
+                const { renameSession: sdkRenameSession } = await import('@anthropic-ai/claude-agent-sdk');
+                await sdkRenameSession(session.sdkSessionId, title);
+              } catch { /* best-effort sync */ }
+            }
+            // Broadcast title change to all subscribers
+            sendJson({
+              jsonrpc: '2.0',
+              method: 'session/title_changed',
+              params: { title },
+            });
           } else if (obj.type === 'set_thinking_tokens') {
             // Claude SDK only
             if (isSdkSession(session)) {

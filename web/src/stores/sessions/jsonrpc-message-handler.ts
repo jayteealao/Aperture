@@ -87,6 +87,9 @@ export function handleJsonRpcMessage(
       get().setSdkErrors(sessionId, { accountInfo: undefined })
     }
     get().setSdkLoading(sessionId, { accountInfo: false })
+  } else if (msg.method === 'session/title_changed') {
+    const params = msg.params as { title: string }
+    get().updateSessionTitle(sessionId, params.title)
   } else if (msg.method === 'session/config_updated') {
     const params = msg.params as { config: SdkSessionConfig }
     get().setSdkConfig(sessionId, params.config)

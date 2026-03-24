@@ -21,6 +21,8 @@ export interface SessionRecord {
   workspace_id: string | null;
   // Pi SDK session field
   pi_session_path: string | null;
+  // Human-readable session title (added in migration 010)
+  title?: string;
 }
 
 export interface MessageRecord {
@@ -410,6 +412,14 @@ export class ApertureDatabase {
   updateSdkConfig(id: string, sdkConfig: string): void {
     const stmt = this.db.prepare("UPDATE sessions SET sdk_config = ? WHERE id = ?");
     stmt.run(sdkConfig, id);
+  }
+
+  /**
+   * Update the human-readable title for a session
+   */
+  updateSessionTitle(id: string, title: string): void {
+    const stmt = this.db.prepare("UPDATE sessions SET title = ? WHERE id = ?");
+    stmt.run(title, id);
   }
 
   /**

@@ -132,6 +132,7 @@ export function MobileNavSheet({
                         <button
                           key={session.id}
                           onClick={() => onSessionSelect(session.id)}
+                          title={session.title ? undefined : session.id}
                           className={cn(
                             'flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors',
                             session.id === activeSessionId
@@ -143,7 +144,7 @@ export function MobileNavSheet({
                             <Wifi size={14} />
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate font-mono text-sm">{session.id.slice(0, 8)}</p>
+                            <p className="truncate text-sm">{session.title || 'New Session'}</p>
                             <p className="truncate text-xs text-muted-foreground">
                               {session.status.workingDirectory ?? 'Workspace session'}
                             </p>
@@ -164,6 +165,7 @@ export function MobileNavSheet({
                         <button
                           key={session.id}
                           onClick={() => onSessionSelect(session.id)}
+                          title={session.title ? undefined : session.id}
                           className={cn(
                             'flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors',
                             session.id === activeSessionId
@@ -175,7 +177,7 @@ export function MobileNavSheet({
                             <WifiOff size={14} />
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate font-mono text-sm">{session.id.slice(0, 8)}</p>
+                            <p className="truncate text-sm">{session.title || 'New Session'}</p>
                             <p className="truncate text-xs text-muted-foreground">History only</p>
                           </div>
                           <ChevronRight size={16} className="shrink-0 text-muted-foreground" />

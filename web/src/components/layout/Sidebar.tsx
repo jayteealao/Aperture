@@ -126,6 +126,7 @@ export function Sidebar({ className }: SidebarProps) {
                       navigate(session.workspaceId ? `/workspaces/${session.workspaceId}` : '/workspaces')
                       setSidebarOpen(false)
                     }}
+                    title={session.title ? undefined : session.id}
                     className={cn(
                       'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors',
                       isActive
@@ -134,8 +135,8 @@ export function Sidebar({ className }: SidebarProps) {
                     )}
                   >
                     <StatusDot status={conn?.status ?? 'disconnected'} />
-                    <span className="truncate font-mono text-xs flex-1 text-left">
-                      {session.id.slice(0, 8)}
+                    <span className="truncate text-xs flex-1 text-left">
+                      {session.title || 'New Session'}
                     </span>
                     {conn?.isStreaming && (
                       <span

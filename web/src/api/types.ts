@@ -69,6 +69,7 @@ export interface Session {
   id: string
   agent: AgentType
   createdAt: number
+  title?: string
   status: SessionStatus
   workspaceId?: string
 }
@@ -328,6 +329,7 @@ export type OutboundMessage =
   | GetSupportedCommandsMessage
   | GetCheckpointsMessage
   | UpdateConfigMessage
+  | RenameSessionMessage
   | PiOutboundMessage
 
 // Inbound WebSocket messages
@@ -855,6 +857,11 @@ export interface GetCheckpointsMessage {
 export interface UpdateConfigMessage {
   type: 'update_config'
   config: Partial<SdkSessionConfig>
+}
+
+export interface RenameSessionMessage {
+  type: 'rename_session'
+  title: string
 }
 
 // SdkOutboundMessage and ExtendedOutboundMessage are now part of OutboundMessage

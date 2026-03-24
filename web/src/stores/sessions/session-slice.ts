@@ -29,6 +29,7 @@ export interface SessionSlice {
   addSession: (session: Session) => Promise<void>
   removeSession: (sessionId: string) => Promise<void>
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void
+  updateSessionTitle: (sessionId: string, title: string) => void
   setActiveSession: (sessionId: string | null) => void
   getActiveSession: () => Session | null
 
@@ -98,6 +99,14 @@ export const createSessionSlice: StateCreator<SessionsStore, [], [], SessionSlic
     set((state) => ({
       sessions: state.sessions.map((s) =>
         s.id === sessionId ? { ...s, status } : s
+      ),
+    }))
+  },
+
+  updateSessionTitle: (sessionId, title) => {
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === sessionId ? { ...s, title } : s
       ),
     }))
   },

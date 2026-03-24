@@ -43,7 +43,9 @@ import {
   getSessionInfo,
   unstable_v2_createSession,
   unstable_v2_resumeSession,
+  renameSession as sdkRenameSession,
 } from '@anthropic-ai/claude-agent-sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import {
   captureRepoBaselineSnapshot,
   computeCompletedTurnDiff,
@@ -195,6 +197,9 @@ export class SdkSession extends EventEmitter {
   private messageUuids: Map<string, string> = new Map();
   private activeTurn: ActiveTurnState | null = null;
 
+  // Title generation
+  private hasGeneratedTitle = false;
+
   // Cached session info (persists after query completes)
   private cachedModels: ModelInfo[] | null = null;
   private cachedAccountInfo: AccountInfo | null = null;
@@ -218,6 +223,14 @@ export class SdkSession extends EventEmitter {
     this.resolvedApiKey = resolvedApiKey;
     if (cwd) {
       this.workingDir = cwd;
+    }
+
+    // If session already has a title in the database, don't regenerate
+    if (database) {
+      const record = database.getSession(sessionConfig.id);
+      if (record?.title) {
+        this.hasGeneratedTitle = true;
+      }
     }
   }
 
@@ -748,6 +761,69 @@ export class SdkSession extends EventEmitter {
         method: 'session/account_info',
         params: { accountInfo: this.cachedAccountInfo },
       });
+    }
+  }
+
+  /**
+   * Generate an AI-powered session title from the first user prompt and
+   * assistant response, then persist and broadcast it.
+   */
+  private async generateTitle(userPrompt: string, assistantSummary?: string): Promise<void> {
+    if (this.hasGeneratedTitle) return;
+
+    try {
+      // Resolve API key — same logic as SDK runtime
+      const apiKey = this.resolvedApiKey || process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        console.log('[SDK-Session] No API key available for title generation');
+        return;
+      }
+
+      const client = new Anthropic({ apiKey });
+      const context = assistantSummary
+        ? `User: ${userPrompt}\n\nAssistant response summary: ${assistantSummary}`
+        : `User: ${userPrompt}`;
+
+      const response = await client.messages.create({
+        model: 'claude-haiku-4-20250414',
+        max_tokens: 30,
+        messages: [{
+          role: 'user',
+          content: `Generate a very short title (5-8 words max) for this conversation. Return ONLY the title, no quotes or punctuation.\n\n${context}`,
+        }],
+      });
+
+      const titleBlock = response.content[0];
+      if (titleBlock.type !== 'text') return;
+      const title = titleBlock.text.trim().substring(0, 100);
+      if (!title) return;
+
+      // Persist to database
+      if (this.database) {
+        this.database.updateSessionTitle(this.id, title);
+      }
+
+      // Mark as generated only after successful persistence — so failed
+      // attempts retry on the next message completion.
+      this.hasGeneratedTitle = true;
+
+      // Sync to SDK backend (best-effort)
+      if (this.sdkSessionId) {
+        try {
+          await sdkRenameSession(this.sdkSessionId, title);
+        } catch { /* best-effort */ }
+      }
+
+      // Broadcast to frontend
+      this.emit('message', {
+        jsonrpc: '2.0',
+        method: 'session/title_changed',
+        params: { title },
+      });
+
+      console.log(`[SDK-Session] Generated title: "${title}"`);
+    } catch (error) {
+      console.log(`[SDK-Session] Title generation failed (will retry next message): ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -1436,6 +1512,14 @@ export class SdkSession extends EventEmitter {
       // Also emit legacy format
       this.emitSessionUpdate('prompt_complete', payload);
       void this.persistTurnDiffSummary(false);
+
+      // Generate AI title on first successful prompt completion
+      if (!this.hasGeneratedTitle && this.activeTurn?.promptText) {
+        const assistantSummary = typeof message.result === 'string'
+          ? message.result.substring(0, 200)
+          : undefined;
+        void this.generateTitle(this.activeTurn.promptText, assistantSummary);
+      }
     } else {
       const payload = {
         subtype: message.subtype,
