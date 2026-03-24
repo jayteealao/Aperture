@@ -637,15 +637,13 @@ function WorkspaceChatPaneReady({
       </div>
       </div>
 
-      {session.agent === 'claude_sdk' && (
-        <div className="hidden h-full shrink-0 md:flex">
-          <SdkControlPanel
-            connected={isConnected}
-            isOpen={sdkSidebarOpen}
-            onToggle={() => setSdkSidebarOpen((value) => !value)}
-            sessionId={sessionId}
-          />
-        </div>
+      {session.agent === 'claude_sdk' && sdkSidebarOpen && (
+        <SdkControlPanel
+          connected={isConnected}
+          isOpen={sdkSidebarOpen}
+          onToggle={() => setSdkSidebarOpen((value) => !value)}
+          sessionId={sessionId}
+        />
       )}
     </div>
   )

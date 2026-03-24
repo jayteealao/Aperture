@@ -11,7 +11,6 @@ import { SdkCheckpoints } from './SdkCheckpoints'
 import { SdkCommandsList } from './SdkCommandsList'
 import {
   PanelRightClose,
-  PanelRight,
   Activity,
   User,
   Server,
@@ -59,26 +58,10 @@ export function SdkControlPanel({ sessionId, connected, isOpen, onToggle }: SdkC
     void getCheckpoints()
   }, [connected, getAccountInfo, getCheckpoints, getCommands, getMcpStatus, isOpen, isSdkSession])
 
-  // Don't render for non-SDK sessions
-  if (!isSdkSession) {
+  // Don't render for non-SDK sessions or when closed
+  // (the toggle lives in the top header bar, not here)
+  if (!isSdkSession || !isOpen) {
     return null
-  }
-
-  // Collapsed state - just show toggle button
-  if (!isOpen) {
-    return (
-      <div className="h-full flex flex-col border-l border-border bg-card">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onToggle}
-          className="m-2"
-          title="Open SDK Controls (Cmd+.)"
-        >
-          <PanelRight size={18} />
-        </Button>
-      </div>
-    )
   }
 
   return (
