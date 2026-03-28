@@ -207,8 +207,13 @@ function WorkspaceChatPaneReady({
       return
     }
 
+    // MO-2 fix: apply the same length guard as the promptSettled path so a
+    // WebSocket reconnect can't overwrite fresher in-memory messages with a
+    // stale DB snapshot.
     void reloadMessages().then((nextMessages) => {
-      setMessages(nextMessages)
+      setMessages((current) =>
+        nextMessages.length >= current.length ? nextMessages : current,
+      )
     })
     void reloadTurnDiffSummaries()
   }, [connection?.status, reloadMessages, reloadTurnDiffSummaries, setMessages])
@@ -236,7 +241,13 @@ function WorkspaceChatPaneReady({
     }
 
     void reloadMessages().then((nextMessages) => {
-      setMessages(nextMessages)
+      // MO-1 fix: use a functional update so we only replace the in-memory
+      // streaming state when the DB snapshot is at least as fresh.  If the
+      // server hasn't persisted the new assistant message yet the DB will have
+      // fewer messages than the current state — in that case keep what we have.
+      setMessages((current) =>
+        nextMessages.length >= current.length ? nextMessages : current,
+      )
     })
     void reloadTurnDiffSummaries()
   }, [
@@ -271,8 +282,16 @@ function WorkspaceChatPaneReady({
   )
 
   const isConnected = connection?.status === 'connected'
-  const isInFlight = status === 'streaming' || status === 'submitted'
+  // Session is "in-flight" when the transport is active OR a permission request
+  // is pending — the agent is still mid-turn, just paused waiting for approval.
+  // This mirrors t3code's approach: isWorking stays true while approvals are open.
+  const isInFlight = status === 'streaming' || status === 'submitted' || pendingPermissions.length > 0
   const renderedConversationItems = useMemo(() => buildConversationRenderItems(messages), [messages])
+  // True when the last rendered item is the assistant actively streaming text — used to
+  // suppress the working indicator so it doesn't double up with the streaming message.
+  const lastConvItem = renderedConversationItems[renderedConversationItems.length - 1]
+  const lastItemIsAssistantText =
+    lastConvItem?.kind === 'message' && lastConvItem.message.role === 'assistant'
   const hasPendingPermission = pendingPermissions.length > 0
   const activityLabel = hasPendingPermission
     ? 'Awaiting approval'
@@ -597,10 +616,22 @@ function WorkspaceChatPaneReady({
                 ),
               )
             )}
-            {status === 'submitted' && !hasPendingPermission && (
+            {/* WI-1: show while the agent is in-flight — submitted (no response yet),
+                 streaming tool calls (between tool cards), or waiting for approval.
+                 Suppressed only while the model is streaming a text reply so the
+                 indicator doesn't duplicate alongside the live message. */}
+            {isInFlight && !(status === 'streaming' && lastItemIsAssistantText) && (
               <div className="flex max-w-full items-center gap-2 text-sm text-foreground/40">
-                <span className="size-2 shrink-0 rounded-full bg-accent animate-pulse" />
-                <Shimmer>Thinking...</Shimmer>
+                <span className={`size-2 shrink-0 rounded-full animate-pulse [animation-delay:0ms] ${hasPendingPermission ? 'bg-warning' : 'bg-accent'}`} />
+                <span className={`size-2 shrink-0 rounded-full animate-pulse [animation-delay:200ms] ${hasPendingPermission ? 'bg-warning' : 'bg-accent'}`} />
+                <span className={`size-2 shrink-0 rounded-full animate-pulse [animation-delay:400ms] ${hasPendingPermission ? 'bg-warning' : 'bg-accent'}`} />
+                <Shimmer>
+                  {hasPendingPermission
+                    ? 'Awaiting approval…'
+                    : status === 'submitted'
+                      ? 'Starting…'
+                      : 'Thinking…'}
+                </Shimmer>
               </div>
             )}
           </ConversationContent>
@@ -775,7 +806,16 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
   const { initialMessages, persistMessages, reloadMessages } = usePersistedUIMessages(sessionId)
   const [turnDiffSummaries, setTurnDiffSummaries] = useState<TurnDiffSummary[]>([])
 
-  const shouldConnect = !!session && (session.status.running || !!session.status.isResumable)
+  // NS-1 fix: also allow connecting when the connection hasn't been confirmed
+  // dead yet (status !== 'ended' and !== 'error').  This covers freshly
+  // created sessions whose running/isResumable are both false because no
+  // prompt has been sent yet — without this they'd get status:'ended' set
+  // immediately and the input would be permanently disabled.
+  const shouldConnect = !!session && (
+    session.status.running ||
+    !!session.status.isResumable ||
+    (connection?.status !== 'ended' && connection?.status !== 'error')
+  )
   const reloadTurnDiffSummaries = useCallback(async () => {
     try {
       const response = await api.listTurnDiffSummaries(sessionId)
@@ -799,6 +839,29 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
 
     updateConnection(sessionId, { status: 'ended', error: null, isStreaming: false })
   }, [sessionId, connectSession, shouldConnect, updateConnection])
+
+  // Recovery effect: when a WS connection ends up in 'error' state while
+  // shouldConnect is still true (e.g. server restart while tab is open), re-run
+  // the full connectSession REST+WS flow so the session is loaded into server
+  // memory before the WS attempt.  Uses a per-render attempt counter to avoid
+  // infinite loops if the session is truly gone.
+  const reconnectAttemptsRef = useRef(0)
+  useEffect(() => {
+    if (connection?.status !== 'error') {
+      // Reset counter whenever the connection recovers
+      reconnectAttemptsRef.current = 0
+      return
+    }
+    if (!shouldConnect) return
+    if (reconnectAttemptsRef.current >= 3) return
+
+    reconnectAttemptsRef.current++
+    const delay = 800 * reconnectAttemptsRef.current
+    const timer = setTimeout(() => {
+      void connectSession(sessionId)
+    }, delay)
+    return () => clearTimeout(timer)
+  }, [connection?.status, shouldConnect, connectSession, sessionId])
 
   useEffect(() => {
     void reloadTurnDiffSummaries()

@@ -45,7 +45,7 @@ import {
   unstable_v2_resumeSession,
   renameSession as sdkRenameSession,
 } from '@anthropic-ai/claude-agent-sdk';
-import Anthropic from '@anthropic-ai/sdk';
+import { generateConversationTitle } from './title-generator.js';
 import {
   captureRepoBaselineSnapshot,
   computeCompletedTurnDiff,
@@ -185,16 +185,23 @@ export class SdkSession extends EventEmitter {
   private currentQuery: Query | null = null;
   private currentStream: AsyncGenerator<SDKMessage, void> | null = null;
   private pendingPermissions: Map<string, PendingPermission> = new Map();
+  // Tools the user approved via "Always Allow" during this session.
+  // Checked in canUseTool before prompting — mirrors Clay's session.allowedTools pattern.
+  private sessionAllowedTools: Set<string> = new Set();
   private lastActivityTime: number = Date.now();
   private idleTimer: NodeJS.Timeout | null = null;
   private isShuttingDown = false;
   private isProcessing = false;
   private hasStartedConversation = false;
+  private needsRuntimeRefreshBeforePrompt = false;
+  private suppressNextWorkerExit = false;
 
   // Result tracking
   private permissionDenials: PermissionDenial[] = [];
   private lastResult: SessionResult | null = null;
   private messageUuids: Map<string, string> = new Map();
+  private checkpointMessageIds: string[] = [];
+  private checkpointMessageIdSet: Set<string> = new Set();
   private activeTurn: ActiveTurnState | null = null;
 
   // Title generation
@@ -257,6 +264,8 @@ export class SdkSession extends EventEmitter {
    */
   updateConfig(config: Partial<SdkSessionConfig>): void {
     this.sdkConfig = { ...this.sdkConfig, ...config };
+    this.markRuntimeRefreshNeeded(config);
+    this.persistSdkConfig();
   }
 
   /**
@@ -264,6 +273,36 @@ export class SdkSession extends EventEmitter {
    */
   getConfig(): SdkSessionConfig {
     return { ...this.sdkConfig };
+  }
+
+  async applyConfigUpdate(config: Partial<SdkSessionConfig>): Promise<SdkSessionConfig> {
+    if ('permissionMode' in config && config.permissionMode !== undefined) {
+      await this.setPermissionMode(config.permissionMode);
+    }
+
+    if ('model' in config) {
+      await this.setModel(config.model);
+    }
+
+    if ('maxThinkingTokens' in config) {
+      await this.setMaxThinkingTokens(config.maxThinkingTokens ?? null);
+    }
+
+    if ('effort' in config) {
+      await this.setEffort(config.effort);
+    }
+
+    const passthroughConfig = { ...config };
+    delete passthroughConfig.permissionMode;
+    delete passthroughConfig.model;
+    delete passthroughConfig.maxThinkingTokens;
+    delete passthroughConfig.effort;
+
+    if (Object.keys(passthroughConfig).length > 0) {
+      this.updateConfig(passthroughConfig);
+    }
+
+    return this.getConfig();
   }
 
   /**
@@ -399,7 +438,11 @@ export class SdkSession extends EventEmitter {
       this.workerPromptPromise = null;
       this.workerPromptResolve = null;
       this.workerPromptReject = null;
-      this.emit('exit', { code, signal });
+      if (this.suppressNextWorkerExit) {
+        this.suppressNextWorkerExit = false;
+      } else {
+        this.emit('exit', { code, signal });
+      }
     });
 
     child.send({
@@ -488,6 +531,20 @@ export class SdkSession extends EventEmitter {
   }
 
   private handleWorkerPermissionRequest(message: Extract<SdkWorkerMessage, { type: 'permission_request' }>): void {
+    // Auto-approve if bypassPermissions or tool was previously "Always Allowed"
+    if (
+      this.sdkConfig.permissionMode === 'bypassPermissions' ||
+      this.sessionAllowedTools.has(message.toolName)
+    ) {
+      const autoResult: PermissionResult = { behavior: 'allow' };
+      this.workerProcess?.send({
+        type: 'permission_response',
+        toolUseId: message.toolUseId,
+        result: autoResult,
+      });
+      return;
+    }
+
     const permissionOptions = this.translatePermissionSuggestions(message.suggestions);
     const context: PermissionContext = {
       blockedPath: message.blockedPath,
@@ -759,7 +816,7 @@ export class SdkSession extends EventEmitter {
       this.emit('message', {
         jsonrpc: '2.0',
         method: 'session/account_info',
-        params: { accountInfo: this.cachedAccountInfo },
+        params: this.cachedAccountInfo,
       });
     }
   }
@@ -768,63 +825,54 @@ export class SdkSession extends EventEmitter {
    * Generate an AI-powered session title from the first user prompt and
    * assistant response, then persist and broadcast it.
    */
-  private async generateTitle(userPrompt: string, assistantSummary?: string): Promise<void> {
+  private async generateTitle(): Promise<void> {
     if (this.hasGeneratedTitle) return;
 
     try {
-      // Resolve API key — same logic as SDK runtime
-      const apiKey = this.resolvedApiKey || process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) {
-        console.log('[SDK-Session] No API key available for title generation');
-        return;
-      }
+      // Load the most recent user + assistant exchange from the database.
+      // Scan backwards through the last 100 messages so resumed sessions
+      // always get the most-recent exchange as context.
+      const recentMessages = this.database?.getMessages(this.id, 100) ?? [];
+      const lastUser = [...recentMessages].reverse().find((m) => m.role === 'user');
+      const lastAssistant = [...recentMessages].reverse().find((m) => m.role === 'assistant');
 
-      const client = new Anthropic({ apiKey });
-      const context = assistantSummary
-        ? `User: ${userPrompt}\n\nAssistant response summary: ${assistantSummary}`
-        : `User: ${userPrompt}`;
+      if (!lastUser) return;
 
-      const response = await client.messages.create({
-        model: 'claude-haiku-4-20250414',
-        max_tokens: 30,
-        messages: [{
-          role: 'user',
-          content: `Generate a very short title (5-8 words max) for this conversation. Return ONLY the title, no quotes or punctuation.\n\n${context}`,
-        }],
+      const title = await generateConversationTitle({
+        userText: lastUser.content.trim().substring(0, 300),
+        assistantText: lastAssistant?.content.trim().substring(0, 300),
+        anthropicApiKey: this.resolvedApiKey || process.env.ANTHROPIC_API_KEY,
+        openRouterApiKey: process.env.OPENROUTER_API_KEY,
       });
 
-      const titleBlock = response.content[0];
-      if (titleBlock.type !== 'text') return;
-      const title = titleBlock.text.trim().substring(0, 100);
       if (!title) return;
 
-      // Persist to database
-      if (this.database) {
-        this.database.updateSessionTitle(this.id, title);
-      }
+      this.database?.updateSessionTitle(this.id, title);
 
-      // Mark as generated only after successful persistence — so failed
-      // attempts retry on the next message completion.
+      // Mark generated only after successful persistence — failed attempts
+      // automatically retry on the next message completion.
       this.hasGeneratedTitle = true;
 
       // Sync to SDK backend (best-effort)
       if (this.sdkSessionId) {
-        try {
-          await sdkRenameSession(this.sdkSessionId, title);
-        } catch { /* best-effort */ }
+        try { await sdkRenameSession(this.sdkSessionId, title); } catch { /* best-effort */ }
       }
 
-      // Broadcast to frontend
       this.emit('message', {
         jsonrpc: '2.0',
         method: 'session/title_changed',
         params: { title },
       });
-
-      console.log(`[SDK-Session] Generated title: "${title}"`);
     } catch (error) {
-      console.log(`[SDK-Session] Title generation failed (will retry next message): ${error instanceof Error ? error.message : String(error)}`);
+      console.log(`[SDK-Session] Title generation failed (will retry): ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  private persistSdkConfig(): void {
+    if (!this.database) {
+      return;
+    }
+    this.database.updateSdkConfig(this.id, JSON.stringify(this.sdkConfig));
   }
 
   private persistRuntimeSessionId(): void {
@@ -838,7 +886,7 @@ export class SdkSession extends EventEmitter {
     }
 
     this.database.updateSdkSessionId(this.id, this.sdkSessionId);
-    this.database.updateSdkConfig(this.id, JSON.stringify(this.sdkConfig));
+    this.persistSdkConfig();
     console.log(`[SDK-Session] Persisted SDK session ID: ${this.sdkSessionId}`);
   }
 
@@ -858,15 +906,75 @@ export class SdkSession extends EventEmitter {
   }
 
   private shouldRefreshRuntimeSessionBeforePrompt(): boolean {
+    if (this.usesWorkerRuntime()) {
+      return !this.workerProcess ||
+        this.needsRuntimeRefreshBeforePrompt ||
+        Boolean(this.sdkConfig.resumeSessionAt || this.sdkConfig.forkSession);
+    }
+
     if (!this.runtimeSession) {
       return true;
     }
 
-    return Boolean(this.sdkConfig.resumeSessionAt || this.sdkConfig.forkSession);
+    return this.needsRuntimeRefreshBeforePrompt ||
+      Boolean(this.sdkConfig.resumeSessionAt || this.sdkConfig.forkSession);
   }
 
-  private refreshRuntimeSessionForPrompt(): void {
-    this.createOrResumeRuntimeSession();
+  private async refreshRuntimeSessionForPrompt(): Promise<void> {
+    if (this.usesWorkerRuntime()) {
+      await this.resetWorkerRuntimeForRefresh();
+      await this.ensureWorkerRuntime();
+    } else {
+      this.createOrResumeRuntimeSession();
+    }
+    this.needsRuntimeRefreshBeforePrompt = false;
+  }
+
+  private async resetWorkerRuntimeForRefresh(): Promise<void> {
+    const child = this.workerProcess;
+    if (!child) {
+      return;
+    }
+
+    this.suppressNextWorkerExit = true;
+    await new Promise<void>((resolve) => {
+      let resolved = false;
+      const finish = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+
+      child.once('exit', finish);
+      try {
+        child.send({ type: 'close' });
+      } catch {
+        finish();
+      }
+
+      setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) {
+          child.kill();
+        }
+        finish();
+      }, 250);
+    });
+  }
+
+  private markRuntimeRefreshNeeded(config: Partial<SdkSessionConfig>): void {
+    if (!this.hasStartedConversation && Object.keys(config).length > 0) {
+      this.needsRuntimeRefreshBeforePrompt = true;
+    }
+  }
+
+  private recordCheckpointMessageId(messageId: string | null): void {
+    if (!messageId || this.checkpointMessageIdSet.has(messageId)) {
+      return;
+    }
+
+    this.checkpointMessageIdSet.add(messageId);
+    this.checkpointMessageIds.push(messageId);
   }
 
   /**
@@ -886,6 +994,16 @@ export class SdkSession extends EventEmitter {
         agentID?: string;
       }
     ): Promise<PermissionResult> => {
+      // Auto-approve if permission mode bypasses all prompts
+      if (this.sdkConfig.permissionMode === 'bypassPermissions') {
+        return { behavior: 'allow' };
+      }
+
+      // Auto-approve if the user previously clicked "Always Allow" for this tool
+      if (this.sessionAllowedTools.has(toolName)) {
+        return { behavior: 'allow' };
+      }
+
       return new Promise<PermissionResult>((resolve, reject) => {
         const { toolUseID, signal, suggestions, blockedPath, decisionReason, agentID } = options;
 
@@ -917,13 +1035,6 @@ export class SdkSession extends EventEmitter {
           reject(new Error('Permission request aborted'));
         });
 
-        // Debug: Log the permission request details
-        console.log('[SDK-Session] Permission request for tool:', toolName);
-        console.log('[SDK-Session] Tool input:', JSON.stringify(input, null, 2));
-        if (suggestions?.length) {
-          console.log('[SDK-Session] Suggestions:', JSON.stringify(suggestions, null, 2));
-        }
-
         // Emit permission request event for frontend
         this.emit('permission_request', {
           id: toolUseID,
@@ -938,23 +1049,6 @@ export class SdkSession extends EventEmitter {
           context,
         });
 
-        // Also emit as session update for message history
-        const updateMessage = {
-          jsonrpc: '2.0' as const,
-          method: 'session/request_permission',
-          params: {
-            toolCallId: toolUseID,
-            toolCall: {
-              toolCallId: toolUseID,
-              name: toolName,
-              rawInput: input,
-              title: toolName,
-            },
-            options: permissionOptions,
-            context,
-          },
-        };
-        this.emit('message', updateMessage);
       });
     };
   }
@@ -1037,9 +1131,13 @@ export class SdkSession extends EventEmitter {
 
     try {
       if (this.usesWorkerRuntime()) {
-        await this.ensureWorkerRuntime();
+        if (this.shouldRefreshRuntimeSessionBeforePrompt()) {
+          await this.refreshRuntimeSessionForPrompt();
+        } else {
+          await this.ensureWorkerRuntime();
+        }
       } else if (this.shouldRefreshRuntimeSessionBeforePrompt()) {
-        this.refreshRuntimeSessionForPrompt();
+        await this.refreshRuntimeSessionForPrompt();
       }
 
       if (!this.usesWorkerRuntime() && !this.runtimeSession) {
@@ -1143,7 +1241,7 @@ export class SdkSession extends EventEmitter {
    */
   private processSDKMessage(message: SDKMessage): void {
     // Update session ID if available and persist to database
-    if ('session_id' in message && message.session_id) {
+      if ('session_id' in message && message.session_id) {
       const newSessionId = message.session_id;
       if (this.sdkSessionId !== newSessionId) {
         this.sdkSessionId = newSessionId;
@@ -1492,6 +1590,8 @@ export class SdkSession extends EventEmitter {
       permissionDenials: this.permissionDenials,
     };
 
+    this.recordCheckpointMessageId(this.activeTurn?.checkpointId ?? null);
+
     if (message.subtype === 'success') {
       const payload = {
         result: message.result,
@@ -1513,12 +1613,11 @@ export class SdkSession extends EventEmitter {
       this.emitSessionUpdate('prompt_complete', payload);
       void this.persistTurnDiffSummary(false);
 
-      // Generate AI title on first successful prompt completion
-      if (!this.hasGeneratedTitle && this.activeTurn?.promptText) {
-        const assistantSummary = typeof message.result === 'string'
-          ? message.result.substring(0, 200)
-          : undefined;
-        void this.generateTitle(this.activeTurn.promptText, assistantSummary);
+      // Generate AI title on first successful prompt completion.
+      // Context is loaded from the DB inside generateTitle — no need to
+      // thread activeTurn fields through here.
+      if (!this.hasGeneratedTitle) {
+        void this.generateTitle();
       }
     } else {
       const payload = {
@@ -1738,16 +1837,31 @@ export class SdkSession extends EventEmitter {
    * Set permission mode for the current query
    */
   async setPermissionMode(mode: PermissionMode): Promise<void> {
+    // Always update the local config first — this is the source of truth for
+    // createCanUseTool auto-approve checks and future session/query creation.
+    this.sdkConfig.permissionMode = mode;
+
+    // Clear the session allow-list when switching to a stricter mode so
+    // previously "Always Allowed" tools don't leak through.
+    if (mode === 'default' || mode === 'plan') {
+      this.sessionAllowedTools.clear();
+    }
+
+    this.markRuntimeRefreshNeeded({ permissionMode: mode });
+
     if (this.usesWorkerRuntime() && this.hasStartedConversation) {
       try {
         await this.callWorkerRpc('setPermissionMode', mode);
-      } catch {
-        // Fall back to updating local config for the next prompt if the runtime cannot mutate live state.
+      } catch (err: unknown) {
+        // Log the failure so it's visible — the local config is already
+        // updated, so the next canUseTool check will use the new mode.
+        console.warn('[SdkSession] Worker setPermissionMode RPC failed, will apply on next prompt:', err);
       }
     } else if (this.currentQuery && this.hasStartedConversation) {
       await this.currentQuery.setPermissionMode(mode);
     }
-    this.sdkConfig.permissionMode = mode;
+
+    this.persistSdkConfig();
     this.emitSessionUpdate('config_changed', { permissionMode: mode });
   }
 
@@ -1755,6 +1869,7 @@ export class SdkSession extends EventEmitter {
    * Set model for the current query
    */
   async setModel(model?: string): Promise<void> {
+    this.markRuntimeRefreshNeeded({ model });
     if (this.usesWorkerRuntime() && this.hasStartedConversation) {
       try {
         await this.callWorkerRpc('setModel', model);
@@ -1765,6 +1880,7 @@ export class SdkSession extends EventEmitter {
       await this.currentQuery.setModel(model);
     }
     this.sdkConfig.model = model;
+    this.persistSdkConfig();
     this.emitSessionUpdate('config_changed', { model });
   }
 
@@ -1772,6 +1888,7 @@ export class SdkSession extends EventEmitter {
    * Set max thinking tokens for the current query
    */
   async setMaxThinkingTokens(tokens: number | null): Promise<void> {
+    this.markRuntimeRefreshNeeded({ maxThinkingTokens: tokens ?? undefined });
     if (this.usesWorkerRuntime() && this.hasStartedConversation) {
       try {
         await this.callWorkerRpc('setMaxThinkingTokens', tokens);
@@ -1782,6 +1899,7 @@ export class SdkSession extends EventEmitter {
       await this.currentQuery.setMaxThinkingTokens(tokens);
     }
     this.sdkConfig.maxThinkingTokens = tokens ?? undefined;
+    this.persistSdkConfig();
     this.emitSessionUpdate('config_changed', { maxThinkingTokens: tokens });
   }
 
@@ -1789,7 +1907,23 @@ export class SdkSession extends EventEmitter {
    * Set effort for subsequent prompts
    */
   async setEffort(effort?: ClaudeEffort): Promise<void> {
+    this.markRuntimeRefreshNeeded({ effort });
+    if (this.usesWorkerRuntime() && this.hasStartedConversation) {
+      try {
+        await this.callWorkerRpc('setEffort', effort);
+      } catch {
+        // Fall back to updating local config for the next prompt if the runtime cannot mutate live state.
+      }
+    } else if (this.currentQuery && this.hasStartedConversation) {
+      const effortSetter = (this.currentQuery as Query & {
+        setEffort?: (value?: ClaudeEffort) => Promise<void>;
+      }).setEffort;
+      if (effortSetter) {
+        await effortSetter.call(this.currentQuery, effort);
+      }
+    }
     this.sdkConfig.effort = effort;
+    this.persistSdkConfig();
     this.emitSessionUpdate('config_changed', { effort });
   }
 
@@ -1901,7 +2035,7 @@ export class SdkSession extends EventEmitter {
    * Get list of available checkpoint message IDs
    */
   getCheckpointMessageIds(): string[] {
-    return Array.from(this.messageUuids.keys());
+    return [...this.checkpointMessageIds];
   }
 
   // ===========================================================================
@@ -1993,6 +2127,12 @@ export class SdkSession extends EventEmitter {
         ...(updatedInput && { updatedInput }),
       };
     } else if (optionId === 'allow_always') {
+      // Remember this tool for the rest of the session so future calls auto-approve
+      // without prompting. This is the application-level allow-list (like Clay's
+      // session.allowedTools). The SDK's updatedPermissions is also passed when
+      // suggestions are available, but it alone is insufficient — the SDK may not
+      // honour it for all tool types, so we double up with our own check.
+      this.sessionAllowedTools.add(pending.toolName);
       result = {
         behavior: 'allow',
         ...(updatedInput && { updatedInput }),
@@ -2079,12 +2219,24 @@ export class SdkSession extends EventEmitter {
     }
 
     // Cancel all pending permissions
-    for (const [, pending] of this.pendingPermissions) {
-      pending.resolve({
-        behavior: 'deny',
-        message: 'Prompt cancelled',
-        interrupt: true,
-      });
+    if (this.usesWorkerRuntime() && this.workerProcess) {
+      // In worker mode pending.resolve is a no-op placeholder; unblock the
+      // worker's own pendingPermissions map by sending explicit deny responses.
+      for (const [toolCallId] of this.pendingPermissions) {
+        this.workerProcess.send({
+          type: 'permission_response',
+          toolUseId: toolCallId,
+          result: { behavior: 'deny', message: 'Prompt cancelled', interrupt: true },
+        });
+      }
+    } else {
+      for (const [, pending] of this.pendingPermissions) {
+        pending.resolve({
+          behavior: 'deny',
+          message: 'Prompt cancelled',
+          interrupt: true,
+        });
+      }
     }
     this.pendingPermissions.clear();
 

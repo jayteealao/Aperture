@@ -120,6 +120,12 @@ export const createConnectionSlice: StateCreator<SessionsStore, [], [], Connecti
     const wsUrl = api.getWebSocketUrl(sessionId)
     const translator = new WsToUIChunkTranslator()
 
+    // Track how many times we've re-run the full REST+WS restore flow for this
+    // connectSession invocation, to prevent an infinite loop if the server keeps
+    // rejecting the session.
+    let restoreRetries = 0
+    const MAX_RESTORE_RETRIES = 3
+
     // Message handler that routes SDK, Pi, and JSON-RPC messages
     const messageHandler = (sid: string, data: unknown) => {
       if (isSdkWsMessage(data)) {
@@ -141,6 +147,25 @@ export const createConnectionSlice: StateCreator<SessionsStore, [], [], Connecti
 
     const statusHandler = (sid: string, status: ConnectionStatus, error?: string) => {
       get().updateConnection(sid, { status, error: error || null })
+
+      // If the WS was rejected because the session isn't in server memory yet
+      // (happens when the WS manager retries after a server restart before the
+      // REST restore has run), re-run the full connectSession REST+WS flow so
+      // the session is loaded into memory before the next WS attempt.
+      if (status === 'error' && error === 'Session not found' && restoreRetries < MAX_RESTORE_RETRIES) {
+        restoreRetries++
+        const delay = 500 * restoreRetries
+        if (import.meta.env.DEV) {
+          console.log(`[Sessions] WS rejected "session not found" for ${sid}, retrying REST restore in ${delay}ms (attempt ${restoreRetries}/${MAX_RESTORE_RETRIES})`)
+        }
+        setTimeout(() => {
+          // Only retry if the session still exists in the store
+          if (get().sessions.find((s) => s.id === sid)) {
+            void get().connectSession(sid)
+          }
+        }, delay)
+        return
+      }
 
       // Reset translator on (re)connect to clear stale partial block state
       if (status === 'connected') {
@@ -174,8 +199,15 @@ export const createConnectionSlice: StateCreator<SessionsStore, [], [], Connecti
     if (import.meta.env.DEV) {
       console.log('[WS] Sending permission response for tool:', toolCallId)
     }
-    wsManager.send(sessionId, message)
-    get().removePendingPermission(sessionId, toolCallId)
+    const sent = wsManager.send(sessionId, message)
+    if (sent) {
+      // Only dismiss the dialog once the message is actually on the wire.
+      // If the WS is down, keep the pending permission visible so the user
+      // can retry once the connection is re-established.
+      get().removePendingPermission(sessionId, toolCallId)
+    } else if (import.meta.env.DEV) {
+      console.warn('[WS] Permission response not sent — WebSocket not connected for session', sessionId)
+    }
   },
 
   cancelPrompt: (sessionId) => {

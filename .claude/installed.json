@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "installedAt": "2026-01-21T17:19:52.735Z",
-  "updatedAt": "2026-03-17T19:38:48.843Z",
+  "updatedAt": "2026-03-20T14:27:44.488Z",
   "plugins": [
     {
       "name": "dev-browser",
@@ -24,6 +24,74 @@
           "commands": [],
           "skills": [
             "dev-browser"
+          ],
+          "isSymlinked": false
+        }
+      }
+    },
+    {
+      "name": "sdlc-workflow",
+      "version": "1.1.0",
+      "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\agent-skills",
+      "installedAt": "2026-03-20T11:35:06.223Z",
+      "components": {
+        "agents": 0,
+        "commands": 11,
+        "skills": 0,
+        "mcpServers": 0,
+        "variants": 0
+      },
+      "installedTo": [
+        "claude"
+      ],
+      "installedFiles": {
+        "claude": {
+          "agents": [],
+          "commands": [
+            "wf-handoff.md",
+            "wf-implement.md",
+            "wf-intake.md",
+            "wf-next.md",
+            "wf-plan.md",
+            "wf-retro.md",
+            "wf-review.md",
+            "wf-shape.md",
+            "wf-ship.md",
+            "wf-slice.md",
+            "wf-verify.md"
+          ],
+          "skills": [],
+          "isSymlinked": false
+        }
+      }
+    },
+    {
+      "name": "diataxis",
+      "version": "1.0.0",
+      "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\agent-skills",
+      "installedAt": "2026-03-20T11:37:43.277Z",
+      "components": {
+        "agents": 0,
+        "commands": 0,
+        "skills": 7,
+        "mcpServers": 0,
+        "variants": 0
+      },
+      "installedTo": [
+        "claude"
+      ],
+      "installedFiles": {
+        "claude": {
+          "agents": [],
+          "commands": [],
+          "skills": [
+            "diataxis-doc-planner",
+            "docs-reviewer",
+            "explanation-writer",
+            "how-to-guide-writer",
+            "readme-writer",
+            "reference-writer",
+            "tutorial-writer"
           ],
           "isSymlinked": false
         }

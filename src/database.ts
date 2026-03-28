@@ -144,9 +144,19 @@ export class ApertureDatabase {
         this.db.exec(sql);
         console.log(`[DB] Migration ${version} applied successfully`);
       } catch (error) {
-        console.error(`[DB] Failed to apply migration ${version}:`, error);
-        throw error;
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes('duplicate column name') || msg.includes('already exists')) {
+          console.warn(`[DB] Migration ${version}: already applied (${msg}), skipping`);
+        } else {
+          console.error(`[DB] Failed to apply migration ${version}:`, error);
+          throw error;
+        }
       }
+
+      // Record the migration as applied so it doesn't re-run on next startup
+      this.db.prepare(
+        'INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)'
+      ).run(version, Date.now());
     }
 
     this.ensureSessionWorkspaceCompatibility();

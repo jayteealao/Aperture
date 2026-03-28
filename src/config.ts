@@ -134,7 +134,7 @@ export function loadConfig(): Config {
     sessionIdleTimeoutMs: getEnvNumber('SESSION_IDLE_TIMEOUT_MS', 600000), // 10 min
     maxMessageSizeBytes: getEnvNumber('MAX_MESSAGE_SIZE_BYTES', 262144), // 256KB
     rpcRequestTimeoutMs: getEnvNumber('RPC_REQUEST_TIMEOUT_MS', 300000), // 5 min
-    rateLimitMax: getEnvNumber('RATE_LIMIT_MAX', 100),
+    rateLimitMax: getEnvNumber('RATE_LIMIT_MAX', 1000),
     rateLimitWindowMs: getEnvNumber('RATE_LIMIT_WINDOW_MS', 60000), // 1 min
     claudeCodeExecutable: getEnv('CLAUDE_CODE_EXECUTABLE'),
     autoInstallClaude: getEnvBoolean('AUTO_INSTALL_CLAUDE_CLI', false),

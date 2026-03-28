@@ -379,13 +379,15 @@ export default function WorkspaceView() {
     }
   }
 
-  const handleSessionCreated = () => {
+  const handleSessionCreated = (session: Session) => {
     setShowAddSession(false)
     if (searchParams.get('modal') === 'new-session') {
       setSearchParams({}, { replace: true })
     }
-    // The new session appears automatically — addSession updates the store,
-    // workspaceSessions re-derives, and the new pane mounts + auto-connects.
+    // NS-1 fix: make the new session the active session so it appears as the
+    // selectedHistoricalSession (it won't be in liveWorkspaceSessions yet
+    // because running=false and isResumable=false until the first prompt runs).
+    setActiveSession(session.id)
   }
 
   return (

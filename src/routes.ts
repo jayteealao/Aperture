@@ -368,11 +368,15 @@ export async function registerRoutes(
           existingRepoId,
         });
 
+        // NS-1 fix: include createdAt so the frontend can sort new sessions
+        // correctly and detect freshly-created sessions without a separate GET.
+        const createdRecord = database?.getSession(session.id);
         return reply.code(201).send({
           id: session.id,
           agent: session.agentType,
-          workspaceId: database?.getSession(session.id)
-            ? resolveWorkspaceIdForRecord(database.getSession(session.id)!, database)
+          createdAt: createdRecord?.created_at ?? Date.now(),
+          workspaceId: createdRecord
+            ? resolveWorkspaceIdForRecord(createdRecord, database)
             : workspaceId || undefined,
           status: session.getStatus(),
         });
@@ -690,8 +694,8 @@ export async function registerRoutes(
       if (!isSdkSession(session)) {
         return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
       }
-      session.updateConfig(request.body);
-      return { success: true, config: session.getConfig() };
+      const config = await session.applyConfigUpdate(request.body);
+      return { success: true, config };
     }
   );
 
@@ -1356,38 +1360,12 @@ export async function registerRoutes(
             }
           } else if (obj.type === 'update_config' && obj.config) {
             if (isSdkSession(session)) {
-              const nextConfig = obj.config as Partial<SdkSessionConfig>;
-
-              if ('permissionMode' in nextConfig && nextConfig.permissionMode !== undefined) {
-                await session.setPermissionMode(nextConfig.permissionMode);
-              }
-
-              if ('model' in nextConfig) {
-                await session.setModel(nextConfig.model);
-              }
-
-              if ('maxThinkingTokens' in nextConfig) {
-                await session.setMaxThinkingTokens(nextConfig.maxThinkingTokens ?? null);
-              }
-
-              if ('effort' in nextConfig) {
-                await session.setEffort(nextConfig.effort);
-              }
-
-              const passthroughConfig = { ...nextConfig };
-              delete passthroughConfig.permissionMode;
-              delete passthroughConfig.model;
-              delete passthroughConfig.maxThinkingTokens;
-              delete passthroughConfig.effort;
-
-              if (Object.keys(passthroughConfig).length > 0) {
-                session.updateConfig(passthroughConfig);
-              }
+              const config = await session.applyConfigUpdate(obj.config as Partial<SdkSessionConfig>);
 
               sendJson({
                 jsonrpc: '2.0',
                 method: 'session/config_updated',
-                params: { config: session.getConfig() },
+                params: { config },
               });
             }
           }
