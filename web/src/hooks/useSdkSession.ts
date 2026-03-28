@@ -21,12 +21,18 @@ export function useSdkSession(sessionId: string | null) {
     sdkModels,
     sdkCommands,
     sdkMcpStatus,
+    sdkMcpUpdateResult,
     sdkCheckpoints,
+    sdkAuthStatus,
+    sdkRuntimeStatus,
+    sdkRuntimeActivity,
     sdkLoading,
     sdkErrors,
     sdkRewindResult,
     setSdkLoading,
     setSdkRewindResult,
+    setSdkMcpUpdateResult,
+    clearSdkRuntimeActivity,
   } = useSessionsStore()
 
   // Get the session to check if it's an SDK session
@@ -40,7 +46,11 @@ export function useSdkSession(sessionId: string | null) {
   const models = sessionId ? sdkModels[sessionId] || [] : []
   const commands = sessionId ? sdkCommands[sessionId] || [] : []
   const mcpStatus = sessionId ? sdkMcpStatus[sessionId] || [] : []
+  const mcpUpdateResult = sessionId ? sdkMcpUpdateResult[sessionId] : null
   const checkpoints = sessionId ? sdkCheckpoints[sessionId] || [] : []
+  const authStatus = sessionId ? sdkAuthStatus[sessionId] : null
+  const runtimeStatus = sessionId ? sdkRuntimeStatus[sessionId] : null
+  const runtimeActivity = sessionId ? sdkRuntimeActivity[sessionId] || [] : []
   const loading = sessionId ? sdkLoading[sessionId] || {} : {}
   const errors = sessionId ? sdkErrors[sessionId] || {} : {}
   const rewindResult = sessionId ? sdkRewindResult[sessionId] : null
@@ -117,9 +127,13 @@ export function useSdkSession(sessionId: string | null) {
 
   const setMcpServers = useCallback(
     (servers: Record<string, McpServerConfig>) => {
+      if (sessionId) {
+        setSdkLoading(sessionId, { mcpUpdate: true })
+        setSdkMcpUpdateResult(sessionId, null)
+      }
       sendSdkMessage({ type: 'set_mcp_servers', servers })
     },
-    [sendSdkMessage]
+    [sendSdkMessage, sessionId, setSdkLoading, setSdkMcpUpdateResult]
   )
 
   const getAccountInfo = useCallback(() => {
@@ -163,6 +177,18 @@ export function useSdkSession(sessionId: string | null) {
     }
   }, [sessionId, setSdkRewindResult])
 
+  const clearRuntimeActivity = useCallback(() => {
+    if (sessionId) {
+      clearSdkRuntimeActivity(sessionId)
+    }
+  }, [clearSdkRuntimeActivity, sessionId])
+
+  const clearMcpUpdateResult = useCallback(() => {
+    if (sessionId) {
+      setSdkMcpUpdateResult(sessionId, null)
+    }
+  }, [sessionId, setSdkMcpUpdateResult])
+
   // Auto-fetch removed: SDK info requires an active query which doesn't exist until
   // the user sends their first prompt. Components now show a "Send prompt first" message
   // instead of infinite loading spinners.
@@ -176,7 +202,11 @@ export function useSdkSession(sessionId: string | null) {
     models,
     commands,
     mcpStatus,
+    mcpUpdateResult,
     checkpoints,
+    authStatus,
+    runtimeStatus,
+    runtimeActivity,
     loading,
     errors,
     rewindResult,
@@ -196,5 +226,7 @@ export function useSdkSession(sessionId: string | null) {
     getCheckpoints,
     rewindFiles,
     clearRewindResult,
+    clearRuntimeActivity,
+    clearMcpUpdateResult,
   }
 }

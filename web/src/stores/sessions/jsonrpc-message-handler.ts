@@ -11,6 +11,10 @@ import type {
   McpServerStatus,
   RewindFilesResult,
   PermissionMode,
+  SdkRuntimeActivityEntry,
+  SdkRuntimeActivityKind,
+  SdkRuntimeActivitySeverity,
+  SdkMcpUpdateResult,
 } from '@/api/types'
 import type { StoreGet, StoreSet } from './handler-types'
 
@@ -78,12 +82,36 @@ export function handleJsonRpcMessage(
       get().setSdkErrors(sessionId, { mcpStatus: undefined })
     }
     get().setSdkLoading(sessionId, { mcpStatus: false })
+  } else if (msg.method === 'session/mcp_servers_updated') {
+    const params = msg.params as Partial<SdkMcpUpdateResult> & { error?: string }
+    const result: SdkMcpUpdateResult = {
+      added: Array.isArray(params.added) ? params.added : [],
+      removed: Array.isArray(params.removed) ? params.removed : [],
+      errors: typeof params.errors === 'object' && params.errors !== null
+        ? params.errors as Record<string, string>
+        : {},
+      error: typeof params.error === 'string' ? params.error : undefined,
+      updatedAt: Date.now(),
+    }
+
+    get().setSdkMcpUpdateResult(sessionId, result)
+    get().setSdkLoading(sessionId, { mcpUpdate: false })
+    get().setSdkErrors(sessionId, { mcpUpdate: result.error, mcpStatus: undefined })
+    applyMcpUpdateToStatus(sessionId, result, get)
+
+    if ((result.error || Object.keys(result.errors).length > 0) && sessionId !== get().activeSessionId) {
+      get().incrementUnread(sessionId)
+    }
   } else if (msg.method === 'session/account_info') {
-    const params = msg.params as (AccountInfo & { error?: string }) | { error: string }
+    const params = msg.params as
+      | (AccountInfo & { error?: string })
+      | { accountInfo?: AccountInfo; error?: string }
+      | { error: string }
     if ('error' in params && params.error) {
       get().setSdkErrors(sessionId, { accountInfo: params.error })
     } else {
-      get().setSdkAccountInfo(sessionId, params as AccountInfo)
+      const accountInfo = 'accountInfo' in params && params.accountInfo ? params.accountInfo : params as AccountInfo
+      get().setSdkAccountInfo(sessionId, accountInfo)
       get().setSdkErrors(sessionId, { accountInfo: undefined })
     }
     get().setSdkLoading(sessionId, { accountInfo: false })
@@ -148,5 +176,128 @@ function handleSessionUpdate(
     if ('maxThinkingTokens' in update) newConfig.maxThinkingTokens = update.maxThinkingTokens as number | undefined
     if ('effort' in update) newConfig.effort = update.effort as SdkSessionConfig['effort']
     get().setSdkConfig(sessionId, newConfig)
+  } else if (updateType === 'auth_status') {
+    get().setSdkAuthStatus(sessionId, {
+      isAuthenticating: Boolean(update.isAuthenticating),
+      output: typeof update.output === 'string' ? update.output : undefined,
+      error: typeof update.error === 'string' ? update.error : undefined,
+      updatedAt: Date.now(),
+    })
+    if (typeof update.error === 'string' && update.error && sessionId !== activeSessionId) {
+      get().incrementUnread(sessionId)
+    }
+  } else if (updateType === 'status') {
+    const status = typeof update.status === 'string' ? update.status : 'unknown'
+    get().setSdkRuntimeStatus(sessionId, {
+      status,
+      updatedAt: Date.now(),
+    })
+  } else if (isRuntimeActivityType(updateType)) {
+    const activity = createRuntimeActivityEntry(sessionId, updateType, update)
+    get().addSdkRuntimeActivity(sessionId, activity)
+    if (updateType === 'task_notification' && sessionId !== activeSessionId) {
+      get().incrementUnread(sessionId)
+    }
+  } else if (
+    updateType === 'user_message' ||
+    updateType === 'tool_call' ||
+    updateType === 'thinking' ||
+    updateType === 'agent_message_complete' ||
+    updateType === 'agent_message_delta' ||
+    updateType === 'content_block_start' ||
+    updateType === 'content_block_stop' ||
+    updateType === 'system' ||
+    updateType === 'sdk_message'
+  ) {
+    if (updateType === 'system') {
+      get().addSdkRuntimeActivity(sessionId, createRuntimeActivityEntry(sessionId, 'system', update))
+    }
+    // Intentionally ignore transcript-owned or debug-only events here.
   }
+}
+
+function applyMcpUpdateToStatus(sessionId: string, result: SdkMcpUpdateResult, get: StoreGet) {
+  if (result.error) {
+    return
+  }
+
+  const current = get().sdkMcpStatus[sessionId] || []
+  const next = current
+    .filter((server) => !result.removed.includes(server.name))
+    .map((server) => {
+      const error = result.errors[server.name]
+      if (!error) {
+        return server
+      }
+      return {
+        ...server,
+        status: 'failed' as const,
+        error,
+      }
+    })
+
+  for (const name of result.added) {
+    if (!next.some((server) => server.name === name)) {
+      next.push({ name, status: 'pending' })
+    }
+  }
+
+  for (const [name, error] of Object.entries(result.errors)) {
+    if (!next.some((server) => server.name === name)) {
+      next.push({ name, status: 'failed', error })
+    }
+  }
+
+  get().setSdkMcpStatus(sessionId, next)
+}
+
+function isRuntimeActivityType(updateType: string): updateType is Exclude<SdkRuntimeActivityKind, 'system'> {
+  return updateType === 'tool_progress'
+    || updateType === 'task_notification'
+    || updateType === 'hook_started'
+    || updateType === 'hook_progress'
+    || updateType === 'hook_response'
+    || updateType === 'compact_boundary'
+}
+
+function createRuntimeActivityEntry(
+  sessionId: string,
+  kind: SdkRuntimeActivityKind,
+  payload: Record<string, unknown>,
+): SdkRuntimeActivityEntry {
+  return {
+    id: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    sessionId,
+    kind,
+    timestamp: Date.now(),
+    severity: getRuntimeActivitySeverity(kind, payload),
+    payload,
+  }
+}
+
+function getRuntimeActivitySeverity(
+  kind: SdkRuntimeActivityKind,
+  payload: Record<string, unknown>,
+): SdkRuntimeActivitySeverity {
+  if (kind === 'hook_response') {
+    const outcome = typeof payload.outcome === 'string' ? payload.outcome : ''
+    const exitCode = typeof payload.exitCode === 'number' ? payload.exitCode : 0
+    return outcome === 'success' && exitCode === 0 ? 'success' : 'danger'
+  }
+
+  if (kind === 'task_notification') {
+    const status = typeof payload.status === 'string' ? payload.status.toLowerCase() : ''
+    if (status.includes('error') || status.includes('fail')) return 'danger'
+    if (status.includes('complete') || status.includes('success')) return 'success'
+  }
+
+  if (kind === 'compact_boundary') {
+    return 'warning'
+  }
+
+  if (kind === 'system') {
+    return 'warning'
+  }
+
+  return 'default'
 }

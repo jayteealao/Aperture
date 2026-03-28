@@ -723,6 +723,46 @@ export interface AccountInfo {
   apiKeySource?: string
 }
 
+export interface SdkAuthStatus {
+  isAuthenticating: boolean
+  output?: string
+  error?: string
+  updatedAt: number
+}
+
+export interface SdkRuntimeStatus {
+  status: string
+  updatedAt: number
+}
+
+export type SdkRuntimeActivityKind =
+  | 'tool_progress'
+  | 'task_notification'
+  | 'hook_started'
+  | 'hook_progress'
+  | 'hook_response'
+  | 'compact_boundary'
+  | 'system'
+
+export type SdkRuntimeActivitySeverity = 'default' | 'success' | 'warning' | 'danger'
+
+export interface SdkRuntimeActivityEntry {
+  id: string
+  sessionId: string
+  kind: SdkRuntimeActivityKind
+  timestamp: number
+  severity: SdkRuntimeActivitySeverity
+  payload: Record<string, unknown>
+}
+
+export interface SdkMcpUpdateResult {
+  added: string[]
+  removed: string[]
+  errors: Record<string, string>
+  error?: string
+  updatedAt: number
+}
+
 // Slash Command / Skill
 export interface SlashCommand {
   name: string

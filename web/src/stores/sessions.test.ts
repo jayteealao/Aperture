@@ -434,6 +434,391 @@ describe('useSessionsStore session/update sub-types', () => {
       maxThinkingTokens: 16000,
     })
   })
+
+  it('session/account_info hydrates from the canonical direct payload shape', () => {
+    const sessionId = 'upd-account-direct'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/account_info',
+        params: {
+          emailAddress: 'user@example.com',
+          organizationName: 'Aperture',
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().sdkAccountInfo[sessionId]).toEqual({
+      emailAddress: 'user@example.com',
+      organizationName: 'Aperture',
+    })
+  })
+
+  it('session/account_info remains backward-compatible with nested warmup payloads', () => {
+    const sessionId = 'upd-account-nested'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/account_info',
+        params: {
+          accountInfo: {
+            emailAddress: 'legacy@example.com',
+            organizationName: 'Legacy Aperture',
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().sdkAccountInfo[sessionId]).toEqual({
+      emailAddress: 'legacy@example.com',
+      organizationName: 'Legacy Aperture',
+    })
+  })
+
+  it('auth_status updates runtime auth state', () => {
+    const sessionId = 'upd-auth'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'auth_status',
+            isAuthenticating: true,
+            output: 'Waiting for browser login',
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().sdkAuthStatus[sessionId]).toMatchObject({
+      isAuthenticating: true,
+      output: 'Waiting for browser login',
+    })
+  })
+
+  it('task_notification appends runtime activity and increments unread for inactive session', () => {
+    const sessionId = 'upd-task'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+      activeSessionId: 'other-session',
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'task_notification',
+            taskId: 'task-1',
+            status: 'completed',
+            summary: 'Lint finished',
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    const runtimeActivity = useSessionsStore.getState().sdkRuntimeActivity[sessionId]
+    expect(runtimeActivity).toHaveLength(1)
+    expect(runtimeActivity?.[0]).toMatchObject({
+      kind: 'task_notification',
+      severity: 'success',
+    })
+    expect(useSessionsStore.getState().connections[sessionId]?.hasUnread).toBe(true)
+  })
+
+  it('tool_progress appends runtime activity without incrementing unread', () => {
+    const sessionId = 'upd-tool-progress'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+      activeSessionId: 'other-session',
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'tool_progress',
+            toolName: 'Bash',
+            elapsedSeconds: 4.2,
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    const runtimeActivity = useSessionsStore.getState().sdkRuntimeActivity[sessionId]
+    expect(runtimeActivity).toHaveLength(1)
+    expect(runtimeActivity?.[0]).toMatchObject({
+      kind: 'tool_progress',
+      payload: { toolName: 'Bash', elapsedSeconds: 4.2 },
+    })
+    expect(useSessionsStore.getState().connections[sessionId]?.hasUnread).toBe(false)
+  })
+
+  it('hook lifecycle events append runtime activity entries', () => {
+    const sessionId = 'upd-hook'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'hook_started',
+            hookId: 'hook-1',
+            hookName: 'pre-commit',
+            hookEvent: 'PreToolUse',
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'hook_progress',
+            hookId: 'hook-1',
+            stdout: 'Running',
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'hook_response',
+            hookId: 'hook-1',
+            outcome: 'success',
+            exitCode: 0,
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().sdkRuntimeActivity[sessionId]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'hook_started' }),
+        expect.objectContaining({ kind: 'hook_progress' }),
+        expect.objectContaining({ kind: 'hook_response', severity: 'success' }),
+      ]),
+    )
+  })
+
+  it('status updates runtime status snapshot', () => {
+    const sessionId = 'upd-status'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'status',
+            status: 'idle',
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().sdkRuntimeStatus[sessionId]).toMatchObject({
+      status: 'idle',
+    })
+  })
+
+  it('system and compact_boundary append runtime activity entries', () => {
+    const sessionId = 'upd-system'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'compact_boundary',
+            trigger: 'context_limit',
+            preTokens: 12345,
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            sessionUpdate: 'system',
+            subtype: 'notice',
+            output: 'System maintenance',
+          },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().sdkRuntimeActivity[sessionId]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'compact_boundary', severity: 'warning' }),
+        expect.objectContaining({ kind: 'system', severity: 'warning' }),
+      ]),
+    )
+  })
+
+  it('session/mcp_servers_updated stores the result and merges MCP status', () => {
+    const sessionId = 'upd-mcp-update'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+      sdkMcpStatus: {
+        [sessionId]: [
+          { name: 'existing', status: 'connected' },
+          { name: 'old', status: 'connected' },
+        ],
+      },
+      sdkLoading: {
+        [sessionId]: { mcpUpdate: true },
+      },
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/mcp_servers_updated',
+        params: {
+          added: ['new-server'],
+          removed: ['old'],
+          errors: { existing: 'Auth expired' },
+        },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().sdkMcpUpdateResult[sessionId]).toMatchObject({
+      added: ['new-server'],
+      removed: ['old'],
+      errors: { existing: 'Auth expired' },
+    })
+    expect(useSessionsStore.getState().sdkLoading[sessionId]?.mcpUpdate).toBe(false)
+    expect(useSessionsStore.getState().sdkMcpStatus[sessionId]).toEqual([
+      { name: 'existing', status: 'failed', error: 'Auth expired' },
+      { name: 'new-server', status: 'pending' },
+    ])
+  })
+
+  it('runtime activity retention stays bounded', () => {
+    const sessionId = 'upd-runtime-retention'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    for (let i = 0; i < 60; i++) {
+      handleJsonRpcMessage(
+        sessionId,
+        {
+          jsonrpc: '2.0',
+          method: 'session/update',
+          params: {
+            update: {
+              sessionUpdate: 'tool_progress',
+              toolName: `tool-${i}`,
+            },
+          },
+        },
+        storeGet,
+        storeSet,
+      )
+    }
+
+    const runtimeActivity = useSessionsStore.getState().sdkRuntimeActivity[sessionId]
+    expect(runtimeActivity).toHaveLength(50)
+    expect(runtimeActivity?.[0]?.payload.toolName).toBe('tool-10')
+    expect(runtimeActivity?.[49]?.payload.toolName).toBe('tool-59')
+  })
 })
 
 describe('useSessionsStore cleanup', () => {

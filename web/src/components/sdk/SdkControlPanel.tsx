@@ -9,6 +9,8 @@ import { SdkAccountInfo } from './SdkAccountInfo'
 import { SdkMcpStatus } from './SdkMcpStatus'
 import { SdkCheckpoints } from './SdkCheckpoints'
 import { SdkCommandsList } from './SdkCommandsList'
+import { SdkRuntimeStatus } from './SdkRuntimeStatus'
+import { SdkRuntimeActivity } from './SdkRuntimeActivity'
 import {
   PanelRightClose,
   Activity,
@@ -16,6 +18,7 @@ import {
   Server,
   History,
   Terminal,
+  Bot,
 } from 'lucide-react'
 
 interface SdkControlPanelProps {
@@ -33,7 +36,11 @@ export function SdkControlPanel({ sessionId, connected, isOpen, onToggle }: SdkC
     accountInfo,
     commands,
     mcpStatus,
+    mcpUpdateResult,
     checkpoints,
+    authStatus,
+    runtimeStatus,
+    runtimeActivity,
     loading,
     errors,
     rewindResult,
@@ -43,6 +50,7 @@ export function SdkControlPanel({ sessionId, connected, isOpen, onToggle }: SdkC
     getCheckpoints,
     rewindFiles,
     clearRewindResult,
+    clearRuntimeActivity,
   } = useSdkSession(sessionId)
   const hasLoadedRef = useRef(false)
 
@@ -84,6 +92,20 @@ export function SdkControlPanel({ sessionId, connected, isOpen, onToggle }: SdkC
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         <PanelSection title="Usage" icon={Activity} defaultOpen>
           <SdkUsageDisplay usage={usage} />
+        </PanelSection>
+
+        <PanelSection title="Runtime" icon={Bot} defaultOpen>
+          <div className="space-y-4">
+            <SdkRuntimeStatus
+              authStatus={authStatus}
+              runtimeStatus={runtimeStatus}
+              mcpUpdateResult={mcpUpdateResult}
+            />
+            <SdkRuntimeActivity
+              activity={runtimeActivity}
+              onClear={clearRuntimeActivity}
+            />
+          </div>
         </PanelSection>
 
         <PanelSection title="Account" icon={User}>
