@@ -536,7 +536,7 @@ export class SdkSession extends EventEmitter {
       this.sdkConfig.permissionMode === 'bypassPermissions' ||
       this.sessionAllowedTools.has(message.toolName)
     ) {
-      const autoResult: PermissionResult = { behavior: 'allow' };
+      const autoResult: PermissionResult = { behavior: 'allow', updatedInput: message.input };
       this.workerProcess?.send({
         type: 'permission_response',
         toolUseId: message.toolUseId,
@@ -996,12 +996,12 @@ export class SdkSession extends EventEmitter {
     ): Promise<PermissionResult> => {
       // Auto-approve if permission mode bypasses all prompts
       if (this.sdkConfig.permissionMode === 'bypassPermissions') {
-        return { behavior: 'allow' };
+        return { behavior: 'allow', updatedInput: input };
       }
 
       // Auto-approve if the user previously clicked "Always Allow" for this tool
       if (this.sessionAllowedTools.has(toolName)) {
-        return { behavior: 'allow' };
+        return { behavior: 'allow', updatedInput: input };
       }
 
       return new Promise<PermissionResult>((resolve, reject) => {
@@ -2119,12 +2119,16 @@ export class SdkSession extends EventEmitter {
     }
 
     let result: PermissionResult;
-    const updatedInput = answers && Object.keys(answers).length > 0 ? answers : undefined;
+    // If the user provided answers (e.g. for AskUserQuestion), use those as the
+    // tool input; otherwise echo the original tool input back to the SDK.
+    // Note: answers fully *replace* toolInput rather than merging — this matches
+    // the SDK's expectation that updatedInput is the complete input to use.
+    const resolvedInput = answers && Object.keys(answers).length > 0 ? answers : pending.toolInput;
 
     if (optionId === 'allow') {
       result = {
         behavior: 'allow',
-        ...(updatedInput && { updatedInput }),
+        updatedInput: resolvedInput,
       };
     } else if (optionId === 'allow_always') {
       // Remember this tool for the rest of the session so future calls auto-approve
@@ -2135,7 +2139,7 @@ export class SdkSession extends EventEmitter {
       this.sessionAllowedTools.add(pending.toolName);
       result = {
         behavior: 'allow',
-        ...(updatedInput && { updatedInput }),
+        updatedInput: resolvedInput,
         ...(pending.sdkSuggestions?.length ? { updatedPermissions: pending.sdkSuggestions } : {}),
       };
     } else if (optionId.startsWith('suggestion_')) {
@@ -2146,7 +2150,7 @@ export class SdkSession extends EventEmitter {
 
       result = {
         behavior: 'allow',
-        ...(updatedInput && { updatedInput }),
+        updatedInput: resolvedInput,
         ...(selectedSuggestion ? { updatedPermissions: [selectedSuggestion] } : {}),
       };
     } else {

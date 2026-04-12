@@ -26,30 +26,53 @@ function createTestHarness() {
   };
 }
 
+function makePending(
+  resolve: ReturnType<typeof vi.fn>,
+  overrides: { toolInput?: Record<string, unknown>; sdkSuggestions?: PermissionUpdate[] } = {}
+) {
+  return {
+    toolName: 'Write',
+    toolInput: overrides.toolInput ?? { file_path: '/tmp/test.txt', content: 'hello' },
+    toolUseID: 'tool-1',
+    resolve,
+    signal: new AbortController().signal,
+    options: [],
+    sdkSuggestions: overrides.sdkSuggestions ?? [],
+  };
+}
+
 describe('SdkSession permission response mapping', () => {
   it('returns original sdk suggestions for allow_always', async () => {
     const session = createTestHarness();
     const resolve = vi.fn();
+    const toolInput = { file_path: '/tmp/test.txt', content: 'hello' };
     const suggestion: PermissionUpdate = {
       type: 'setMode',
       mode: 'acceptEdits',
       destination: 'session',
     };
 
-    session.pendingPermissions.set('tool-1', {
-      toolName: 'Write',
-      toolInput: {},
-      toolUseID: 'tool-1',
-      resolve,
-      signal: new AbortController().signal,
-      options: [],
-      sdkSuggestions: [suggestion],
-    });
+    session.pendingPermissions.set('tool-1', makePending(resolve, { toolInput, sdkSuggestions: [suggestion] }));
     await session.respondToPermission('tool-1', 'allow_always');
 
     expect(resolve).toHaveBeenCalledWith({
       behavior: 'allow',
+      updatedInput: toolInput,
       updatedPermissions: [suggestion],
+    } satisfies PermissionResult);
+  });
+
+  it('echoes updatedInput from pending toolInput for plain allow', async () => {
+    const session = createTestHarness();
+    const resolve = vi.fn();
+    const toolInput = { file_path: '/tmp/test.txt', content: 'hello' };
+
+    session.pendingPermissions.set('tool-1', makePending(resolve, { toolInput }));
+    await session.respondToPermission('tool-1', 'allow');
+
+    expect(resolve).toHaveBeenCalledWith({
+      behavior: 'allow',
+      updatedInput: toolInput,
     } satisfies PermissionResult);
   });
 
@@ -69,15 +92,7 @@ describe('SdkSession permission response mapping', () => {
       },
     ];
 
-    session.pendingPermissions.set('tool-1', {
-      toolName: 'Write',
-      toolInput: {},
-      toolUseID: 'tool-1',
-      resolve,
-      signal: new AbortController().signal,
-      options: [],
-      sdkSuggestions: suggestions,
-    });
+    session.pendingPermissions.set('tool-1', makePending(resolve, { sdkSuggestions: suggestions }));
     await session.respondToPermission('tool-1', 'suggestion_1', { answer: 'ok' });
 
     expect(resolve).toHaveBeenCalledWith({
@@ -87,19 +102,33 @@ describe('SdkSession permission response mapping', () => {
     } satisfies PermissionResult);
   });
 
+  it('echoes toolInput for suggestion_n when no answers provided', async () => {
+    const session = createTestHarness();
+    const resolve = vi.fn();
+    const toolInput = { file_path: '/tmp/out.txt', content: 'data' };
+    const suggestions: PermissionUpdate[] = [
+      {
+        type: 'setMode',
+        mode: 'acceptEdits',
+        destination: 'session',
+      },
+    ];
+
+    session.pendingPermissions.set('tool-1', makePending(resolve, { toolInput, sdkSuggestions: suggestions }));
+    await session.respondToPermission('tool-1', 'suggestion_0');
+
+    expect(resolve).toHaveBeenCalledWith({
+      behavior: 'allow',
+      updatedInput: toolInput,
+      updatedPermissions: [suggestions[0]],
+    } satisfies PermissionResult);
+  });
+
   it('does not include toolUseID in deny results', async () => {
     const session = createTestHarness();
     const resolve = vi.fn();
 
-    session.pendingPermissions.set('tool-1', {
-      toolName: 'Write',
-      toolInput: {},
-      toolUseID: 'tool-1',
-      resolve,
-      signal: new AbortController().signal,
-      options: [],
-      sdkSuggestions: [],
-    });
+    session.pendingPermissions.set('tool-1', makePending(resolve));
     await session.respondToPermission('tool-1', 'deny');
 
     expect(resolve).toHaveBeenCalledWith({
