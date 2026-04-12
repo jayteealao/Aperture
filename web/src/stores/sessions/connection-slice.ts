@@ -177,7 +177,18 @@ export const createConnectionSlice: StateCreator<SessionsStore, [], [], Connecti
           get().piGetStats(sid)
           get().piGetModels(sid)
           get().piGetForkable(sid)
+        } else if (session?.agent === 'claude_sdk') {
+          get().markSdkHydrationConnected(sid)
         }
+
+        // Re-fetch session metadata to sync title changes during disconnect
+        void api.getSession(sid).then((serverSession) => {
+          if (serverSession.title && serverSession.title !== session?.title) {
+            get().updateSessionTitle(sid, serverSession.title)
+          }
+        }).catch(() => {
+          // Non-critical — stale title is acceptable until next sync
+        })
       }
     }
 

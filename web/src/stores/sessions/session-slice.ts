@@ -29,7 +29,7 @@ export interface SessionSlice {
   addSession: (session: Session) => Promise<void>
   removeSession: (sessionId: string) => Promise<void>
   updateSessionStatus: (sessionId: string, status: SessionStatus) => void
-  updateSessionTitle: (sessionId: string, title: string) => void
+  updateSessionTitle: (sessionId: string, title: string) => Promise<void>
   setActiveSession: (sessionId: string | null) => void
   getActiveSession: () => Session | null
 
@@ -103,12 +103,16 @@ export const createSessionSlice: StateCreator<SessionsStore, [], [], SessionSlic
     }))
   },
 
-  updateSessionTitle: (sessionId, title) => {
+  updateSessionTitle: async (sessionId, title) => {
     set((state) => ({
       sessions: state.sessions.map((s) =>
         s.id === sessionId ? { ...s, title } : s
       ),
     }))
+    const updated = get().sessions.find((s) => s.id === sessionId)
+    if (updated) {
+      await persistSession(updated)
+    }
   },
 
   setActiveSession: (sessionId) => {
