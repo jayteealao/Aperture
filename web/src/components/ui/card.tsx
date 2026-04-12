@@ -2,12 +2,11 @@ import type { HTMLAttributes } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/utils/cn'
 
-const cardVariants = cva('rounded-xl border transition-all duration-200', {
+const cardVariants = cva('rounded-xl border border-border', {
   variants: {
     variant: {
-      default: 'bg-card border-border',
-      glass: 'glass',
-      outline: 'border-border bg-transparent',
+      default: 'bg-card',
+      outline: 'bg-transparent',
     },
     padding: {
       none: '',

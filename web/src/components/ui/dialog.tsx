@@ -40,22 +40,34 @@ export function DialogOverlay({
 
 const dialogContentVariants = cva(
   [
-    'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
-    'grid w-full gap-4 p-6 shadow-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto',
-    'glass-strong rounded-2xl',
+    // Mobile: bottom sheet anchored to bottom
+    'fixed z-50 grid w-full gap-4 p-6 shadow-2xl overflow-y-auto',
+    'glass-strong',
+    'bottom-0 left-0 right-0 rounded-t-2xl max-h-[85dvh]',
+    'pb-[calc(1.5rem+env(safe-area-inset-bottom))]',
+    // Desktop: centered dialog
+    'md:bottom-auto md:left-1/2 md:top-1/2 md:right-auto',
+    'md:-translate-x-1/2 md:-translate-y-1/2',
+    'md:rounded-2xl md:max-h-[calc(100dvh-2rem)]',
+    'md:pb-6',
+    // Animations
     'data-[state=open]:animate-in data-[state=closed]:animate-out',
     'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-    'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-    'data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]',
-    'data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]',
+    // Mobile: slide from bottom
+    'data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
+    // Desktop: centered zoom
+    'md:data-[state=closed]:slide-out-to-bottom-0 md:data-[state=open]:slide-in-from-bottom-0',
+    'md:data-[state=closed]:zoom-out-95 md:data-[state=open]:zoom-in-95',
+    'md:data-[state=closed]:slide-out-to-left-1/2 md:data-[state=closed]:slide-out-to-top-[48%]',
+    'md:data-[state=open]:slide-in-from-left-1/2 md:data-[state=open]:slide-in-from-top-[48%]',
   ].join(' '),
   {
     variants: {
       size: {
-        sm: 'max-w-sm',
-        md: 'max-w-md',
-        lg: 'max-w-lg',
-        xl: 'max-w-xl',
+        sm: 'md:max-w-sm',
+        md: 'md:max-w-md',
+        lg: 'md:max-w-lg',
+        xl: 'md:max-w-xl',
       },
     },
     defaultVariants: { size: 'md' },

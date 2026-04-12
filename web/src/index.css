@@ -4,63 +4,58 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #f8f9fc;
-  --foreground: rgba(0, 0, 0, 0.9);
-  --card: #ffffff;
+  --background: oklch(0.975 0.005 55);
+  --foreground: rgba(0, 0, 0, 0.88);
+  --card: oklch(0.993 0.003 55);
   --card-foreground: var(--foreground);
   --popover: var(--card);
   --popover-foreground: var(--foreground);
-  --muted: #f1f3f9;
-  --muted-foreground: rgba(0, 0, 0, 0.6);
-  --secondary: rgba(0, 0, 0, 0.02);
-  --secondary-hover: rgba(0, 0, 0, 0.04);
-  --secondary-active: rgba(0, 0, 0, 0.06);
+  --muted: oklch(0.945 0.008 55);
+  --muted-foreground: rgba(0, 0, 0, 0.55);
+  --secondary: rgba(0, 0, 0, 0.025);
+  --secondary-hover: rgba(0, 0, 0, 0.05);
+  --secondary-active: rgba(0, 0, 0, 0.07);
   --secondary-foreground: var(--foreground);
-  --border: rgba(0, 0, 0, 0.06);
-  --ring: rgba(0, 0, 0, 0.12);
+  --border: rgba(0, 0, 0, 0.08);
+  --ring: rgba(0, 0, 0, 0.14);
   --input: var(--border);
-  --primary: #00f5a0;
-  --primary-hover: #00d68f;
-  --primary-foreground: #0a0a0f;
-  --accent: #7c3aed;
-  --accent-foreground: #ffffff;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --gradient-from: #f0fdf4;
-  --gradient-to: #e0e7ff;
+  --primary: oklch(0.52 0.12 55);
+  --primary-hover: oklch(0.47 0.11 55);
+  --primary-foreground: oklch(0.98 0.005 55);
+  --accent: oklch(0.48 0.09 250);
+  --accent-foreground: oklch(0.98 0.005 250);
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.98 0.005 25);
+  --success: oklch(0.50 0.14 155);
+  --warning: oklch(0.62 0.14 80);
   --radius: 0.75rem;
-
 }
 
 .dark {
-  --background: #0a0a0f;
-  --foreground: rgba(255, 255, 255, 0.95);
-  --card: #12121a;
+  --background: oklch(0.145 0.012 55);
+  --foreground: rgba(255, 255, 255, 0.93);
+  --card: oklch(0.185 0.012 55);
   --card-foreground: var(--foreground);
   --popover: var(--card);
   --popover-foreground: var(--foreground);
-  --muted: #1a1a24;
-  --muted-foreground: rgba(255, 255, 255, 0.65);
-  --secondary: rgba(255, 255, 255, 0.03);
+  --muted: oklch(0.225 0.012 55);
+  --muted-foreground: rgba(255, 255, 255, 0.55);
+  --secondary: rgba(255, 255, 255, 0.035);
   --secondary-hover: rgba(255, 255, 255, 0.06);
   --secondary-active: rgba(255, 255, 255, 0.09);
   --secondary-foreground: var(--foreground);
   --border: rgba(255, 255, 255, 0.08);
   --ring: rgba(255, 255, 255, 0.15);
   --input: var(--border);
-  --primary: #00f5a0;
-  --primary-hover: #00d68f;
-  --primary-foreground: #0a0a0f;
-  --accent: #7c3aed;
-  --accent-foreground: #ffffff;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --gradient-from: #0f172a;
-  --gradient-to: #1e1b4b;
+  --primary: oklch(0.75 0.14 55);
+  --primary-hover: oklch(0.68 0.13 55);
+  --primary-foreground: oklch(0.16 0.015 55);
+  --accent: oklch(0.62 0.10 250);
+  --accent-foreground: oklch(0.95 0.005 250);
+  --destructive: oklch(0.63 0.21 25);
+  --destructive-foreground: oklch(0.98 0.005 25);
+  --success: oklch(0.64 0.17 155);
+  --warning: oklch(0.78 0.13 80);
 }
 
 @theme inline {
@@ -92,8 +87,6 @@
   --color-primary-hover: var(--primary-hover);
   --color-secondary-hover: var(--secondary-hover);
   --color-secondary-active: var(--secondary-active);
-  --color-gradient-from: var(--gradient-from);
-  --color-gradient-to: var(--gradient-to);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -101,11 +94,10 @@
 }
 
 @theme {
-  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: JetBrains Mono, ui-monospace, monospace;
-  --text-2xs: 0.625rem;
+  --text-2xs: 0.6875rem;
   --radius-4xl: 2rem;
-  --backdrop-blur-xs: 2px;
   --animate-fade-in: fade-in 0.2s ease-out;
   --animate-slide-up: slide-up 0.2s ease-out;
   --animate-slide-down: slide-down 0.2s ease-out;
@@ -191,6 +183,11 @@
     min-height: 100vh;
     background: var(--background);
     color: var(--foreground);
+    line-height: 1.5;
+  }
+
+  .dark body {
+    line-height: 1.55;
   }
 
   pre,
@@ -213,12 +210,12 @@
   }
 
   ::selection {
-    background: rgba(0, 180, 120, 0.4);
+    background: oklch(0.65 0.12 55 / 0.3);
     color: inherit;
   }
 
   .dark ::selection {
-    background: rgba(0, 245, 160, 0.35);
+    background: oklch(0.75 0.14 55 / 0.25);
   }
 
   :focus-visible {
@@ -245,38 +242,14 @@
   }
 }
 
-@utility glass {
-  background: var(--secondary);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border);
-}
-
 @utility glass-strong {
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in oklch, var(--foreground) 6%, transparent);
   backdrop-filter: blur(40px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid color-mix(in oklch, var(--foreground) 10%, transparent);
 }
 
-@utility glass-card {
-  @apply glass rounded-2xl;
-}
-
-@utility bg-gradient-radial {
-  background: radial-gradient(ellipse at top, var(--gradient-from), var(--gradient-to));
-}
-
-@utility bg-gradient-mesh {
-  background:
-    radial-gradient(at 40% 20%, rgba(0, 245, 160, 0.08) 0px, transparent 50%),
-    radial-gradient(at 80% 0%, rgba(124, 58, 237, 0.08) 0px, transparent 50%),
-    radial-gradient(at 0% 50%, rgba(0, 245, 160, 0.05) 0px, transparent 50%),
-    radial-gradient(at 80% 50%, rgba(124, 58, 237, 0.05) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(0, 245, 160, 0.08) 0px, transparent 50%),
-    var(--background);
-}
-
-@utility text-gradient {
-  @apply bg-linear-to-r from-accent to-accent-secondary bg-clip-text text-transparent;
+@utility text-accent {
+  color: var(--primary);
 }
 
 @utility scrollbar-thin {
@@ -308,6 +281,20 @@
 
 @utility animate-in {
   animation: animate-in 0.2s ease-out;
+}
+
+@utility stagger-in {
+  & > * {
+    opacity: 0;
+    animation: animate-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  & > *:nth-child(1) { animation-delay: 0ms; }
+  & > *:nth-child(2) { animation-delay: 60ms; }
+  & > *:nth-child(3) { animation-delay: 120ms; }
+  & > *:nth-child(4) { animation-delay: 180ms; }
+  & > *:nth-child(5) { animation-delay: 240ms; }
+  & > *:nth-child(6) { animation-delay: 300ms; }
 }
 
 @media (prefers-reduced-motion: reduce) {
