@@ -151,7 +151,7 @@ export async function verifyClaudeInstallation(
 }
 
 /**
- * Checks readiness: verifies we can spawn processes and locate claude-code-acp
+ * Checks readiness: verifies we can spawn processes and locate a supported agent CLI
  */
 export async function checkReadiness(autoInstall: boolean = false): Promise<{
   ready: boolean;
@@ -165,13 +165,6 @@ export async function checkReadiness(autoInstall: boolean = false): Promise<{
     await execAsync('echo test');
   } catch (err) {
     errors.push(`Cannot spawn processes: ${(err as Error).message}`);
-  }
-
-  // Check if claude-code-acp is available (it should be installed via npm)
-  try {
-    await execAsync('which claude-code-acp || where claude-code-acp');
-  } catch {
-    errors.push('claude-code-acp not found in PATH (install @zed-industries/claude-code-acp)');
   }
 
   // Check if Claude CLI is available (optional but recommended)
