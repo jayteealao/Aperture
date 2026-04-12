@@ -113,6 +113,19 @@ async function main() {
   // Register routes
   await registerRoutes(fastify, sessionManager, config, database, credentialStore);
 
+  // SPA fallback: serve index.html for client-side routes, JSON 404 for API routes
+  fastify.setNotFoundHandler((request, reply) => {
+    if (request.url.startsWith('/v1/')) {
+      reply.status(404).send({
+        statusCode: 404,
+        error: 'Not Found',
+        message: `Route ${request.method}:${request.url} not found`,
+      });
+      return;
+    }
+    reply.sendFile('index.html');
+  });
+
   // Graceful shutdown
   const shutdown = async () => {
     console.log('\n🛑 Shutting down...');
