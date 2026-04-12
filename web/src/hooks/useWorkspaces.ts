@@ -1,37 +1,22 @@
-import { useState, useEffect } from 'react'
-import { api } from '@/api/client'
-import type { WorkspaceRecord } from '@/api/types'
+import { useEffect } from 'react'
+import { useAppStore } from '@/stores/app'
 
 /**
- * Fetches the workspace list once on mount.
- * Both SidebarRail and WorkspacePanel consume this hook independently;
- * a shared store would be the next step if workspace mutations need to
- * propagate in real-time across components.
+ * Returns the shared workspace list from the Zustand store.
+ * Triggers a fetch on mount if the store is empty.
+ * All consumers share the same data — mutations that call
+ * `useAppStore.getState().fetchWorkspaces()` update every subscriber.
  */
 export function useWorkspaces() {
-  const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const workspaces = useAppStore((s) => s.workspaces)
+  const loading = useAppStore((s) => s.workspacesLoading)
+  const fetchWorkspaces = useAppStore((s) => s.fetchWorkspaces)
 
   useEffect(() => {
-    let cancelled = false
-
-    api
-      .listWorkspaces()
-      .then(({ workspaces: ws }) => {
-        if (!cancelled) setWorkspaces(ws)
-      })
-      .catch(() => {
-        // Gateway may not yet be reachable on first render — fail silently
-        // and leave workspaces as [] so the rail renders without crashing.
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-
-    return () => {
-      cancelled = true
+    if (workspaces.length === 0) {
+      fetchWorkspaces()
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { workspaces, loading }
 }

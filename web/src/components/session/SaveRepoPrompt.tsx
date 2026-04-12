@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { api } from '@/api/client'
+import { useAppStore } from '@/stores/app'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { InputField } from '@/components/ui/input-field'
@@ -14,8 +15,6 @@ interface SaveRepoPromptProps {
 }
 
 export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps) {
-  const queryClient = useQueryClient()
-
   // Extract default name from path
   const defaultName = repoPath.split(/[/\\]/).pop() || 'repository'
   const [name, setName] = useState(defaultName)
@@ -36,7 +35,7 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
     },
     onSuccess: () => {
       toast.success('Repository saved', { description: 'This repository will appear in your list for future sessions' })
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+      useAppStore.getState().fetchWorkspaces()
       onClose()
     },
     onError: (error) => {

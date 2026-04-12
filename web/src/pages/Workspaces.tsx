@@ -25,6 +25,7 @@ import {
   Play,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
+import { useAppStore } from '@/stores/app'
 
 interface WorkspaceWithData extends WorkspaceRecord {
   checkouts: CheckoutRecord[]
@@ -103,6 +104,12 @@ export default function Workspaces() {
     try {
       await api.deleteWorkspace(deleteWorkspaceTarget.id)
       toast.success(`Workspace "${deleteWorkspaceTarget.name}" deleted`)
+      const { activeWorkspaceId, setActiveWorkspaceId, setWorkspacePanelOpen, fetchWorkspaces } = useAppStore.getState()
+      if (deleteWorkspaceTarget.id === activeWorkspaceId) {
+        setActiveWorkspaceId(null)
+        setWorkspacePanelOpen(false)
+      }
+      fetchWorkspaces()
       setDeleteWorkspaceTarget(null)
       loadWorkspaces(true)
     } catch (error) {
@@ -227,12 +234,17 @@ export default function Workspaces() {
             setSearchParams({}, { replace: true })
           }
         }}
-        onSuccess={() => {
+        onSuccess={(workspaceId) => {
           setShowCreateDialog(false)
           if (searchParams.get('modal') === 'new-workspace') {
             setSearchParams({}, { replace: true })
           }
           loadWorkspaces(true)
+          useAppStore.getState().fetchWorkspaces()
+          if (workspaceId) {
+            useAppStore.getState().setActiveWorkspaceId(workspaceId)
+            navigate(`/workspaces/${workspaceId}`)
+          }
         }}
       />
 
@@ -423,7 +435,7 @@ function CreateWorkspaceDialog({
 }: {
   open: boolean
   onClose: () => void
-  onSuccess: () => void
+  onSuccess: (workspaceId?: string) => void
 }) {
   const [mode, setMode] = useState<CreateMode>('manual')
   const [name, setName] = useState('')
@@ -499,13 +511,16 @@ function CreateWorkspaceDialog({
           return
         }
 
-        await api.cloneWorkspace({
+        const cloneResult = await api.cloneWorkspace({
           remoteUrl: cloneUrl.trim(),
           targetDirectory: targetDirectory.trim(),
           name: name.trim() || undefined,
         })
 
         toast.success('Repository cloned and workspace created!')
+        resetState()
+        onSuccess(cloneResult.workspace.id)
+        return
       } else {
         // Manual or Browse mode: create from existing repo
         if (!name.trim() || !repoRoot.trim()) {
@@ -514,17 +529,17 @@ function CreateWorkspaceDialog({
           return
         }
 
-        await api.createWorkspace({
+        const createResult = await api.createWorkspace({
           name: name.trim(),
           repoRoot: repoRoot.trim(),
           description: description.trim() || undefined,
         })
 
         toast.success('Workspace created successfully!')
+        resetState()
+        onSuccess(createResult.id)
+        return
       }
-
-      resetState()
-      onSuccess()
     } catch (error) {
       toast.error(
         'Failed to create workspace',

@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import { api } from '@/api/client'
+import type { WorkspaceRecord } from '@/api/types'
 
 type Theme = 'light' | 'dark'
 
@@ -20,6 +21,8 @@ interface AppState {
   sdkPanelOpen: boolean
 
   // Workspace rail state
+  workspaces: WorkspaceRecord[]
+  workspacesLoading: boolean
   activeWorkspaceId: string | null
   workspacePanelOpen: boolean
   mobileCarousel: {
@@ -40,6 +43,7 @@ interface AppState {
   toggleCommandPalette: () => void
   setSdkPanelOpen: (open: boolean) => void
   toggleSdkPanel: () => void
+  fetchWorkspaces: () => Promise<void>
   setActiveWorkspaceId: (id: string | null) => void
   setWorkspacePanelOpen: (open: boolean) => void
   setMobileCarousel: (state: { visible: boolean; count: number; index: number }) => void
@@ -91,6 +95,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarOpen: false,
   commandPaletteOpen: false,
   sdkPanelOpen: true,
+  workspaces: [],
+  workspacesLoading: false,
   activeWorkspaceId: null,
   workspacePanelOpen: false,
   mobileCarousel: {
@@ -134,6 +140,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setSdkPanelOpen: (open) => set({ sdkPanelOpen: open }),
   toggleSdkPanel: () => set((s) => ({ sdkPanelOpen: !s.sdkPanelOpen })),
+
+  fetchWorkspaces: async () => {
+    set({ workspacesLoading: true })
+    try {
+      const { workspaces } = await api.listWorkspaces()
+      set({ workspaces, workspacesLoading: false })
+    } catch {
+      set({ workspacesLoading: false })
+    }
+  },
 
   setActiveWorkspaceId: (id) => set({ activeWorkspaceId: id }),
   setWorkspacePanelOpen: (open) => set({ workspacePanelOpen: open }),
