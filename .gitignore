@@ -13,3 +13,7 @@ coverage/
 # Scratch workspace
 .scratch/
 .collaborator
+
+# Workflow artifacts and internal docs
+.ai/
+docs/internal/
