@@ -4,6 +4,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router'
 import { useAppStore } from './stores/app'
 import { Shell } from './components/layout/Shell'
 import { Spinner } from './components/ui/Spinner'
+import { Aperture } from 'lucide-react'
 import { getSingletonHighlighter } from './lib/shiki.bundle'
 
 // Lazy load pages for code splitting
@@ -16,10 +17,9 @@ const Help = lazy(() => import('./pages/Help'))
 
 function LoadingFallback() {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-mesh">
-      <div className="glass-card p-8 text-center animate-in">
-        <Spinner size="lg" />
-        <p className="mt-4 text-sm text-muted-foreground">Loading...</p>
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="text-center animate-in">
+        <Aperture size={32} className="mx-auto text-accent animate-spin" style={{ animationDuration: '3s' }} />
       </div>
     </div>
   )

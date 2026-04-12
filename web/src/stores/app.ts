@@ -16,7 +16,6 @@ interface AppState {
   theme: Theme
 
   // UI state
-  sidebarOpen: boolean
   commandPaletteOpen: boolean
   sdkPanelOpen: boolean
 
@@ -37,8 +36,6 @@ interface AppState {
   setConnected: (connected: boolean) => void
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
-  setSidebarOpen: (open: boolean) => void
-  toggleSidebar: () => void
   setCommandPaletteOpen: (open: boolean) => void
   toggleCommandPalette: () => void
   setSdkPanelOpen: (open: boolean) => void
@@ -92,7 +89,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   apiToken: '',
   isConnected: false,
   theme: 'dark',
-  sidebarOpen: false,
   commandPaletteOpen: false,
   sdkPanelOpen: true,
   workspaces: [],
@@ -131,9 +127,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     const newTheme = get().theme === 'dark' ? 'light' : 'dark'
     get().setTheme(newTheme)
   },
-
-  setSidebarOpen: (open) => set({ sidebarOpen: open }),
-  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),

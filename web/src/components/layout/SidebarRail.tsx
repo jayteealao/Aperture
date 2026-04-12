@@ -10,7 +10,7 @@ import { cn } from '@/utils/cn'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaces } from '@/hooks/useWorkspaces'
 import type { WorkspaceRecord } from '@/api/types'
-import { Key, Settings, HelpCircle, Plus, Moon, Sun } from 'lucide-react'
+import { Aperture, Key, Settings, HelpCircle, Plus, Moon, Sun } from 'lucide-react'
 
 // ── Workspace helpers ──────────────────────────────────────────────────────
 
@@ -74,18 +74,7 @@ function Squircle({
 }
 
 function ApertureIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="w-5 h-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="12" cy="12" r="4" />
-    </svg>
-  )
+  return <Aperture size={20} />
 }
 
 // ── Rail button (plain button) ─────────────────────────────────────────────
@@ -189,7 +178,7 @@ function WorkspaceItem({
           active && 'ring-2 ring-accent ring-offset-1 ring-offset-card',
         )}
       >
-        <span className="text-[11px] font-bold leading-none">{initials}</span>
+        <span className="text-2xs font-bold leading-none">{initials}</span>
       </Squircle>
       <span className={cn(LABEL_CLS, 'text-xs')}>{displayName}</span>
     </button>

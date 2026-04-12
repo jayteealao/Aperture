@@ -77,18 +77,22 @@ export function MobileBottomBar({
           >
             <ArrowLeft size={16} />
           </Button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0">
             {Array.from({ length: carousel.count }).map((_, index) => (
               <button
                 key={index}
                 type="button"
                 onClick={() => onCarouselSelect?.(index)}
-                className={cn(
-                  'h-2.5 rounded-full transition-all',
-                  index === carousel.index ? 'w-6 bg-accent' : 'w-2.5 bg-border',
-                )}
+                className="flex items-center justify-center p-2"
                 aria-label={`Go to item ${index + 1}`}
-              />
+              >
+                <span
+                  className={cn(
+                    'h-2.5 rounded-full transition-all',
+                    index === carousel.index ? 'w-6 bg-accent' : 'w-2.5 bg-border',
+                  )}
+                />
+              </button>
             ))}
           </div>
           <Button
@@ -105,7 +109,7 @@ export function MobileBottomBar({
       <div className="mx-auto flex max-w-screen-sm items-center gap-2 px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
         {openSheet ? (
           <>
-            <Button variant="ghost" size="sm" className="px-2" onClick={onCloseSheet}>
+            <Button variant="ghost" className="px-3 py-2" onClick={onCloseSheet}>
               <ArrowLeft size={16} />
               <span>Back</span>
             </Button>
@@ -113,7 +117,7 @@ export function MobileBottomBar({
               {openSheet === 'workspaces' ? 'Workspaces' : 'Sessions'}
             </div>
             {onPrimaryAction && primaryActionLabel ? (
-              <Button variant="ghost" size="sm" className="px-2" onClick={onPrimaryAction}>
+              <Button variant="ghost" className="px-3 py-2" onClick={onPrimaryAction}>
                 <Plus size={16} />
                 <span>{primaryActionLabel}</span>
               </Button>

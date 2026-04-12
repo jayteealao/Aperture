@@ -1,6 +1,5 @@
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import { useEffect, useMemo, useState } from 'react'
-import { Sidebar } from './Sidebar'
 import { SidebarRail } from './SidebarRail'
 import { WorkspacePanel } from './WorkspacePanel'
 import { Topbar } from './Topbar'
@@ -80,10 +79,7 @@ export function Shell() {
   }, [activeWorkspaceId, sessions])
 
   return (
-    <div className="h-screen flex bg-gradient-mesh overflow-hidden">
-      {/* Legacy mobile drawer is kept mounted but no longer triggered by the shell. */}
-      <Sidebar />
-      {/* Desktop: narrow icon rail + closable workspace context panel */}
+    <div className="h-screen flex bg-background overflow-hidden">
       <SidebarRail />
       <WorkspacePanel />
       <div className="flex-1 flex flex-col min-w-0">

@@ -85,7 +85,7 @@ export function WorkspacePanel() {
                 <span className="text-xs font-medium uppercase tracking-wider text-foreground/40">
                   Live
                 </span>
-                <span className="ml-auto rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                <span className="ml-auto rounded-full border border-border px-1.5 py-0.5 text-2xs text-muted-foreground">
                   {liveSessions.length}
                 </span>
                 <ChevronDown
@@ -140,7 +140,7 @@ export function WorkspacePanel() {
                 <span className="text-xs font-medium uppercase tracking-wider text-foreground/40">
                   Previous
                 </span>
-                <span className="ml-auto rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                <span className="ml-auto rounded-full border border-border px-1.5 py-0.5 text-2xs text-muted-foreground">
                   {historicalSessions.length}
                 </span>
                 <ChevronDown
@@ -173,7 +173,7 @@ export function WorkspacePanel() {
                         <span className="w-2 h-2 rounded-full bg-foreground/20 shrink-0" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs">{session.title || 'New Session'}</p>
-                          <p className="text-[10px] uppercase tracking-wide text-foreground/35">
+                          <p className="text-2xs uppercase tracking-wide text-foreground/35">
                             History only
                           </p>
                         </div>
