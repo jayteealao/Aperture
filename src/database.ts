@@ -325,13 +325,10 @@ export class ApertureDatabase {
       SELECT * FROM sessions
       WHERE (
         status = 'active'
-        AND (
-          agent NOT IN ('claude_sdk', 'pi_sdk')
-          OR sdk_session_id IS NOT NULL
-          OR pi_session_path IS NOT NULL
-        )
       )
       OR (
+        -- Idle SDK/Pi sessions need provider resume metadata to be restorable.
+        -- Sessions without it are cleaned up by cleanupOrphanSdkSessions() on restart.
         status = 'idle'
         AND is_resumable = 1
         AND (

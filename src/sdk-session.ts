@@ -2338,7 +2338,7 @@ export class SdkSession extends EventEmitter {
       idleMs: Date.now() - this.lastActivityTime,
       acpSessionId: effectiveSdkSessionId, // Backward compat
       sdkSessionId: effectiveSdkSessionId, // Explicit field
-      isResumable: !this.isShuttingDown && !!effectiveSdkSessionId,
+      isResumable: !this.isShuttingDown,
       config: this.sdkConfig,
       lastResult: this.lastResult,
       workingDirectory: this.workingDir,

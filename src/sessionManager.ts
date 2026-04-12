@@ -734,7 +734,7 @@ export class SessionManager {
         user_id: null,
         sdk_session_id: null, // Will be updated when SDK returns session_id
         sdk_config: options.sdk ? JSON.stringify(options.sdk) : null,
-        is_resumable: 0, // Becomes resumable only after provider session metadata is persisted
+        is_resumable: 1, // Resumable from creation; cleanupOrphanSdkSessions handles orphans on restart
         working_directory: sessionCwd || null,
         workspace_id: options.workspaceId || null,
         pi_session_path: null,
@@ -800,7 +800,7 @@ export class SessionManager {
         user_id: null,
         sdk_session_id: null,
         sdk_config: options.pi ? JSON.stringify(options.pi) : null,
-        is_resumable: 0, // Becomes resumable only after provider session metadata is persisted
+        is_resumable: 1, // Resumable from creation; cleanupOrphanSdkSessions handles orphans on restart
         working_directory: sessionCwd || null,
         workspace_id: options.workspaceId || null,
         pi_session_path: null, // Will be updated when Pi SDK creates session file

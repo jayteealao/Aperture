@@ -581,7 +581,7 @@ export class PiSession extends EventEmitter {
       lastActivityTime: this.lastActivityTime,
       idleMs: Date.now() - this.lastActivityTime,
       piSessionPath: this.piSessionPath,
-      isResumable: !this.isShuttingDown && !!this.piSessionPath,
+      isResumable: !this.isShuttingDown,
       workingDirectory: this.workingDir,
       thinkingLevel: this.currentThinkingLevel,
       currentModel: this.currentModel || undefined,

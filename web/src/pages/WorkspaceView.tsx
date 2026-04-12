@@ -384,9 +384,7 @@ export default function WorkspaceView() {
     if (searchParams.get('modal') === 'new-session') {
       setSearchParams({}, { replace: true })
     }
-    // NS-1 fix: make the new session the active session so it appears as the
-    // selectedHistoricalSession (it won't be in liveWorkspaceSessions yet
-    // because running=false and isResumable=false until the first prompt runs).
+    // Select the newly created session so the user can start interacting with it
     setActiveSession(session.id)
   }
 

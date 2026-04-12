@@ -160,7 +160,7 @@ describe('ApertureDatabase - Managed Repos', () => {
         user_id: null,
         sdk_session_id: null,
         sdk_config: null,
-        is_resumable: 0,
+        is_resumable: 1,
         working_directory: null,
         workspace_id: null,
         pi_session_path: null,

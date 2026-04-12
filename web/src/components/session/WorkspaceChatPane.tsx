@@ -806,11 +806,8 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
   const { initialMessages, persistMessages, reloadMessages } = usePersistedUIMessages(sessionId)
   const [turnDiffSummaries, setTurnDiffSummaries] = useState<TurnDiffSummary[]>([])
 
-  // NS-1 fix: also allow connecting when the connection hasn't been confirmed
-  // dead yet (status !== 'ended' and !== 'error').  This covers freshly
-  // created sessions whose running/isResumable are both false because no
-  // prompt has been sent yet — without this they'd get status:'ended' set
-  // immediately and the input would be permanently disabled.
+  // Connect when the session is live (running or resumable) or when the
+  // connection hasn't been confirmed dead yet (covers transient states).
   const shouldConnect = !!session && (
     session.status.running ||
     !!session.status.isResumable ||
