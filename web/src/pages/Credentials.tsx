@@ -66,7 +66,7 @@ export default function Credentials() {
   }, {} as Record<ProviderKey, Credential[]>)
 
   return (
-    <div className="h-full overflow-y-auto p-6">
+    <div className="h-full overflow-y-auto p-6 lg:p-8">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -86,20 +86,12 @@ export default function Credentials() {
         </div>
 
         {/* Security notice */}
-        <Card variant="glass" padding="md" className="mb-6">
-          <div className="flex items-start gap-3">
-            <Shield size={20} className="text-accent shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm text-foreground font-medium">
-                Security Notice
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                API keys are stored securely on the gateway server. Keys are never sent back to
-                this browser after creation. Use stored credentials to avoid pasting keys repeatedly.
-              </p>
-            </div>
-          </div>
-        </Card>
+        <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-secondary mb-6">
+          <Shield size={18} className="text-accent shrink-0 mt-0.5" />
+          <p className="text-sm text-muted-foreground">
+            API keys are stored securely on the gateway server and never sent back to this browser after creation.
+          </p>
+        </div>
 
         {/* Credentials list */}
         {isLoading ? (
@@ -109,7 +101,7 @@ export default function Credentials() {
             ))}
           </div>
         ) : credentials.length === 0 ? (
-          <Card variant="glass" padding="lg" className="text-center">
+          <Card padding="lg" className="text-center">
             <div className="py-8">
               <Key size={48} className="mx-auto text-foreground/40 mb-4" />
               <h3 className="text-lg font-semibold text-foreground">
@@ -190,7 +182,7 @@ function CredentialCard({
   const createdDate = new Date(credential.createdAt).toLocaleDateString()
 
   return (
-    <Card variant="glass" padding="md">
+    <Card padding="md">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
@@ -199,7 +191,7 @@ function CredentialCard({
           <div>
             <p className="font-medium text-foreground">{credential.label}</p>
             <div className="flex items-center gap-2 mt-1">
-              <Badge variant={providerColors[credential.provider] as 'accent' | 'success' | 'warning'} size="sm">
+              <Badge variant={providerColors[credential.provider] as 'accent' | 'success' | 'warning' | 'danger' | 'outline'} size="sm">
                 {providerLabels[credential.provider]}
               </Badge>
               <span className="flex items-center gap-1 text-xs text-foreground/40">
@@ -257,7 +249,7 @@ function AddCredentialDialog({
       setApiKey('')
       onAdded()
     } catch (error) {
-      toast.error('Failed to add credential', { description: error instanceof Error ? error.message : 'Unknown error' })
+      toast.error('Could not add credential', { description: error instanceof Error ? error.message : 'Something went wrong' })
     } finally {
       setIsAdding(false)
     }

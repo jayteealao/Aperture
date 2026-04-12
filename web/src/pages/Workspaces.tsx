@@ -53,7 +53,7 @@ export default function Workspaces() {
       const workspacesWithData = await Promise.all(
         workspaceList.map(async (workspace) => {
           try {
-            const checkoutsData = await api.listWorkspaceCheckouts(workspace.id)
+            const checkoutsData = await api.listWorkspaceRepositories(workspace.id)
 
             return {
               ...workspace,
@@ -72,7 +72,7 @@ export default function Workspaces() {
       setWorkspaces(workspacesWithData)
     } catch (error) {
       toast.error(
-        'Failed to load workspaces',
+        'Could not load workspaces',
         { description: error instanceof Error ? error.message : 'Unknown error' }
       )
     } finally {
@@ -114,7 +114,7 @@ export default function Workspaces() {
       loadWorkspaces(true)
     } catch (error) {
       toast.error(
-        'Failed to delete workspace',
+        'Could not delete workspace',
         { description: error instanceof Error ? error.message : 'Unknown error' }
       )
     } finally {
@@ -127,12 +127,12 @@ export default function Workspaces() {
     setIsDeletingCheckout(true)
     try {
       await api.deleteWorkspaceCheckout(deleteCheckoutTarget.workspace.id, deleteCheckoutTarget.checkout.id)
-      toast.success('Checkout removed')
+      toast.success('Repository removed')
       setDeleteCheckoutTarget(null)
       loadWorkspaces(true)
     } catch (error) {
       toast.error(
-        'Failed to remove checkout',
+        'Could not remove repository',
         { description: error instanceof Error ? error.message : 'Unknown error' }
       )
     } finally {
@@ -191,14 +191,14 @@ export default function Workspaces() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
         {workspaces.length === 0 ? (
-          <Card variant="glass" padding="lg" className="max-w-md mx-auto text-center">
+          <Card padding="lg" className="max-w-md mx-auto text-center">
             <div className="py-8">
               <Folder size={48} className="mx-auto text-foreground/40 mb-4" />
               <h3 className="text-lg font-semibold text-foreground">
                 No workspaces yet
               </h3>
               <p className="text-muted-foreground mb-4">
-                Create a workspace to enable multi-agent isolated environments
+                Each workspace isolates a repo with its own agent sessions and credentials.
               </p>
               <Button
                 variant="default"
@@ -254,7 +254,7 @@ export default function Workspaces() {
         onClose={() => setDeleteWorkspaceTarget(null)}
         onConfirm={doDeleteWorkspace}
         title="Delete Workspace"
-        description={`Are you sure you want to delete workspace "${deleteWorkspaceTarget?.name}"? This will remove all checkouts and their clone directories.`}
+        description={`Delete "${deleteWorkspaceTarget?.name}" and all its cloned repositories? This cannot be undone.`}
         confirmText="Delete"
         variant="danger"
         loading={isDeletingWorkspace}
@@ -265,8 +265,8 @@ export default function Workspaces() {
         open={!!deleteCheckoutTarget}
         onClose={() => setDeleteCheckoutTarget(null)}
         onConfirm={doDeleteCheckout}
-        title="Remove Checkout"
-        description={`Are you sure you want to remove checkout "${deleteCheckoutTarget?.checkout.name}"? This will delete the clone directory.`}
+        title="Remove Repository"
+        description={`Remove "${deleteCheckoutTarget?.checkout.name}"? The cloned directory will be deleted.`}
         confirmText="Remove"
         variant="danger"
         loading={isDeletingCheckout}
@@ -288,10 +288,10 @@ function WorkspaceCard({
   onRefresh: () => void
   onNewSession: () => void
 }) {
-  const [showCheckouts, setShowCheckouts] = useState(true)
+  const [showRepositories, setShowRepositories] = useState(true)
 
   return (
-    <Card variant="glass" padding="none" className="overflow-hidden hover:shadow-lg transition-shadow">
+    <Card padding="none" className="overflow-hidden hover:shadow-lg transition-shadow">
       {/* Header */}
       <div className="p-4 border-b border-border">
         <div className="flex items-start justify-between">
@@ -299,8 +299,8 @@ function WorkspaceCard({
             <h3 className="text-lg font-semibold text-foreground truncate">
               {workspace.name}
             </h3>
-            <p className="text-xs font-mono text-foreground/40 mt-1">
-              {workspace.id}
+            <p className="text-xs font-mono text-foreground/40 mt-1 truncate">
+              {workspace.repoRoot}
             </p>
           </div>
           <div className="flex items-center gap-1 ml-2">
@@ -359,23 +359,23 @@ function WorkspaceCard({
         </div>
       </div>
 
-      {/* Checkouts Section */}
+      {/* Repositories Section */}
       <div className="border-t border-border">
         <button
-          onClick={() => setShowCheckouts(!showCheckouts)}
+          onClick={() => setShowRepositories(!showRepositories)}
           className="w-full px-4 py-3 flex items-center justify-between hover:bg-secondary transition-colors"
         >
           <div className="flex items-center gap-2">
             <GitBranch size={16} className="text-foreground/40" />
             <span className="text-sm font-medium text-foreground">
-              Checkouts
+              Repositories
             </span>
           </div>
           <Badge variant={workspace.checkouts.length > 0 ? 'success' : 'default'} size="sm">
             {workspace.checkouts.length}
           </Badge>
         </button>
-        {showCheckouts && (
+        {showRepositories && (
           <div className="px-4 pb-3">
             {workspace.checkouts.length > 0 ? (
               <div className="space-y-2">
@@ -416,7 +416,7 @@ function WorkspaceCard({
               </div>
             ) : (
               <p className="text-xs text-foreground/40 text-center py-3">
-                No checkouts
+                No repositories
               </p>
             )}
           </div>
@@ -471,7 +471,7 @@ function CreateWorkspaceDialog({
 
   const handleScan = async () => {
     if (!scanPath.trim()) {
-      toast.error('Validation error', { description: 'Please enter a directory path to scan' })
+      toast.error('Enter a directory path to scan')
       return
     }
 
@@ -506,7 +506,7 @@ function CreateWorkspaceDialog({
       if (mode === 'clone') {
         // Clone mode: clone and create workspace
         if (!cloneUrl.trim() || !targetDirectory.trim()) {
-          toast.error('Validation error', { description: 'Clone URL and target directory are required' })
+          toast.error('Clone URL and target directory are required')
           setCreating(false)
           return
         }
@@ -517,14 +517,14 @@ function CreateWorkspaceDialog({
           name: name.trim() || undefined,
         })
 
-        toast.success('Repository cloned and workspace created!')
+        toast.success('Workspace created from clone')
         resetState()
         onSuccess(cloneResult.workspace.id)
         return
       } else {
         // Manual or Browse mode: create from existing repo
         if (!name.trim() || !repoRoot.trim()) {
-          toast.error('Validation error', { description: 'Name and repository path are required' })
+          toast.error('Name and repository path are required')
           setCreating(false)
           return
         }
@@ -535,14 +535,14 @@ function CreateWorkspaceDialog({
           description: description.trim() || undefined,
         })
 
-        toast.success('Workspace created successfully!')
+        toast.success('Workspace created')
         resetState()
         onSuccess(createResult.id)
         return
       }
     } catch (error) {
       toast.error(
-        'Failed to create workspace',
+        'Could not create workspace',
         { description: error instanceof Error ? error.message : 'Unknown error' }
       )
     } finally {

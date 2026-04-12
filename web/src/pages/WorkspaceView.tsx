@@ -102,8 +102,8 @@ function AddSessionDialog({
       toast.success('Session created', { description: `${session.title || 'New Session'} ready` })
       onCreated(nextSession)
     } catch (err) {
-      toast.error('Failed to create session', {
-        description: err instanceof Error ? err.message : 'Unknown error',
+      toast.error('Could not create session', {
+        description: err instanceof Error ? err.message : 'Something went wrong',
       })
     } finally {
       setIsCreating(false)

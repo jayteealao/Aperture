@@ -4,8 +4,8 @@ import { useAppStore } from '@/stores/app'
 import { api } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { InputField } from '@/components/ui/input-field'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Check, X, Zap, Shield, Globe } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Check, X, Aperture, Globe, Shield } from 'lucide-react'
 
 type ConnectionStep = 'idle' | 'testing' | 'success' | 'error'
 
@@ -42,9 +42,12 @@ export default function Onboarding() {
     // Configure API client
     api.configure(url, token)
 
+    let healthPassed = false
+
     try {
       // Test health endpoint
       await api.checkHealth()
+      healthPassed = true
       setTest((t) => ({ ...t, health: 'success' }))
 
       // Test readiness endpoint
@@ -80,113 +83,94 @@ export default function Onboarding() {
       setError(err instanceof Error ? err.message : 'Connection failed')
 
       // Update test states based on where we failed
-      if (test.health !== 'success') {
+      if (!healthPassed) {
         setTest((t) => ({ ...t, health: 'error' }))
       }
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-mesh flex items-center justify-center p-4">
-      <div className="w-full max-w-md animate-in">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-accent flex items-center justify-center mb-4 shadow-lg shadow-accent/30">
-            <svg viewBox="0 0 24 24" className="w-10 h-10" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="9" />
-              <circle cx="12" cy="12" r="4" />
-            </svg>
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-sm stagger-in">
+        {/* Brand mark */}
+        <div className="text-center mb-10">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-accent/15 text-accent flex items-center justify-center mb-5">
+            <Aperture size={28} strokeWidth={1.5} />
           </div>
-          <h1 className="text-3xl font-bold text-foreground">Aperture</h1>
-          <p className="text-muted-foreground mt-2">AI Workspace for ACP Agents</p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Aperture</h1>
+          <p className="text-sm text-muted-foreground mt-1.5">
+            Connect to your gateway to get started.
+          </p>
         </div>
 
-        {/* Connection Card */}
-        <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader>
-            <CardTitle>Connect to Gateway</CardTitle>
-            <CardDescription>Enter your Aperture Gateway URL and authentication token</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <InputField
-                label="Gateway URL"
-                placeholder="http://localhost:8080"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                leftIcon={<Globe size={18} />}
-                disabled={step === 'testing'}
-              />
+        {/* Connection form — no card wrapper, just the form */}
+        <div className="space-y-4 mb-8">
+          <InputField
+            label="Gateway URL"
+            placeholder="http://localhost:8080"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            leftIcon={<Globe size={16} />}
+            disabled={step === 'testing'}
+          />
 
-              <InputField
-                label="API Token"
-                type="password"
-                placeholder="Enter your bearer token"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                leftIcon={<Shield size={18} />}
-                disabled={step === 'testing'}
-                hint="Your token is stored securely in this browser session"
-              />
+          <InputField
+            label="API Token"
+            type="password"
+            placeholder="Enter your bearer token"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            leftIcon={<Shield size={16} />}
+            disabled={step === 'testing'}
+            hint="Stored in this browser session only"
+          />
 
-              {/* Error message */}
-              {error && (
-                <div className="p-3 rounded-lg bg-danger/10 border border-danger/20">
-                  <p className="text-sm text-danger">{error}</p>
-                </div>
-              )}
-
-              {/* Connection test results */}
-              {step !== 'idle' && (
-                <div className="space-y-2 pt-2">
-                  <TestResult label="Health Check" status={test.health} />
-                  <TestResult
-                    label="Readiness Check"
-                    status={test.ready}
-                    detail={test.claudePath ? `Claude: ${test.claudePath}` : undefined}
-                  />
-                  {test.errors?.map((err, i) => (
-                    <p key={i} className="text-xs text-danger pl-6">{err}</p>
-                  ))}
-                </div>
-              )}
-
-              <Button
-                variant="default"
-                size="lg"
-                className="w-full mt-4"
-                onClick={handleConnect}
-                loading={step === 'testing'}
-                disabled={step === 'success'}
-              >
-                {step === 'success' ? (
-                  <>
-                    <Check size={18} />
-                    Connected!
-                  </>
-                ) : step === 'testing' ? (
-                  'Testing Connection...'
-                ) : (
-                  <>
-                    <Zap size={18} />
-                    Connect
-                  </>
-                )}
-              </Button>
+          {/* Error message */}
+          {error && (
+            <div className="p-3 rounded-lg bg-danger/10 border border-danger/20">
+              <p className="text-sm text-danger">{error}</p>
             </div>
-          </CardContent>
-        </Card>
+          )}
 
-        {/* Features */}
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <Feature icon={<Zap size={20} />} label="Fast" />
-          <Feature icon={<Shield size={20} />} label="Secure" />
-          <Feature icon={<Globe size={20} />} label="Multi-Agent" />
+          {/* Connection test results */}
+          {step !== 'idle' && (
+            <div className="space-y-2 pt-1">
+              <TestResult label="Health" status={test.health} />
+              <TestResult
+                label="Ready"
+                status={test.ready}
+                detail={test.claudePath ? `Claude: ${test.claudePath}` : undefined}
+              />
+              {test.errors?.map((err, i) => (
+                <p key={i} className="text-xs text-danger pl-6">{err}</p>
+              ))}
+            </div>
+          )}
+
+          <Button
+            variant="default"
+            size="lg"
+            className="w-full"
+            onClick={handleConnect}
+            loading={step === 'testing'}
+            disabled={step === 'success'}
+          >
+            {step === 'success' ? (
+              <>
+                <Check size={16} />
+                Connected
+              </>
+            ) : step === 'testing' ? (
+              'Connecting...'
+            ) : (
+              'Connect'
+            )}
+          </Button>
         </div>
 
-        {/* Version */}
-        <p className="text-center text-xs text-foreground/40 mt-8">
-          Aperture Web v1.0.0
+        {/* Version — minimal */}
+        <p className="text-center text-xs text-foreground/30 font-mono">
+          v1.0.0
         </p>
       </div>
     </div>
@@ -217,15 +201,6 @@ function TestResult({
           {detail}
         </span>
       )}
-    </div>
-  )
-}
-
-function Feature({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div className="flex flex-col items-center gap-2 p-3 rounded-lg glass">
-      <span className="text-accent">{icon}</span>
-      <span className="text-xs text-muted-foreground">{label}</span>
     </div>
   )
 }

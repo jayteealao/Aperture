@@ -5,8 +5,8 @@ import { useSessionsStore } from '@/stores/sessions'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { InputField } from '@/components/ui/input-field'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Moon,
@@ -15,6 +15,7 @@ import {
   Server,
   Database,
   RefreshCw,
+  Keyboard,
 } from 'lucide-react'
 
 export default function Settings() {
@@ -22,6 +23,7 @@ export default function Settings() {
   const { theme, toggleTheme, gatewayUrl, setGatewayUrl, clearStorage, isConnected } = useAppStore()
   const { sessions, clearAll } = useSessionsStore()
 
+  const modKey = /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘' : 'Ctrl'
   const [showClearDialog, setShowClearDialog] = useState(false)
   const [editUrl, setEditUrl] = useState(gatewayUrl)
   const [isClearing, setIsClearing] = useState(false)
@@ -39,7 +41,7 @@ export default function Settings() {
       toast.success('All data cleared')
       navigate('/onboarding')
     } catch (error) {
-      toast.error('Failed to clear data', { description: error instanceof Error ? error.message : 'Unknown error' })
+      toast.error('Could not clear data', { description: error instanceof Error ? error.message : 'Something went wrong' })
     } finally {
       setIsClearing(false)
       setShowClearDialog(false)
@@ -47,106 +49,93 @@ export default function Settings() {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold text-foreground mb-6">Settings</h2>
+    <div className="h-full overflow-y-auto p-6 lg:p-8">
+      <div className="max-w-5xl mx-auto">
+        <h2 className="text-2xl font-bold text-foreground mb-8">Settings</h2>
 
-        {/* Appearance */}
-        <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader>
-            <CardTitle>Appearance</CardTitle>
-            <CardDescription>Customize the look and feel</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
+        {/* Top row: Appearance + Connection side by side on desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Appearance */}
+          <Card padding="lg">
+            <div className="flex items-center gap-3 mb-4">
+              {theme === 'dark' ? <Moon size={20} className="text-muted-foreground" /> : <Sun size={20} className="text-muted-foreground" />}
+              <h3 className="text-base font-semibold text-foreground">Appearance</h3>
+            </div>
+            <CardContent className="mt-0">
+              <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-foreground">Theme</p>
                   <p className="text-sm text-muted-foreground">
-                    {theme === 'dark' ? 'Nebula Glass (Dark)' : 'Pearl Glass (Light)'}
+                    {theme === 'dark' ? 'Dark' : 'Light'}
                   </p>
                 </div>
+                <Button variant="secondary" onClick={toggleTheme}>
+                  Switch to {theme === 'dark' ? 'Light' : 'Dark'}
+                </Button>
               </div>
-              <Button variant="secondary" onClick={toggleTheme}>
-                Switch to {theme === 'dark' ? 'Light' : 'Dark'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Connection */}
-        <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <CardTitle>Connection</CardTitle>
-                <CardDescription>Gateway server configuration</CardDescription>
+          {/* Connection */}
+          <Card padding="lg">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Server size={20} className="text-muted-foreground" />
+                <h3 className="text-base font-semibold text-foreground">Connection</h3>
               </div>
               <Badge variant={isConnected ? 'success' : 'danger'}>
                 {isConnected ? 'Connected' : 'Disconnected'}
               </Badge>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3">
-                <Server size={20} className="mt-2.5 text-foreground/40" />
-                <div className="flex-1">
-                  <InputField
-                    label="Gateway URL"
-                    value={editUrl}
-                    onChange={(e) => setEditUrl(e.target.value)}
-                    placeholder="http://localhost:8080"
-                  />
-                </div>
-              </div>
-              {editUrl !== gatewayUrl && (
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setEditUrl(gatewayUrl)}>
-                    Cancel
-                  </Button>
-                  <Button variant="default" size="sm" onClick={handleSaveUrl}>
-                    Save URL
-                  </Button>
-                </div>
-              )}
-
-              <div className="pt-4 border-t border-border">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <RefreshCw size={20} className="text-foreground/40" />
-                    <div>
-                      <p className="font-medium text-foreground">Reconnect</p>
-                      <p className="text-sm text-muted-foreground">
-                        Test connection and refresh session list
-                      </p>
-                    </div>
+            <CardContent className="mt-0">
+              <div className="space-y-4">
+                <InputField
+                  label="Gateway URL"
+                  value={editUrl}
+                  onChange={(e) => setEditUrl(e.target.value)}
+                  placeholder="http://localhost:8080"
+                />
+                {editUrl !== gatewayUrl && (
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setEditUrl(gatewayUrl)}>
+                      Cancel
+                    </Button>
+                    <Button variant="default" size="sm" onClick={handleSaveUrl}>
+                      Save URL
+                    </Button>
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-3 border-t border-border">
+                  <div>
+                    <p className="font-medium text-foreground">Reconnect</p>
+                    <p className="text-sm text-muted-foreground">Test connection and refresh</p>
                   </div>
                   <Button
                     variant="secondary"
+                    size="sm"
                     onClick={() => {
                       clearStorage()
                       navigate('/onboarding')
                     }}
                   >
+                    <RefreshCw size={14} />
                     Reconnect
                   </Button>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
 
-        {/* Keyboard Shortcuts */}
-        <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader>
-            <CardTitle>Keyboard Shortcuts</CardTitle>
-            <CardDescription>Quick actions for power users</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <ShortcutRow keys={['Cmd', 'K']} description="Open command palette" />
+        {/* Keyboard Shortcuts — full width, compact */}
+        <Card padding="lg" className="mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Keyboard size={20} className="text-muted-foreground" />
+            <h3 className="text-base font-semibold text-foreground">Keyboard Shortcuts</h3>
+          </div>
+          <CardContent className="mt-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-2">
+              <ShortcutRow keys={[modKey, 'K']} description="Open command palette" />
               <ShortcutRow keys={['Enter']} description="Send message" />
               <ShortcutRow keys={['Shift', 'Enter']} description="New line in message" />
               <ShortcutRow keys={['Escape']} description="Close dialogs" />
@@ -154,17 +143,17 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Data Management */}
-        <Card variant="glass" padding="lg" className="mb-6">
-          <CardHeader>
-            <CardTitle>Data Management</CardTitle>
-            <CardDescription>Manage local data and storage</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-secondary">
-                <div className="flex items-center gap-3">
-                  <Database size={20} className="text-foreground/40" />
+        {/* Bottom row: Data Management + About side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Data Management — takes 2 cols */}
+          <Card padding="lg" className="lg:col-span-2">
+            <div className="flex items-center gap-3 mb-4">
+              <Database size={20} className="text-muted-foreground" />
+              <h3 className="text-base font-semibold text-foreground">Data Management</h3>
+            </div>
+            <CardContent className="mt-0">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between py-2">
                   <div>
                     <p className="font-medium text-foreground">Local Sessions</p>
                     <p className="text-sm text-muted-foreground">
@@ -172,52 +161,44 @@ export default function Settings() {
                     </p>
                   </div>
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-lg bg-danger/5 border border-danger/20">
-                <div className="flex items-center gap-3">
-                  <Trash2 size={20} className="text-danger" />
+                <div className="flex items-center justify-between p-4 rounded-lg bg-danger/5 border border-danger/20">
                   <div>
                     <p className="font-medium text-foreground">Clear All Data</p>
                     <p className="text-sm text-muted-foreground">
-                      Remove all local sessions, messages, and credentials
+                      Remove all local sessions and credentials
                     </p>
                   </div>
+                  <Button variant="destructive" onClick={() => setShowClearDialog(true)}>
+                    <Trash2 size={14} />
+                    Clear Data
+                  </Button>
                 </div>
-                <Button variant="destructive" onClick={() => setShowClearDialog(true)}>
-                  Clear Data
-                </Button>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* About */}
-        <Card variant="glass" padding="lg">
-          <CardHeader>
-            <CardTitle>About Aperture</CardTitle>
-            <CardDescription>AI Workspace for ACP Agents</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>Version: 1.0.0</p>
-              <p>
-                Aperture provides a beautiful, high-performance interface for interacting with
-                ACP-compatible AI agents including Claude Code, Codex, and Gemini.
-              </p>
-              <a
-                href="https://github.com/jayteealao/Aperture"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-accent hover:underline"
-              >
-                View on GitHub
-              </a>
-            </div>
-          </CardContent>
-        </Card>
+          {/* About — takes 1 col */}
+          <Card padding="lg">
+            <h3 className="text-base font-semibold text-foreground mb-4">About</h3>
+            <CardContent className="mt-0">
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p className="font-mono text-xs text-foreground/60">v1.0.0</p>
+                <p>
+                  AI Workspace for ACP-compatible agents including Claude Code, Codex, and Gemini.
+                </p>
+                <a
+                  href="https://github.com/jayteealao/Aperture"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block text-accent hover:underline"
+                >
+                  View on GitHub
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-        {/* Clear Dialog */}
         <ConfirmDialog
           open={showClearDialog}
           onClose={() => setShowClearDialog(false)}
@@ -235,7 +216,7 @@ export default function Settings() {
 
 function ShortcutRow({ keys, description }: { keys: string[]; description: string }) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between py-2">
       <span className="text-sm text-muted-foreground">{description}</span>
       <div className="flex items-center gap-1">
         {keys.map((key, i) => (
