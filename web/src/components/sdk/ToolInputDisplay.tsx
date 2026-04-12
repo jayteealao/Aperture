@@ -61,7 +61,7 @@ function FileDisplay({ path }: { path: string }) {
   return (
     <div className="flex min-w-0 max-w-full items-center gap-2">
       <File size={14} className="text-foreground/40 shrink-0" />
-      <code className="min-w-0 max-w-full truncate text-[10px] font-mono text-muted-foreground">
+      <code className="min-w-0 max-w-full truncate text-2xs font-mono text-muted-foreground">
         {path}
       </code>
     </div>
@@ -77,7 +77,7 @@ function WriteDisplay({ input }: { input: Record<string, unknown> }) {
     <div className="min-w-0 max-w-full space-y-2">
       <div className="flex min-w-0 max-w-full items-center gap-2">
         <File size={14} className="text-foreground/40 shrink-0" />
-        <code className="min-w-0 max-w-full truncate text-[10px] font-mono text-muted-foreground">
+        <code className="min-w-0 max-w-full truncate text-2xs font-mono text-muted-foreground">
           {filePath}
         </code>
       </div>
@@ -104,7 +104,7 @@ function EditDisplay({ input }: { input: Record<string, unknown> }) {
     <div className="min-w-0 max-w-full space-y-2">
       <div className="flex min-w-0 max-w-full items-center gap-2">
         <PenLine size={14} className="text-foreground/40 shrink-0" />
-        <code className="min-w-0 max-w-full truncate text-[10px] font-mono text-muted-foreground">
+        <code className="min-w-0 max-w-full truncate text-2xs font-mono text-muted-foreground">
           {filePath}
         </code>
       </div>
@@ -115,7 +115,7 @@ function EditDisplay({ input }: { input: Record<string, unknown> }) {
               <div className="px-2 py-1 text-2xs font-medium text-danger border-b border-border">
                 − Remove
               </div>
-              <pre className="max-w-full overflow-x-auto p-2 text-[10px] text-muted-foreground">
+              <pre className="max-w-full overflow-x-auto p-2 text-2xs text-muted-foreground">
                 {truncate(oldString, 150)}
               </pre>
             </div>
@@ -125,7 +125,7 @@ function EditDisplay({ input }: { input: Record<string, unknown> }) {
               <div className="px-2 py-1 text-2xs font-medium text-success border-b border-border">
                 + Add
               </div>
-              <pre className="max-w-full overflow-x-auto p-2 text-[10px] text-muted-foreground">
+              <pre className="max-w-full overflow-x-auto p-2 text-2xs text-muted-foreground">
                 {truncate(newString, 150)}
               </pre>
             </div>
@@ -143,7 +143,7 @@ function SearchDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="flex min-w-0 max-w-full items-center gap-2">
       <Search size={14} className="text-foreground/40 shrink-0" />
-      <div className="min-w-0 max-w-full overflow-hidden text-[10px]">
+      <div className="min-w-0 max-w-full overflow-hidden text-2xs">
         <code className="font-mono text-accent">{pattern}</code>
         {path && (
           <span className="break-all text-foreground/40"> in {path}</span>
@@ -159,7 +159,7 @@ function WebFetchDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="flex min-w-0 max-w-full items-center gap-2">
       <Globe size={14} className="text-foreground/40 shrink-0" />
-      <code className="min-w-0 max-w-full truncate text-[10px] font-mono text-accent">
+      <code className="min-w-0 max-w-full truncate text-2xs font-mono text-accent">
         {url}
       </code>
     </div>
@@ -172,7 +172,7 @@ function WebSearchDisplay({ input }: { input: Record<string, unknown> }) {
   return (
     <div className="flex min-w-0 max-w-full items-center gap-2">
       <Search size={14} className="text-foreground/40 shrink-0" />
-      <span className="min-w-0 break-words text-[10px] text-muted-foreground">
+      <span className="min-w-0 break-words text-2xs text-muted-foreground">
         Searching: <span className="text-accent font-medium">{query}</span>
       </span>
     </div>
@@ -192,7 +192,7 @@ function TaskDisplay({ input }: { input: Record<string, unknown> }) {
         </Badge>
       )}
       {description && (
-        <span className="min-w-0 break-words text-[10px] text-muted-foreground">
+        <span className="min-w-0 break-words text-2xs text-muted-foreground">
           {description}
         </span>
       )}

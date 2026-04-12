@@ -38,7 +38,7 @@ export class ChatErrorBoundary extends Component<
     if (this.state.error) {
       return (
         <div className="flex-1 flex items-center justify-center p-8">
-          <div className="glass rounded-2xl px-6 py-5 max-w-md text-center space-y-3">
+          <div className="bg-card border border-border rounded-2xl px-6 py-5 max-w-md text-center space-y-3">
             <AlertCircle
               className="mx-auto text-danger"
               size={32}

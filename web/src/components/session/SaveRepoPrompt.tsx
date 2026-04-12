@@ -39,7 +39,7 @@ export function SaveRepoPrompt({ open, onClose, repoPath }: SaveRepoPromptProps)
       onClose()
     },
     onError: (error) => {
-      toast.error('Failed to save repository', { description: error instanceof Error ? error.message : 'Unknown error' })
+      toast.error('Could not save repository', { description: error instanceof Error ? error.message : 'Something went wrong' })
     },
   })
 

@@ -56,7 +56,7 @@ export const MessageContent = ({
       "is-user:dark flex w-full min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm",
       "group-[.is-user]:ml-auto group-[.is-user]:rounded-md group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
       "group-[.is-user]:w-fit group-[.is-user]:max-w-full",
-      "group-[.is-assistant]:w-full group-[.is-assistant]:rounded-md group-[.is-assistant]:backdrop-blur-sm group-[.is-assistant]:text-foreground",
+      "group-[.is-assistant]:w-full group-[.is-assistant]:rounded-md group-[.is-assistant]:text-foreground",
       className
     )}
     {...props}

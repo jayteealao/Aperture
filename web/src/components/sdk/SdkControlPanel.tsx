@@ -76,7 +76,7 @@ export function SdkControlPanel({ sessionId, connected, isOpen, onToggle }: SdkC
           size="sm"
           onClick={onToggle}
           className="h-7 w-7 p-0"
-          title="Close (Cmd+.)"
+          title={`Close (${/Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘' : 'Ctrl'}+.)`}
         >
           <PanelRightClose size={16} />
         </Button>

@@ -72,7 +72,7 @@ function AttachmentCountBadge() {
   const { files } = usePromptInputAttachments()
   if (files.length === 0) return null
   return (
-    <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold leading-none text-nebula-bg-primary">
+    <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-accent text-2xs font-bold leading-none text-nebula-bg-primary">
       {files.length}
     </span>
   )
@@ -487,19 +487,19 @@ function WorkspaceChatPaneReady({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+            className="rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-foreground"
             onClick={() => setMobileHeaderCollapsed((value) => !value)}
             aria-label={mobileHeaderCollapsed ? 'Expand session controls' : 'Collapse session controls'}
           >
-            {mobileHeaderCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            {mobileHeaderCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                className="rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                 aria-label="Session actions"
               >
-                <MoreHorizontal size={14} />
+                <MoreHorizontal size={16} />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
@@ -870,8 +870,8 @@ export function WorkspaceChatPane({ sessionId }: { sessionId: string }) {
       await removeSession(sessionId)
       toast.success('Session deleted')
     } catch (err) {
-      toast.error('Failed to delete session', {
-        description: err instanceof Error ? err.message : 'Unknown error',
+      toast.error('Could not delete session', {
+        description: err instanceof Error ? err.message : 'Something went wrong',
       })
     }
   }, [sessionId, removeSession])

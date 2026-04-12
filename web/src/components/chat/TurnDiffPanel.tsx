@@ -70,7 +70,7 @@ export function TurnDiffPanel({
                   onClick={() => setSelectedPath(file.path)}
                 >
                   <span className="min-w-0 truncate text-xs">{file.path}</span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                  <span className="shrink-0 text-2xs text-muted-foreground">
                     <span className="text-emerald-400">+{file.additions}</span>{' '}
                     <span className="text-rose-400">-{file.deletions}</span>
                   </span>

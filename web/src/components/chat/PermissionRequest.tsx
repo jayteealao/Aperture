@@ -92,7 +92,6 @@ export function PermissionRequest({
       <Card
         className="border-l-4 border-l-accent"
         padding="md"
-        variant="glass"
       >
         <div className="flex items-start gap-3">
           <AlertCircle className="shrink-0 mt-0.5 text-accent" size={20} />

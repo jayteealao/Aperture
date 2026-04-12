@@ -64,7 +64,7 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
           size="sm"
           onClick={onToggle}
           className="m-2"
-          title="Open Pi Controls (Cmd+.)"
+          title={`Open Pi Controls (${/Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘' : 'Ctrl'}+.)`}
         >
           <PanelRight size={18} />
         </Button>
@@ -101,7 +101,7 @@ export function PiControlPanel({ sessionId, isStreaming, isOpen, onToggle }: PiC
           size="sm"
           onClick={onToggle}
           className="h-7 w-7 p-0"
-          title="Close (Cmd+.)"
+          title={`Close (${/Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘' : 'Ctrl'}+.)`}
         >
           <PanelRightClose size={16} />
         </Button>

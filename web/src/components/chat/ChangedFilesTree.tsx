@@ -12,7 +12,7 @@ interface ChangedFilesTreeProps {
 
 function DiffStat({ additions, deletions }: { additions: number; deletions: number }) {
   return (
-    <span className="shrink-0 text-[11px] text-muted-foreground">
+    <span className="shrink-0 text-2xs text-muted-foreground">
       <span className="text-emerald-400">+{additions}</span> <span className="text-rose-400">-{deletions}</span>
     </span>
   )
