@@ -1,5 +1,3 @@
-// Custom hook for SDK session operations
-
 import { useCallback } from 'react'
 import { useSessionsStore } from '@/stores/sessions'
 import { wsManager } from '@/api/websocket'
@@ -29,17 +27,18 @@ export function useSdkSession(sessionId: string | null) {
     sdkLoading,
     sdkErrors,
     sdkRewindResult,
+    markSdkHydrationRequested,
+    markSdkHydrationStale,
+    shouldHydrateSdkResource,
     setSdkLoading,
     setSdkRewindResult,
     setSdkMcpUpdateResult,
     clearSdkRuntimeActivity,
   } = useSessionsStore()
 
-  // Get the session to check if it's an SDK session
   const session = sessions.find((s) => s.id === sessionId)
   const isSdkSession = session?.agent === 'claude_sdk'
 
-  // Get SDK state for this session
   const config = sessionId ? sdkConfig[sessionId] : undefined
   const usage = sessionId ? sdkUsage[sessionId] : null
   const accountInfo = sessionId ? sdkAccountInfo[sessionId] : null
@@ -55,7 +54,6 @@ export function useSdkSession(sessionId: string | null) {
   const errors = sessionId ? sdkErrors[sessionId] || {} : {}
   const rewindResult = sessionId ? sdkRewindResult[sessionId] : null
 
-  // Helper to send SDK messages
   const sendSdkMessage = useCallback(
     (message: ExtendedOutboundMessage) => {
       if (!sessionId) return false
@@ -64,7 +62,6 @@ export function useSdkSession(sessionId: string | null) {
     [sessionId]
   )
 
-  // SDK actions
   const setModel = useCallback(
     (model?: string) => {
       sendSdkMessage({ type: 'set_model', model })
@@ -106,60 +103,68 @@ export function useSdkSession(sessionId: string | null) {
 
   const getModels = useCallback(() => {
     if (sessionId) {
+      markSdkHydrationRequested(sessionId, 'models')
       setSdkLoading(sessionId, { models: true })
     }
     sendSdkMessage({ type: 'get_supported_models' })
-  }, [sessionId, sendSdkMessage, setSdkLoading])
+  }, [markSdkHydrationRequested, sessionId, sendSdkMessage, setSdkLoading])
 
   const getCommands = useCallback(() => {
     if (sessionId) {
+      markSdkHydrationRequested(sessionId, 'commands')
       setSdkLoading(sessionId, { commands: true })
     }
     sendSdkMessage({ type: 'get_supported_commands' })
-  }, [sessionId, sendSdkMessage, setSdkLoading])
+  }, [markSdkHydrationRequested, sessionId, sendSdkMessage, setSdkLoading])
 
   const getMcpStatus = useCallback(() => {
     if (sessionId) {
+      markSdkHydrationRequested(sessionId, 'mcpStatus')
       setSdkLoading(sessionId, { mcpStatus: true })
     }
     sendSdkMessage({ type: 'get_mcp_status' })
-  }, [sessionId, sendSdkMessage, setSdkLoading])
+  }, [markSdkHydrationRequested, sessionId, sendSdkMessage, setSdkLoading])
 
   const setMcpServers = useCallback(
     (servers: Record<string, McpServerConfig>) => {
       if (sessionId) {
+        markSdkHydrationStale(sessionId, ['mcpStatus'])
         setSdkLoading(sessionId, { mcpUpdate: true })
         setSdkMcpUpdateResult(sessionId, null)
       }
       sendSdkMessage({ type: 'set_mcp_servers', servers })
     },
-    [sendSdkMessage, sessionId, setSdkLoading, setSdkMcpUpdateResult]
+    [markSdkHydrationStale, sendSdkMessage, sessionId, setSdkLoading, setSdkMcpUpdateResult]
   )
 
   const getAccountInfo = useCallback(() => {
     if (sessionId) {
+      markSdkHydrationRequested(sessionId, 'accountInfo')
       setSdkLoading(sessionId, { accountInfo: true })
     }
     sendSdkMessage({ type: 'get_account_info' })
-  }, [sessionId, sendSdkMessage, setSdkLoading])
+  }, [markSdkHydrationRequested, sessionId, sendSdkMessage, setSdkLoading])
 
   const getCheckpoints = useCallback(async () => {
     if (!sessionId) {
       return
     }
 
+    markSdkHydrationRequested(sessionId, 'checkpoints')
     setSdkLoading(sessionId, { checkpoints: true })
     try {
       const response = await api.getSessionCheckpoints(sessionId)
       useSessionsStore.getState().setSdkCheckpoints(sessionId, response.checkpoints)
+      useSessionsStore.getState().markSdkHydrationFulfilled(sessionId, 'checkpoints')
       useSessionsStore.getState().setSdkLoading(sessionId, { checkpoints: false })
     } catch (error) {
+      useSessionsStore.getState().markSdkHydrationFailed(sessionId, 'checkpoints')
       useSessionsStore.getState().setSdkLoading(sessionId, { checkpoints: false })
       useSessionsStore.getState().setSdkErrors(sessionId, {
         checkpoints: error instanceof Error ? error.message : 'Failed to load checkpoints',
       })
     }
-  }, [sessionId, setSdkLoading])
+  }, [markSdkHydrationRequested, sessionId, setSdkLoading])
 
   const rewindFiles = useCallback(
     (messageId: string, dryRun = false) => {
@@ -189,9 +194,42 @@ export function useSdkSession(sessionId: string | null) {
     }
   }, [sessionId, setSdkMcpUpdateResult])
 
-  // Auto-fetch removed: SDK info requires an active query which doesn't exist until
-  // the user sends their first prompt. Components now show a "Send prompt first" message
-  // instead of infinite loading spinners.
+  const ensureModelsHydrated = useCallback(() => {
+    if (!sessionId || !isSdkSession) {
+      return
+    }
+
+    if (shouldHydrateSdkResource(sessionId, 'models')) {
+      getModels()
+    }
+  }, [getModels, isSdkSession, sessionId, shouldHydrateSdkResource])
+
+  const ensurePanelHydrated = useCallback(() => {
+    if (!sessionId || !isSdkSession) {
+      return
+    }
+
+    if (shouldHydrateSdkResource(sessionId, 'commands')) {
+      getCommands()
+    }
+    if (shouldHydrateSdkResource(sessionId, 'mcpStatus')) {
+      getMcpStatus()
+    }
+    if (shouldHydrateSdkResource(sessionId, 'accountInfo')) {
+      getAccountInfo()
+    }
+    if (shouldHydrateSdkResource(sessionId, 'checkpoints')) {
+      void getCheckpoints()
+    }
+  }, [
+    getAccountInfo,
+    getCheckpoints,
+    getCommands,
+    getMcpStatus,
+    isSdkSession,
+    sessionId,
+    shouldHydrateSdkResource,
+  ])
 
   return {
     // State
@@ -228,5 +266,7 @@ export function useSdkSession(sessionId: string | null) {
     clearRewindResult,
     clearRuntimeActivity,
     clearMcpUpdateResult,
+    ensureModelsHydrated,
+    ensurePanelHydrated,
   }
 }

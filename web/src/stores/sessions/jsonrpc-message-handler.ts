@@ -58,27 +58,33 @@ export function handleJsonRpcMessage(
   } else if (msg.method === 'session/supported_models') {
     const params = msg.params as { models?: ModelInfo[]; error?: string }
     if (params.error) {
+      get().markSdkHydrationFailed(sessionId, 'models')
       get().setSdkErrors(sessionId, { models: params.error })
     } else if (params.models) {
       get().setSdkModels(sessionId, params.models)
+      get().markSdkHydrationFulfilled(sessionId, 'models')
       get().setSdkErrors(sessionId, { models: undefined })
     }
     get().setSdkLoading(sessionId, { models: false })
   } else if (msg.method === 'session/supported_commands') {
     const params = msg.params as { commands?: SlashCommand[]; error?: string }
     if (params.error) {
+      get().markSdkHydrationFailed(sessionId, 'commands')
       get().setSdkErrors(sessionId, { commands: params.error })
     } else if (params.commands) {
       get().setSdkCommands(sessionId, params.commands)
+      get().markSdkHydrationFulfilled(sessionId, 'commands')
       get().setSdkErrors(sessionId, { commands: undefined })
     }
     get().setSdkLoading(sessionId, { commands: false })
   } else if (msg.method === 'session/mcp_status') {
     const params = msg.params as { servers?: McpServerStatus[]; error?: string }
     if (params.error) {
+      get().markSdkHydrationFailed(sessionId, 'mcpStatus')
       get().setSdkErrors(sessionId, { mcpStatus: params.error })
     } else if (params.servers) {
       get().setSdkMcpStatus(sessionId, params.servers)
+      get().markSdkHydrationFulfilled(sessionId, 'mcpStatus')
       get().setSdkErrors(sessionId, { mcpStatus: undefined })
     }
     get().setSdkLoading(sessionId, { mcpStatus: false })
@@ -98,6 +104,11 @@ export function handleJsonRpcMessage(
     get().setSdkLoading(sessionId, { mcpUpdate: false })
     get().setSdkErrors(sessionId, { mcpUpdate: result.error, mcpStatus: undefined })
     applyMcpUpdateToStatus(sessionId, result, get)
+    if (result.error) {
+      get().markSdkHydrationFailed(sessionId, 'mcpStatus')
+    } else {
+      get().markSdkHydrationFulfilled(sessionId, 'mcpStatus')
+    }
 
     if ((result.error || Object.keys(result.errors).length > 0) && sessionId !== get().activeSessionId) {
       get().incrementUnread(sessionId)
@@ -108,10 +119,12 @@ export function handleJsonRpcMessage(
       | { accountInfo?: AccountInfo; error?: string }
       | { error: string }
     if ('error' in params && params.error) {
+      get().markSdkHydrationFailed(sessionId, 'accountInfo')
       get().setSdkErrors(sessionId, { accountInfo: params.error })
     } else {
       const accountInfo = 'accountInfo' in params && params.accountInfo ? params.accountInfo : params as AccountInfo
       get().setSdkAccountInfo(sessionId, accountInfo)
+      get().markSdkHydrationFulfilled(sessionId, 'accountInfo')
       get().setSdkErrors(sessionId, { accountInfo: undefined })
     }
     get().setSdkLoading(sessionId, { accountInfo: false })
@@ -125,6 +138,7 @@ export function handleJsonRpcMessage(
   } else if (msg.method === 'session/checkpoints') {
     const params = msg.params as { checkpoints: string[] }
     get().setSdkCheckpoints(sessionId, params.checkpoints)
+    get().markSdkHydrationFulfilled(sessionId, 'checkpoints')
     get().setSdkLoading(sessionId, { checkpoints: false })
   } else if (msg.method === 'session/rewind_result') {
     const params = msg.params as RewindFilesResult
@@ -166,6 +180,9 @@ function handleSessionUpdate(
     }
   } else if (updateType === 'prompt_complete' || updateType === 'prompt_error') {
     get().setStreaming(sessionId, false)
+    if (updateType === 'prompt_complete') {
+      get().markSdkHydrationStale(sessionId, ['checkpoints'])
+    }
   } else if (updateType === 'init' && typeof update.config === 'object' && update.config !== null) {
     get().setSdkConfig(sessionId, update.config as SdkSessionConfig)
   } else if (updateType === 'config_changed') {

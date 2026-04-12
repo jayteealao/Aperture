@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { ClaudeEffort, PermissionMode } from '@/api/types'
 import { useSdkSession } from '@/hooks/useSdkSession'
 import {
@@ -66,18 +66,16 @@ export function SdkComposerControls({
   connected,
   variant = 'toolbar',
 }: SdkComposerControlsProps) {
-  const { isSdkSession, config, models, getModels, setModel, setPermissionMode, setThinkingTokens, setEffort } =
+  const { isSdkSession, config, models, ensureModelsHydrated, setModel, setPermissionMode, setThinkingTokens, setEffort } =
     useSdkSession(sessionId)
-  const hasRequestedModels = useRef(false)
 
   useEffect(() => {
-    if (!isSdkSession || !connected || hasRequestedModels.current) {
+    if (!isSdkSession || !connected) {
       return
     }
 
-    hasRequestedModels.current = true
-    getModels()
-  }, [connected, getModels, isSdkSession])
+    ensureModelsHydrated()
+  }, [connected, ensureModelsHydrated, isSdkSession])
 
   const modelOptions = useMemo(() => {
     const currentModel = config?.model

@@ -18,8 +18,22 @@ import type { SessionsStore } from './index'
 import { cleanupSessionState } from './cleanup-helper'
 
 const MAX_RUNTIME_ACTIVITY_ENTRIES = 50
+const SDK_HYDRATION_RESOURCES = ['models', 'commands', 'mcpStatus', 'accountInfo', 'checkpoints'] as const
+type SdkHydrationResource = (typeof SDK_HYDRATION_RESOURCES)[number]
 
-// SDK session state
+type HydrationStatus = 'idle' | 'requested' | 'fulfilled' | 'failed'
+
+interface SdkResourceHydrationState {
+  status: HydrationStatus
+  stale: boolean
+  connectionEpoch: number
+}
+
+interface SdkHydrationState {
+  connectionEpoch: number
+  resources: Partial<Record<SdkHydrationResource, SdkResourceHydrationState>>
+}
+
 interface SdkLoadingState {
   config?: boolean
   models?: boolean
@@ -52,6 +66,7 @@ export interface SdkSlice {
   sdkAuthStatus: Record<string, SdkAuthStatus | null>
   sdkRuntimeStatus: Record<string, SdkRuntimeStatus | null>
   sdkRuntimeActivity: Record<string, SdkRuntimeActivityEntry[]>
+  sdkHydration: Record<string, SdkHydrationState>
   sdkLoading: Record<string, SdkLoadingState>
   sdkErrors: Record<string, SdkErrorState>
   sdkRewindResult: Record<string, RewindFilesResult | null>
@@ -69,6 +84,12 @@ export interface SdkSlice {
   setSdkRuntimeStatus: (sessionId: string, status: SdkRuntimeStatus | null) => void
   addSdkRuntimeActivity: (sessionId: string, activity: SdkRuntimeActivityEntry) => void
   clearSdkRuntimeActivity: (sessionId: string) => void
+  markSdkHydrationRequested: (sessionId: string, resource: SdkHydrationResource) => void
+  markSdkHydrationFulfilled: (sessionId: string, resource: SdkHydrationResource) => void
+  markSdkHydrationFailed: (sessionId: string, resource: SdkHydrationResource) => void
+  markSdkHydrationStale: (sessionId: string, resources?: SdkHydrationResource[]) => void
+  markSdkHydrationConnected: (sessionId: string) => void
+  shouldHydrateSdkResource: (sessionId: string, resource: SdkHydrationResource) => boolean
   setSdkLoading: (sessionId: string, loading: Partial<SdkLoadingState>) => void
   setSdkErrors: (sessionId: string, errors: Partial<SdkErrorState>) => void
   setSdkRewindResult: (sessionId: string, result: RewindFilesResult | null) => void
@@ -89,12 +110,13 @@ export const sdkSliceInitialState = {
   sdkAuthStatus: {} as Record<string, SdkAuthStatus | null>,
   sdkRuntimeStatus: {} as Record<string, SdkRuntimeStatus | null>,
   sdkRuntimeActivity: {} as Record<string, SdkRuntimeActivityEntry[]>,
+  sdkHydration: {} as Record<string, SdkHydrationState>,
   sdkLoading: {} as Record<string, SdkLoadingState>,
   sdkErrors: {} as Record<string, SdkErrorState>,
   sdkRewindResult: {} as Record<string, RewindFilesResult | null>,
 }
 
-export const createSdkSlice: StateCreator<SessionsStore, [], [], SdkSlice> = (set) => ({
+export const createSdkSlice: StateCreator<SessionsStore, [], [], SdkSlice> = (set, get) => ({
   ...sdkSliceInitialState,
 
   setSdkConfig: (sessionId, config) => {
@@ -173,6 +195,79 @@ export const createSdkSlice: StateCreator<SessionsStore, [], [], SdkSlice> = (se
     }))
   },
 
+  markSdkHydrationRequested: (sessionId, resource) => {
+    patchHydrationResource(set, sessionId, resource, { status: 'requested', stale: false })
+  },
+
+  markSdkHydrationFulfilled: (sessionId, resource) => {
+    patchHydrationResource(set, sessionId, resource, { status: 'fulfilled', stale: false })
+  },
+
+  markSdkHydrationFailed: (sessionId, resource) => {
+    patchHydrationResource(set, sessionId, resource, { status: 'failed', stale: false })
+  },
+
+  markSdkHydrationStale: (sessionId, resources = [...SDK_HYDRATION_RESOURCES]) => {
+    set((state) => {
+      const hydration = state.sdkHydration[sessionId] ?? EMPTY_HYDRATION
+      const nextResources = { ...hydration.resources }
+      for (const resource of resources) {
+        const current = nextResources[resource]
+        if (current?.stale) continue
+        nextResources[resource] = {
+          ...(current ?? DEFAULT_RESOURCE(hydration.connectionEpoch)),
+          stale: true,
+        }
+      }
+      return {
+        sdkHydration: {
+          ...state.sdkHydration,
+          [sessionId]: { connectionEpoch: hydration.connectionEpoch, resources: nextResources },
+        },
+      }
+    })
+  },
+
+  markSdkHydrationConnected: (sessionId) => {
+    set((state) => {
+      const previous = state.sdkHydration[sessionId] ?? EMPTY_HYDRATION
+      const nextEpoch = previous.connectionEpoch + 1
+      const nextResources: SdkHydrationState['resources'] = {}
+      for (const resource of SDK_HYDRATION_RESOURCES) {
+        nextResources[resource] = {
+          ...(previous.resources[resource] ?? DEFAULT_RESOURCE(nextEpoch)),
+          stale: true,
+          connectionEpoch: nextEpoch,
+        }
+      }
+      return {
+        sdkHydration: {
+          ...state.sdkHydration,
+          [sessionId]: { connectionEpoch: nextEpoch, resources: nextResources },
+        },
+      }
+    })
+  },
+
+  shouldHydrateSdkResource: (sessionId, resource) => {
+    const state = get()
+    if (state.sdkLoading[sessionId]?.[resource]) {
+      return false
+    }
+    const resourceState = state.sdkHydration[sessionId]?.resources[resource]
+    if (!resourceState) {
+      return true
+    }
+    if (resourceState.stale) {
+      return true
+    }
+    // Don't auto-retry failures; wait for reconnect (which sets stale: true)
+    if (resourceState.status === 'failed') {
+      return false
+    }
+    return resourceState.status !== 'fulfilled'
+  },
+
   setSdkLoading: (sessionId, loading) => {
     set((state) => ({
       sdkLoading: {
@@ -201,3 +296,35 @@ export const createSdkSlice: StateCreator<SessionsStore, [], [], SdkSlice> = (se
     set((state) => cleanupSessionState(state, sdkSliceInitialState, sessionId))
   },
 })
+
+const EMPTY_HYDRATION: SdkHydrationState = { connectionEpoch: 0, resources: {} }
+
+function DEFAULT_RESOURCE(epoch: number): SdkResourceHydrationState {
+  return { status: 'idle', stale: true, connectionEpoch: epoch }
+}
+
+type SetFn = Parameters<typeof createSdkSlice>[0]
+
+function patchHydrationResource(
+  set: SetFn,
+  sessionId: string,
+  resource: SdkHydrationResource,
+  patch: Partial<SdkResourceHydrationState>,
+) {
+  set((state) => {
+    const hydration = state.sdkHydration[sessionId] ?? EMPTY_HYDRATION
+    const current = hydration.resources[resource] ?? DEFAULT_RESOURCE(hydration.connectionEpoch)
+    return {
+      sdkHydration: {
+        ...state.sdkHydration,
+        [sessionId]: {
+          connectionEpoch: hydration.connectionEpoch,
+          resources: {
+            ...hydration.resources,
+            [resource]: { ...current, ...patch, connectionEpoch: hydration.connectionEpoch },
+          },
+        },
+      },
+    }
+  })
+}

@@ -821,6 +821,111 @@ describe('useSessionsStore session/update sub-types', () => {
   })
 })
 
+describe('useSessionsStore SDK hydration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useSessionsStore.setState(initialState, true)
+  })
+
+  it('treats unhydrated SDK resources as stale by default', () => {
+    const sessionId = 'hydrate-1'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    expect(useSessionsStore.getState().shouldHydrateSdkResource(sessionId, 'models')).toBe(true)
+    expect(useSessionsStore.getState().shouldHydrateSdkResource(sessionId, 'commands')).toBe(true)
+  })
+
+  it('marks a resource fresh after fulfillment and stale again after reconnect', () => {
+    const sessionId = 'hydrate-2'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    useSessionsStore.getState().markSdkHydrationConnected(sessionId)
+    useSessionsStore.getState().markSdkHydrationRequested(sessionId, 'models')
+    useSessionsStore.getState().markSdkHydrationFulfilled(sessionId, 'models')
+
+    expect(useSessionsStore.getState().shouldHydrateSdkResource(sessionId, 'models')).toBe(false)
+
+    useSessionsStore.getState().markSdkHydrationConnected(sessionId)
+
+    expect(useSessionsStore.getState().shouldHydrateSdkResource(sessionId, 'models')).toBe(true)
+  })
+
+  it('keeps hydration state isolated per session', () => {
+    const sessionA = 'hydrate-a'
+    const sessionB = 'hydrate-b'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionA, 'claude_sdk'), makeSession(sessionB, 'claude_sdk')],
+      connections: {
+        [sessionA]: makeConnection(),
+        [sessionB]: makeConnection(),
+      },
+    }))
+
+    useSessionsStore.getState().markSdkHydrationConnected(sessionA)
+    useSessionsStore.getState().markSdkHydrationRequested(sessionA, 'models')
+    useSessionsStore.getState().markSdkHydrationFulfilled(sessionA, 'models')
+
+    expect(useSessionsStore.getState().shouldHydrateSdkResource(sessionA, 'models')).toBe(false)
+    expect(useSessionsStore.getState().shouldHydrateSdkResource(sessionB, 'models')).toBe(true)
+  })
+
+  it('does not immediately retry a failed hydration until the resource becomes stale again', () => {
+    const sessionId = 'hydrate-failure'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    useSessionsStore.getState().markSdkHydrationConnected(sessionId)
+    useSessionsStore.getState().markSdkHydrationRequested(sessionId, 'accountInfo')
+    useSessionsStore.getState().markSdkHydrationFailed(sessionId, 'accountInfo')
+
+    expect(useSessionsStore.getState().shouldHydrateSdkResource(sessionId, 'accountInfo')).toBe(false)
+
+    useSessionsStore.getState().markSdkHydrationConnected(sessionId)
+
+    expect(useSessionsStore.getState().shouldHydrateSdkResource(sessionId, 'accountInfo')).toBe(true)
+  })
+
+  it('prompt_complete marks checkpoints stale for later panel hydration', () => {
+    const sessionId = 'hydrate-checkpoints'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    useSessionsStore.getState().markSdkHydrationConnected(sessionId)
+    useSessionsStore.getState().markSdkHydrationRequested(sessionId, 'checkpoints')
+    useSessionsStore.getState().markSdkHydrationFulfilled(sessionId, 'checkpoints')
+
+    expect(useSessionsStore.getState().shouldHydrateSdkResource(sessionId, 'checkpoints')).toBe(false)
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: { update: { sessionUpdate: 'prompt_complete' } },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().shouldHydrateSdkResource(sessionId, 'checkpoints')).toBe(true)
+  })
+})
+
 describe('useSessionsStore cleanup', () => {
   beforeEach(() => {
     vi.clearAllMocks()

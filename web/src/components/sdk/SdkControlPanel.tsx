@@ -1,6 +1,6 @@
 // SDK Control Panel - Main collapsible right panel for SDK session controls
 
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { PanelSection } from '@/components/ui/PanelSection'
 import { useSdkSession } from '@/hooks/useSdkSession'
@@ -46,25 +46,19 @@ export function SdkControlPanel({ sessionId, connected, isOpen, onToggle }: SdkC
     rewindResult,
     getCommands,
     getMcpStatus,
-    getAccountInfo,
-    getCheckpoints,
     rewindFiles,
     clearRewindResult,
     clearRuntimeActivity,
+    ensurePanelHydrated,
   } = useSdkSession(sessionId)
-  const hasLoadedRef = useRef(false)
 
   useEffect(() => {
-    if (!isOpen || !connected || !isSdkSession || hasLoadedRef.current) {
+    if (!isOpen || !connected || !isSdkSession) {
       return
     }
 
-    hasLoadedRef.current = true
-    getCommands()
-    getMcpStatus()
-    getAccountInfo()
-    void getCheckpoints()
-  }, [connected, getAccountInfo, getCheckpoints, getCommands, getMcpStatus, isOpen, isSdkSession])
+    ensurePanelHydrated()
+  }, [connected, ensurePanelHydrated, isOpen, isSdkSession])
 
   // Don't render for non-SDK sessions or when closed
   // (the toggle lives in the top header bar, not here)
