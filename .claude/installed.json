@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "installedAt": "2026-01-21T17:19:52.735Z",
-  "updatedAt": "2026-03-20T14:27:44.488Z",
+  "updatedAt": "2026-04-03T12:38:24.024Z",
   "plugins": [
     {
       "name": "dev-browser",
@@ -31,13 +31,13 @@
     },
     {
       "name": "sdlc-workflow",
-      "version": "1.1.0",
+      "version": "7.7.0",
       "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\agent-skills",
-      "installedAt": "2026-03-20T11:35:06.223Z",
+      "installedAt": "2026-04-03T12:38:24.024Z",
       "components": {
         "agents": 0,
-        "commands": 11,
-        "skills": 0,
+        "commands": 50,
+        "skills": 11,
         "mcpServers": 0,
         "variants": 0
       },
@@ -48,6 +48,45 @@
         "claude": {
           "agents": [],
           "commands": [
+            "review\\accessibility.md",
+            "review\\api-contracts.md",
+            "review\\architecture.md",
+            "review\\backend-concurrency.md",
+            "review\\ci.md",
+            "review\\code-simplification.md",
+            "review\\correctness.md",
+            "review\\cost.md",
+            "review\\data-integrity.md",
+            "review\\docs.md",
+            "review\\dx.md",
+            "review\\frontend-accessibility.md",
+            "review\\frontend-performance.md",
+            "review\\infra-security.md",
+            "review\\infra.md",
+            "review\\logging.md",
+            "review\\maintainability.md",
+            "review\\migrations.md",
+            "review\\observability.md",
+            "review\\overengineering.md",
+            "review\\performance.md",
+            "review\\privacy.md",
+            "review\\refactor-safety.md",
+            "review\\release.md",
+            "review\\reliability.md",
+            "review\\scalability.md",
+            "review\\security.md",
+            "review\\style-consistency.md",
+            "review\\supply-chain.md",
+            "review\\testing.md",
+            "review\\ux-copy.md",
+            "review-all.md",
+            "review-architecture.md",
+            "review-infra.md",
+            "review-pre-merge.md",
+            "review-quick.md",
+            "review-security.md",
+            "review-ux.md",
+            "setup-wide-logging.md",
             "wf-handoff.md",
             "wf-implement.md",
             "wf-intake.md",
@@ -60,38 +99,18 @@
             "wf-slice.md",
             "wf-verify.md"
           ],
-          "skills": [],
-          "isSymlinked": false
-        }
-      }
-    },
-    {
-      "name": "diataxis",
-      "version": "1.0.0",
-      "sourcePath": "C:\\Users\\jayte\\Documents\\dev\\agent-skills",
-      "installedAt": "2026-03-20T11:37:43.277Z",
-      "components": {
-        "agents": 0,
-        "commands": 0,
-        "skills": 7,
-        "mcpServers": 0,
-        "variants": 0
-      },
-      "installedTo": [
-        "claude"
-      ],
-      "installedFiles": {
-        "claude": {
-          "agents": [],
-          "commands": [],
           "skills": [
             "diataxis-doc-planner",
             "docs-reviewer",
+            "error-analysis",
             "explanation-writer",
             "how-to-guide-writer",
             "readme-writer",
+            "refactoring-patterns",
             "reference-writer",
-            "tutorial-writer"
+            "test-patterns",
+            "tutorial-writer",
+            "wide-event-observability"
           ],
           "isSymlinked": false
         }
