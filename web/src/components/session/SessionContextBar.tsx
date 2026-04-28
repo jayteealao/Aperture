@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { cn } from '@/utils/cn'
 import { formatNumber } from '@/utils/format'
 import { ClaudeMascotIcon } from '@/components/icons/ClaudeMascotIcon'
@@ -63,9 +63,17 @@ export function SessionContextBar({
     [usage],
   )
 
-  const isStale = useMemo(() => {
-    if (!lastActivityTime) return false
-    return Date.now() - lastActivityTime > STALE_THRESHOLD_MS
+  const [isStale, setIsStale] = useState(false)
+
+  useEffect(() => {
+    if (!lastActivityTime) {
+      setIsStale(false)
+      return
+    }
+    const check = () => setIsStale(Date.now() - lastActivityTime > STALE_THRESHOLD_MS)
+    check()
+    const id = setInterval(check, STALE_THRESHOLD_MS)
+    return () => clearInterval(id)
   }, [lastActivityTime])
 
   const opacityClass = isStale ? 'opacity-50' : 'opacity-100'

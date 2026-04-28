@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import { SessionContextBar } from './SessionContextBar'
 import type { SessionResult, ModelUsage } from '@/api/types'
 
@@ -229,14 +229,16 @@ describe('SessionContextBar', () => {
     const usage = sessionResult({
       'claude-sonnet': modelUsage({ inputTokens: 5000 }),
     })
-    render(
-      <SessionContextBar
-        usage={usage}
-        isActive={false}
-        onClickSidebar={vi.fn()}
-        lastActivityTime={fiveMinutesAgo}
-      />,
-    )
+    act(() => {
+      render(
+        <SessionContextBar
+          usage={usage}
+          isActive={false}
+          onClickSidebar={vi.fn()}
+          lastActivityTime={fiveMinutesAgo}
+        />,
+      )
+    })
 
     const button = screen.getByLabelText('Toggle SDK details')
     expect(button.classList.contains('opacity-50')).toBe(true)
@@ -247,14 +249,16 @@ describe('SessionContextBar', () => {
     const usage = sessionResult({
       'claude-sonnet': modelUsage({ inputTokens: 5000 }),
     })
-    render(
-      <SessionContextBar
-        usage={usage}
-        isActive={false}
-        onClickSidebar={vi.fn()}
-        lastActivityTime={recentTime}
-      />,
-    )
+    act(() => {
+      render(
+        <SessionContextBar
+          usage={usage}
+          isActive={false}
+          onClickSidebar={vi.fn()}
+          lastActivityTime={recentTime}
+        />,
+      )
+    })
 
     const button = screen.getByLabelText('Toggle SDK details')
     expect(button.classList.contains('opacity-100')).toBe(true)
