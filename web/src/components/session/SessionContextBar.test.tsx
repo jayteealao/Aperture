@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import { SessionContextBar } from './SessionContextBar'
 import type { SessionResult, ModelUsage } from '@/api/types'
@@ -45,8 +45,8 @@ describe('SessionContextBar', () => {
       />,
     )
 
-    expect(screen.getByRole('img')).toBeTruthy()
-    expect(screen.getByLabelText('Toggle SDK details')).toBeTruthy()
+    const button = screen.getByLabelText('Open SDK sidebar')
+    expect(button.querySelector('svg')).toBeTruthy()
     expect(screen.queryByRole('progressbar')).toBeNull()
   })
 
@@ -202,7 +202,7 @@ describe('SessionContextBar', () => {
       />,
     )
 
-    // Total: 40+10+10+30+5+5 = 100k / 200k = 50%
+    // Total: 40+10+10+0 + 30+5+5+0 = 100k / 200k = 50%
     const bar = screen.getByRole('progressbar')
     expect(bar.getAttribute('aria-valuenow')).toBe('50')
   })
@@ -220,7 +220,7 @@ describe('SessionContextBar', () => {
       />,
     )
 
-    fireEvent.click(screen.getByLabelText('Toggle SDK details'))
+    fireEvent.click(screen.getByLabelText('Open SDK sidebar'))
     expect(onClick).toHaveBeenCalledTimes(1)
   })
 
@@ -240,7 +240,7 @@ describe('SessionContextBar', () => {
       )
     })
 
-    const button = screen.getByLabelText('Toggle SDK details')
+    const button = screen.getByLabelText('Open SDK sidebar')
     expect(button.classList.contains('opacity-50')).toBe(true)
   })
 
@@ -260,7 +260,7 @@ describe('SessionContextBar', () => {
       )
     })
 
-    const button = screen.getByLabelText('Toggle SDK details')
+    const button = screen.getByLabelText('Open SDK sidebar')
     expect(button.classList.contains('opacity-100')).toBe(true)
   })
 
@@ -276,8 +276,8 @@ describe('SessionContextBar', () => {
       />,
     )
 
-    const svg = screen.getByRole('img')
-    expect(svg.classList.contains('text-[var(--primary)]')).toBe(true)
+    const svg = screen.getByLabelText('Open SDK sidebar').querySelector('svg')
+    expect(svg?.classList.contains('text-[var(--primary)]')).toBe(true)
   })
 
   it('applies muted-foreground to mascot when inactive', () => {
@@ -292,8 +292,8 @@ describe('SessionContextBar', () => {
       />,
     )
 
-    const svg = screen.getByRole('img')
-    expect(svg.classList.contains('text-muted-foreground')).toBe(true)
+    const svg = screen.getByLabelText('Open SDK sidebar').querySelector('svg')
+    expect(svg?.classList.contains('text-muted-foreground')).toBe(true)
   })
 
   it('passes className through to the button wrapper', () => {
@@ -306,7 +306,92 @@ describe('SessionContextBar', () => {
       />,
     )
 
-    const button = screen.getByLabelText('Toggle SDK details')
+    const button = screen.getByLabelText('Open SDK sidebar')
     expect(button.classList.contains('my-custom-class')).toBe(true)
+  })
+
+  describe('staleness polling', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('transitions from fresh to stale after polling interval', () => {
+      const recentTime = Date.now() - 1000
+      const usage = sessionResult({
+        'claude-sonnet': modelUsage({ inputTokens: 5000 }),
+      })
+      render(
+        <SessionContextBar
+          usage={usage}
+          isActive={false}
+          onClickSidebar={vi.fn()}
+          lastActivityTime={recentTime}
+        />,
+      )
+
+      const button = screen.getByLabelText('Open SDK sidebar')
+      expect(button.classList.contains('opacity-100')).toBe(true)
+
+      // Advance past stale threshold (5 min) + one polling interval (30s)
+      act(() => {
+        vi.advanceTimersByTime(5 * 60 * 1000 + 30 * 1000)
+      })
+
+      expect(button.classList.contains('opacity-50')).toBe(true)
+    })
+
+    it('clears interval on unmount', () => {
+      const clearIntervalSpy = vi.spyOn(global, 'clearInterval')
+      const recentTime = Date.now() - 1000
+      const usage = sessionResult({
+        'claude-sonnet': modelUsage({ inputTokens: 5000 }),
+      })
+      const { unmount } = render(
+        <SessionContextBar
+          usage={usage}
+          isActive={false}
+          onClickSidebar={vi.fn()}
+          lastActivityTime={recentTime}
+        />,
+      )
+
+      unmount()
+      expect(clearIntervalSpy).toHaveBeenCalled()
+      clearIntervalSpy.mockRestore()
+    })
+  })
+
+  it('renders sr-only context summary for screen readers', () => {
+    const usage = sessionResult({
+      'claude-sonnet': modelUsage({
+        inputTokens: 100000,
+        contextWindow: 200000,
+      }),
+    })
+    render(
+      <SessionContextBar
+        usage={usage}
+        isActive={false}
+        onClickSidebar={vi.fn()}
+      />,
+    )
+
+    const srOnly = screen.getByText(/50%, .* of .* tokens used/)
+    expect(srOnly.classList.contains('sr-only')).toBe(true)
+  })
+
+  it('uses Close label when sdkSidebarOpen is true', () => {
+    render(
+      <SessionContextBar
+        usage={null}
+        isActive={false}
+        sdkSidebarOpen={true}
+        onClickSidebar={vi.fn()}
+      />,
+    )
+    expect(screen.getByLabelText('Close SDK sidebar')).toBeTruthy()
   })
 })

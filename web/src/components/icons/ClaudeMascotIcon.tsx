@@ -4,18 +4,22 @@ import { cn } from '@/utils/cn'
 interface ClaudeMascotIconProps {
   size?: number
   className?: string
+  'aria-hidden'?: boolean | 'true' | 'false'
 }
 
 const ClaudeMascotIconInner = ({
   size = 20,
   className,
+  'aria-hidden': ariaHidden,
 }: ClaudeMascotIconProps) => {
+  const decorative = ariaHidden === true || ariaHidden === 'true'
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 15 16"
-      role="img"
-      aria-label="Claude Code"
+      role={decorative ? 'presentation' : 'img'}
+      aria-label={decorative ? undefined : 'Claude Code'}
+      aria-hidden={ariaHidden}
       data-slot="clawd-mascot"
       shapeRendering="crispEdges"
       className={cn('transition-colors duration-300', className)}

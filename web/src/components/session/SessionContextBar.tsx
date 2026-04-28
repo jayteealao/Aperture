@@ -11,10 +11,12 @@ import {
 import type { SessionResult } from '@/api/types'
 
 const STALE_THRESHOLD_MS = 5 * 60 * 1000
+const POLL_INTERVAL_MS = 30 * 1000
 
 interface SessionContextBarProps {
   usage: SessionResult | null
   isActive: boolean
+  sdkSidebarOpen?: boolean
   onClickSidebar: () => void
   lastActivityTime?: number
   className?: string
@@ -28,16 +30,19 @@ function computeContextUsage(usage: SessionResult) {
   let maxContextWindow = 0
 
   for (const m of entries) {
-    totalTokens +=
-      m.inputTokens +
-      m.cacheReadInputTokens +
-      m.cacheCreationInputTokens
-    if (m.contextWindow && m.contextWindow > maxContextWindow) {
-      maxContextWindow = m.contextWindow
+    const input = Number(m.inputTokens) || 0
+    const cacheRead = Number(m.cacheReadInputTokens) || 0
+    const cacheWrite = Number(m.cacheCreationInputTokens) || 0
+    const output = Number(m.outputTokens) || 0
+    totalTokens += input + cacheRead + cacheWrite + output
+    const cw = Number(m.contextWindow)
+    if (Number.isFinite(cw) && cw > maxContextWindow) {
+      maxContextWindow = cw
     }
   }
 
   if (maxContextWindow === 0) return null
+  if (!Number.isFinite(totalTokens)) return null
 
   const percent = Math.min(100, Math.round((totalTokens / maxContextWindow) * 100))
   const modelNames = Object.keys(usage.usage)
@@ -54,6 +59,7 @@ function getFillColor(percent: number) {
 export function SessionContextBar({
   usage,
   isActive,
+  sdkSidebarOpen,
   onClickSidebar,
   lastActivityTime,
   className,
@@ -72,47 +78,18 @@ export function SessionContextBar({
     }
     const check = () => setIsStale(Date.now() - lastActivityTime > STALE_THRESHOLD_MS)
     check()
-    const id = setInterval(check, STALE_THRESHOLD_MS)
-    return () => clearInterval(id)
+    const id = setInterval(check, POLL_INTERVAL_MS)
+    const onVisible = () => { if (!document.hidden) check() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [lastActivityTime])
 
   const opacityClass = isStale ? 'opacity-50' : 'opacity-100'
-
-  if (!contextData) {
-    return (
-      <TooltipProvider delayDuration={200}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                'flex flex-col items-center gap-0.5 transition-opacity duration-300',
-                opacityClass,
-                className,
-              )}
-              onClick={onClickSidebar}
-              aria-label="Toggle SDK details"
-            >
-              <ClaudeMascotIcon
-                size={20}
-                className={cn(
-                  isActive
-                    ? 'text-[var(--primary)]'
-                    : 'text-muted-foreground',
-                  'transition-colors duration-300',
-                )}
-              />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={4}>
-            <p className="text-xs">No usage data yet</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    )
-  }
-
-  const { percent, totalTokens, maxContextWindow, modelNames } = contextData
+  const buttonLabel = sdkSidebarOpen ? 'Close SDK sidebar' : 'Open SDK sidebar'
+  const percent = contextData?.percent
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -126,10 +103,11 @@ export function SessionContextBar({
               className,
             )}
             onClick={onClickSidebar}
-            aria-label="Toggle SDK details"
+            aria-label={buttonLabel}
           >
             <ClaudeMascotIcon
               size={20}
+              aria-hidden="true"
               className={cn(
                 isActive
                   ? 'text-[var(--primary)]'
@@ -137,36 +115,49 @@ export function SessionContextBar({
                 'transition-colors duration-300',
               )}
             />
-            <div
-              className="h-[2px] w-5 rounded-full bg-secondary"
-              role="progressbar"
-              aria-valuenow={percent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`Context: ${percent}%`}
-            >
+            {contextData && (
               <div
-                className={cn(
-                  'h-full rounded-full transition-[width,background-color] duration-300 ease-in-out',
-                  getFillColor(percent),
-                )}
-                style={{ width: `${percent}%` }}
-              />
-            </div>
+                className="h-[2px] w-5 rounded-full bg-secondary"
+                role="progressbar"
+                aria-valuenow={percent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`Context: ${percent}%`}
+              >
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-[width,background-color] duration-300 ease-in-out',
+                    getFillColor(contextData.percent),
+                  )}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+            )}
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          <p className="text-xs font-medium">Context: {percent}%</p>
-          <p className="text-xs text-muted-foreground">
-            {formatNumber(totalTokens)} / {formatNumber(maxContextWindow)}{' '}
-            tokens
-          </p>
-          {modelNames.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {modelNames.join(', ')}
-            </p>
+          {contextData ? (
+            <>
+              <p className="text-xs font-medium">Context: {contextData.percent}%</p>
+              <p className="text-xs text-muted-foreground">
+                {formatNumber(contextData.totalTokens)} / {formatNumber(contextData.maxContextWindow)}{' '}
+                tokens
+              </p>
+              {contextData.modelNames.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {contextData.modelNames.join(', ')}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-xs">No usage data yet</p>
           )}
         </TooltipContent>
+        {contextData && (
+          <span className="sr-only">
+            Context: {contextData.percent}%, {formatNumber(contextData.totalTokens)} of {formatNumber(contextData.maxContextWindow)} tokens used
+          </span>
+        )}
       </Tooltip>
     </TooltipProvider>
   )
