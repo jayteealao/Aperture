@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Popover, PopoverAnchor } from '@/components/ui/popover'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { MoreHorizontal, Trash2, Info, Copy, ChevronDown, ChevronUp, PanelRight, PanelRightClose, Pencil } from 'lucide-react'
+import { MoreHorizontal, Trash2, Info, Copy, ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
@@ -54,15 +55,29 @@ import { useChat } from '@ai-sdk/react'
 import { api } from '@/api/client'
 import { useSessionsStore } from '@/stores/sessions'
 import { usePersistedUIMessages } from '@/hooks/usePersistedUIMessages'
+import { useSlashPickerEntries } from '@/hooks/useSlashPickerEntries'
+import { useSlashPickerFavorites } from '@/hooks/useSlashPickerFavorites'
 import { ApertureWebSocketTransport } from '@/api/chat-transport'
 import { wsManager } from '@/api/websocket'
 import { submitChatMessage } from '@/utils/chat-submit'
 import { formatMessageTimestamp } from '@/utils/format'
 import type { ApertureUIMessage } from '@/utils/ui-message'
-import type { ConnectionState, Session, TurnDiffSummary } from '@/api/types'
+import type { ConnectionState, Session, SlashPickerEntry, TurnDiffSummary } from '@/api/types'
 import { IMAGE_LIMITS } from '@/api/types'
 import { SdkComposerControls, SdkControlPanel, SdkOverflowMenu } from '@/components/sdk'
 import { cn } from '@/utils/cn'
+import { SessionContextBar } from './SessionContextBar'
+import { GitBranchLabel } from './GitBranchLabel'
+import { SlashPicker, getSlashPickerEntryDomId } from './SlashPicker'
+import {
+  buildSlashInsertion,
+  filterSlashPickerEntries,
+  getNextSlashPickerActiveEntryId,
+  getSlashPickerSelectableEntryIds,
+  getSlashPickerTrigger,
+  groupSlashPickerEntries,
+  isClaudeSdkSlashPickerEligible,
+} from './slash-picker-logic'
 
 // ── AttachmentCountBadge ───────────────────────────────────────────────────
 // Reads attachment count from the PromptInput context and renders a small
@@ -184,6 +199,9 @@ function WorkspaceChatPaneReady({
   onDelete: () => void
 }) {
   const setStreaming = useSessionsStore((s) => s.setStreaming)
+  const isClaudeSdk = session.agent === 'claude_sdk'
+  const sdkUsage = useSessionsStore(isClaudeSdk ? (s) => s.sdkUsage[sessionId] ?? null : () => null)
+  const gitBranch = useSessionsStore(isClaudeSdk ? (s) => s.gitBranch[sessionId] ?? null : () => null)
   const transport = useMemo(() => new ApertureWebSocketTransport(sessionId), [sessionId])
 
   const { messages, sendMessage, setMessages, status, stop } = useChat<ApertureUIMessage>({
@@ -302,6 +320,18 @@ function WorkspaceChatPaneReady({
         : null
   const agentLabel = session.agent === 'claude_sdk' ? 'SDK' : 'Pi'
   const agentVariant = (session.agent === 'claude_sdk' ? 'accent' : 'secondary') as 'accent' | 'secondary'
+  const [isDataStale, setIsDataStale] = useState(false)
+  useEffect(() => {
+    const check = () => {
+      const t = session.status.lastActivityTime
+      setIsDataStale(!!t && Date.now() - t > 5 * 60 * 1000)
+    }
+    check()
+    const id = setInterval(check, 30_000)
+    const onVis = () => { check() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis) }
+  }, [session.status.lastActivityTime])
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showInfo, setShowInfo] = useState(false)
@@ -311,16 +341,64 @@ function WorkspaceChatPaneReady({
   // ── Collapsible input state ──────────────────────────────────────────────
   const [isInputExpanded, setIsInputExpanded] = useState(true)
   const [inputValue, setInputValue] = useState('')
+  const [slashPickerArgumentHint, setSlashPickerArgumentHint] = useState<string | null>(null)
+  const [slashPickerActiveEntryId, setSlashPickerActiveEntryId] = useState<string | null>(null)
+  const [slashPickerDismissedValue, setSlashPickerDismissedValue] = useState<string | null>(null)
   // Ref keeps a fresh copy of inputValue accessible inside setTimeout callbacks
   // without stale-closure issues.
   const inputValueRef = useRef('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const slashPickerTrigger = useMemo(() => getSlashPickerTrigger(inputValue), [inputValue])
+  const slashPickerEligible = isClaudeSdkSlashPickerEligible(inputValue, session.agent)
+  const slashPickerEntries = useSlashPickerEntries(sessionId, slashPickerEligible)
+  const slashPickerFavorites = useSlashPickerFavorites()
+  const slashPickerFilteredEntries = useMemo(
+    () => filterSlashPickerEntries(slashPickerEntries.entries, slashPickerTrigger.query),
+    [slashPickerEntries.entries, slashPickerTrigger.query],
+  )
+  const slashPickerGroups = useMemo(
+    () => groupSlashPickerEntries(slashPickerFilteredEntries, slashPickerFavorites.favoriteEntryIds),
+    [slashPickerFavorites.favoriteEntryIds, slashPickerFilteredEntries],
+  )
+  const slashPickerListId = useMemo(() => `slash-picker-list-${sessionId}`, [sessionId])
+  const slashPickerHintId = useMemo(() => `slash-picker-hint-${sessionId}`, [sessionId])
+  const slashPickerOpen = slashPickerEligible && slashPickerDismissedValue !== inputValue
+  const slashPickerActiveDescendantId = slashPickerOpen && slashPickerActiveEntryId
+    ? getSlashPickerEntryDomId(slashPickerListId, slashPickerActiveEntryId)
+    : undefined
+  const slashPickerActiveEntry = useMemo(
+    () => slashPickerFilteredEntries.find((entry) => entry.id === slashPickerActiveEntryId) ?? null,
+    [slashPickerActiveEntryId, slashPickerFilteredEntries],
+  )
 
   // Keep ref in sync with state
   useEffect(() => {
     inputValueRef.current = inputValue
   }, [inputValue])
+
+  useEffect(() => {
+    if (!slashPickerEligible) {
+      setSlashPickerArgumentHint(null)
+      setSlashPickerActiveEntryId(null)
+      setSlashPickerDismissedValue(null)
+    }
+  }, [slashPickerEligible])
+
+  useEffect(() => {
+    if (!slashPickerOpen) return
+    setSlashPickerActiveEntryId((current) =>
+      slashPickerFilteredEntries.some((entry) => entry.id === current)
+        ? current
+        : (getSlashPickerSelectableEntryIds(slashPickerGroups)[0] ?? null)
+    )
+  }, [slashPickerFilteredEntries, slashPickerGroups, slashPickerOpen])
+
+  useEffect(() => {
+    if (slashPickerFavorites.error) {
+      toast.error(slashPickerFavorites.error)
+    }
+  }, [slashPickerFavorites.error])
 
   // Clean up any pending blur timer on unmount
   useEffect(() => {
@@ -333,8 +411,88 @@ function WorkspaceChatPaneReady({
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       inputValueRef.current = e.target.value
       setInputValue(e.target.value)
+      setSlashPickerDismissedValue((dismissedValue) =>
+        dismissedValue === e.target.value ? dismissedValue : null
+      )
     },
     [],
+  )
+
+  const handleSlashPickerDismiss = useCallback(() => {
+    setSlashPickerDismissedValue(inputValueRef.current)
+    setSlashPickerActiveEntryId(null)
+    textareaRef.current?.focus()
+  }, [])
+
+  const handleSlashPickerSelect = useCallback((entry: typeof slashPickerFilteredEntries[number]) => {
+    const insertion = buildSlashInsertion(entry)
+    inputValueRef.current = insertion.value
+    setInputValue(insertion.value)
+    setSlashPickerArgumentHint(insertion.argumentHint)
+    setSlashPickerDismissedValue(insertion.value)
+    setSlashPickerActiveEntryId(null)
+    textareaRef.current?.focus()
+  }, [])
+
+  const handleSlashPickerFavoriteToggle = useCallback((entry: SlashPickerEntry) => {
+    if (!slashPickerFavorites.isLoaded) {
+      toast.error('Favorites are still loading')
+      textareaRef.current?.focus()
+      return
+    }
+    slashPickerFavorites.toggleFavorite(entry)
+    textareaRef.current?.focus()
+  }, [slashPickerFavorites])
+
+  const handleTextareaKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (!slashPickerOpen) return
+
+      if (
+        event.key.toLocaleLowerCase() === 'f' &&
+        event.shiftKey &&
+        (event.ctrlKey || event.metaKey)
+      ) {
+        event.preventDefault()
+        if (slashPickerActiveEntry) {
+          handleSlashPickerFavoriteToggle(slashPickerActiveEntry)
+        }
+        return
+      }
+
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        setSlashPickerActiveEntryId((current) =>
+          getNextSlashPickerActiveEntryId(
+            slashPickerGroups,
+            current,
+            event.key === 'ArrowDown' ? 'next' : 'previous',
+          )
+        )
+        return
+      }
+
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault()
+        if (slashPickerActiveEntry) {
+          handleSlashPickerSelect(slashPickerActiveEntry)
+        }
+        return
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        handleSlashPickerDismiss()
+      }
+    },
+    [
+      handleSlashPickerDismiss,
+      handleSlashPickerFavoriteToggle,
+      handleSlashPickerSelect,
+      slashPickerActiveEntry,
+      slashPickerGroups,
+      slashPickerOpen,
+    ],
   )
 
   // Expand and focus the textarea (used by click-to-expand and toggle)
@@ -403,6 +561,7 @@ function WorkspaceChatPaneReady({
       // Clear and collapse on submit
       setInputValue('')
       inputValueRef.current = ''
+      setSlashPickerArgumentHint(null)
       setIsInputExpanded(false)
 
       await submitChatMessage(message, {
@@ -420,13 +579,31 @@ function WorkspaceChatPaneReady({
       {/* Compact pane header */}
       <div className="hidden shrink-0 items-center justify-between border-b border-border px-3 py-2 sm:flex">
         <div className="flex items-center gap-2 min-w-0">
-          <ConnectionStatus status={connection?.status ?? 'disconnected'} />
-          <EditableTitle
-            title={session.title}
-            fallback="New Session"
-            onRename={handleRename}
-          />
-          <Badge variant={agentVariant} size="sm">{agentLabel}</Badge>
+          {isClaudeSdk ? (
+            <SessionContextBar
+              usage={sdkUsage}
+              isActive={status === 'streaming' || status === 'submitted'}
+              sdkSidebarOpen={sdkSidebarOpen}
+              onClickSidebar={() => setSdkSidebarOpen((v) => !v)}
+              lastActivityTime={session.status.lastActivityTime}
+            />
+          ) : (
+            <ConnectionStatus status={connection?.status ?? 'disconnected'} />
+          )}
+          <span className="flex-1 min-w-[80px]">
+            <EditableTitle
+              title={session.title}
+              fallback="New Session"
+              onRename={handleRename}
+            />
+          </span>
+          {isClaudeSdk ? (
+            <span className={cn('shrink min-w-0 transition-opacity duration-300', isDataStale && 'opacity-50')}>
+              <GitBranchLabel branch={gitBranch} />
+            </span>
+          ) : (
+            <Badge variant={agentVariant} size="sm">{agentLabel}</Badge>
+          )}
           {activityLabel && (
             <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
               <span className="size-2 shrink-0 rounded-full bg-accent animate-pulse" />
@@ -435,16 +612,6 @@ function WorkspaceChatPaneReady({
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {session.agent === 'claude_sdk' && (
-            <button
-              type="button"
-              className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              aria-label={sdkSidebarOpen ? 'Close SDK sidebar' : 'Open SDK sidebar'}
-              onClick={() => setSdkSidebarOpen((value) => !value)}
-            >
-              {sdkSidebarOpen ? <PanelRightClose size={14} /> : <PanelRight size={14} />}
-            </button>
-          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -653,100 +820,156 @@ function WorkspaceChatPaneReady({
       )}
 
       {/* Input */}
-      <div className="px-3 py-3 border-t border-border bg-card shrink-0">
-        <PromptInput
-          accept={IMAGE_LIMITS.ALLOWED_MIME_TYPES.join(',')}
-          maxFileSize={IMAGE_LIMITS.MAX_BYTES}
-          maxFiles={IMAGE_LIMITS.MAX_COUNT}
-          multiple
-          onError={handleFileError}
-          onSubmit={handleSubmit}
+      <div
+        className="px-3 py-3 border-t border-border bg-card shrink-0"
+        data-slash-picker-open={slashPickerOpen ? 'true' : 'false'}
+        data-slash-picker-query={slashPickerTrigger.query || undefined}
+        data-slash-picker-entry-count={slashPickerFilteredEntries.length}
+        data-slash-picker-group-count={slashPickerGroups.length}
+        data-slash-picker-active-entry={slashPickerActiveEntryId ?? undefined}
+        data-slash-picker-loading={slashPickerEntries.isLoading ? 'true' : 'false'}
+        data-slash-picker-error={slashPickerEntries.error ?? undefined}
+        data-slash-picker-has-cache={slashPickerEntries.hasCachedResult ? 'true' : 'false'}
+        data-slash-picker-argument-hint={slashPickerArgumentHint ?? undefined}
+        data-slash-picker-favorite-count={slashPickerFavorites.favoriteEntryIds.length}
+      >
+        <Popover
+          open={slashPickerOpen}
+          modal={false}
+          onOpenChange={(open) => {
+            if (!open) handleSlashPickerDismiss()
+          }}
         >
-          {/* ── Collapsible section: attachments preview + textarea ─────── */}
-          {/* Uses the CSS grid trick for smooth zero-height animation.      */}
-          {/* The inner flex-col div ensures correct header/body stacking.   */}
-          <div
-            className={cn(
-              'w-full grid transition-[grid-template-rows] duration-200 ease-in-out',
-              isInputExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
-            )}
-          >
-            <div className="flex min-h-0 flex-col overflow-hidden">
-              <PromptInputHeader>
-                <AttachmentsPreview maxFiles={IMAGE_LIMITS.MAX_COUNT} />
-              </PromptInputHeader>
-              <PromptInputBody>
-                <PromptInputTextarea
-                  ref={textareaRef}
-                  disabled={!isConnected}
-                  placeholder={isConnected ? 'Message...' : 'Connecting...'}
-                  value={inputValue}
-                  onChange={handleInputChange}
-                  onFocus={handleTextareaFocus}
-                  onBlur={handleTextareaBlur}
-                />
-              </PromptInputBody>
-            </div>
-          </div>
-
-          {/* ── Footer toolbar: always visible ──────────────────────────── */}
-          <PromptInputFooter>
-            {/* Left side: toggle + attachment + model + collapsed preview */}
-            <PromptInputTools className="min-w-0 flex-1">
-              {/* Collapse / expand toggle */}
-              <PromptInputButton
-                onClick={handleToggleExpand}
-                aria-label={isInputExpanded ? 'Collapse input' : 'Expand input'}
-                aria-expanded={isInputExpanded}
-                tooltip={{ content: isInputExpanded ? 'Collapse' : 'Expand', side: 'top' }}
+          <PopoverAnchor asChild>
+            <div className="w-full">
+              <PromptInput
+                accept={IMAGE_LIMITS.ALLOWED_MIME_TYPES.join(',')}
+                maxFileSize={IMAGE_LIMITS.MAX_BYTES}
+                maxFiles={IMAGE_LIMITS.MAX_COUNT}
+                multiple
+                onError={handleFileError}
+                onSubmit={handleSubmit}
               >
-                {isInputExpanded
-                  ? <ChevronDown className="size-4" />
-                  : <ChevronUp className="size-4" />}
-              </PromptInputButton>
-
-              {/* Add files — with attachment count badge when collapsed */}
-              <div className="relative">
-                <PromptInputActionMenu>
-                  <PromptInputActionMenuTrigger />
-                  <PromptInputActionMenuContent>
-                    <PromptInputActionAddAttachments />
-                  </PromptInputActionMenuContent>
-                </PromptInputActionMenu>
-                {!isInputExpanded && <AttachmentCountBadge />}
-              </div>
-
-              {/* Model selector — always visible */}
-              <SdkComposerControls
-                connected={isConnected}
-                sessionId={sessionId}
-                variant="toolbar"
-              />
-
-              {/* Collapsed text preview — fills remaining space, click to expand */}
-              {!isInputExpanded && (
-                <button
-                  type="button"
-                  className="min-h-8 min-w-0 flex-1 truncate px-1 text-left text-sm opacity-50 hover:opacity-70 transition-opacity"
-                  onClick={handleExpand}
-                  aria-label="Expand message input"
+                {/* ── Collapsible section: attachments preview + textarea ─────── */}
+                {/* Uses the CSS grid trick for smooth zero-height animation.      */}
+                {/* The inner flex-col div ensures correct header/body stacking.   */}
+                <div
+                  className={cn(
+                    'w-full grid transition-[grid-template-rows] duration-200 ease-in-out',
+                    isInputExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+                  )}
                 >
-                  {inputValue.trim() !== '' ? inputValue : 'Message...'}
-                </button>
-              )}
-            </PromptInputTools>
+                  <div className="flex min-h-0 flex-col overflow-hidden">
+                    <PromptInputHeader>
+                      <AttachmentsPreview maxFiles={IMAGE_LIMITS.MAX_COUNT} />
+                    </PromptInputHeader>
+                    <PromptInputBody>
+                      <PromptInputTextarea
+                        ref={textareaRef}
+                        role="combobox"
+                        aria-activedescendant={slashPickerActiveDescendantId}
+                        aria-autocomplete="list"
+                        aria-controls={slashPickerOpen ? slashPickerListId : undefined}
+                        aria-describedby={slashPickerArgumentHint ? slashPickerHintId : undefined}
+                        aria-expanded={slashPickerOpen}
+                        aria-haspopup="listbox"
+                        aria-keyshortcuts="Control+Shift+F Meta+Shift+F"
+                        disabled={!isConnected}
+                        placeholder={isConnected ? 'Message...' : 'Connecting...'}
+                        value={inputValue}
+                        onChange={handleInputChange}
+                        onFocus={handleTextareaFocus}
+                        onBlur={handleTextareaBlur}
+                        onKeyDown={handleTextareaKeyDown}
+                      />
+                    </PromptInputBody>
+                    {slashPickerArgumentHint && (
+                      <div
+                        id={slashPickerHintId}
+                        className="px-3 pb-2 text-2xs text-muted-foreground"
+                      >
+                        Arguments: <span className="font-mono text-foreground">{slashPickerArgumentHint}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-            {/* Right side: overflow settings + submit */}
-            <div className="flex shrink-0 items-center gap-1">
-              <SdkOverflowMenu connected={isConnected} sessionId={sessionId} />
-              <PromptInputSubmit
-                disabled={!isConnected && !isInFlight}
-                onStop={handleStop}
-                status={status}
-              />
+                {/* ── Footer toolbar: always visible ──────────────────────────── */}
+                <PromptInputFooter>
+                  {/* Left side: toggle + attachment + model + collapsed preview */}
+                  <PromptInputTools className="min-w-0 flex-1">
+                    {/* Collapse / expand toggle */}
+                    <PromptInputButton
+                      onClick={handleToggleExpand}
+                      aria-label={isInputExpanded ? 'Collapse input' : 'Expand input'}
+                      aria-expanded={isInputExpanded}
+                      tooltip={{ content: isInputExpanded ? 'Collapse' : 'Expand', side: 'top' }}
+                    >
+                      {isInputExpanded
+                        ? <ChevronDown className="size-4" />
+                        : <ChevronUp className="size-4" />}
+                    </PromptInputButton>
+
+                    {/* Add files — with attachment count badge when collapsed */}
+                    <div className="relative">
+                      <PromptInputActionMenu>
+                        <PromptInputActionMenuTrigger />
+                        <PromptInputActionMenuContent>
+                          <PromptInputActionAddAttachments />
+                        </PromptInputActionMenuContent>
+                      </PromptInputActionMenu>
+                      {!isInputExpanded && <AttachmentCountBadge />}
+                    </div>
+
+                    {/* Model selector — always visible */}
+                    <SdkComposerControls
+                      connected={isConnected}
+                      sessionId={sessionId}
+                      variant="toolbar"
+                    />
+
+                    {/* Collapsed text preview — fills remaining space, click to expand */}
+                    {!isInputExpanded && (
+                      <button
+                        type="button"
+                        className="min-h-8 min-w-0 flex-1 truncate px-1 text-left text-sm opacity-50 hover:opacity-70 transition-opacity"
+                        onClick={handleExpand}
+                        aria-label="Expand message input"
+                      >
+                        {inputValue.trim() !== '' ? inputValue : 'Message...'}
+                      </button>
+                    )}
+                  </PromptInputTools>
+
+                  {/* Right side: overflow settings + submit */}
+                  <div className="flex shrink-0 items-center gap-1">
+                    <SdkOverflowMenu connected={isConnected} sessionId={sessionId} />
+                    <PromptInputSubmit
+                      disabled={!isConnected && !isInFlight}
+                      onStop={handleStop}
+                      status={status}
+                    />
+                  </div>
+                </PromptInputFooter>
+              </PromptInput>
             </div>
-          </PromptInputFooter>
-        </PromptInput>
+          </PopoverAnchor>
+          <SlashPicker
+            listId={slashPickerListId}
+            activeEntryId={slashPickerActiveEntryId}
+            argumentHint={slashPickerArgumentHint}
+            error={slashPickerEntries.error}
+            groups={slashPickerGroups}
+            isLoading={slashPickerEntries.isLoading}
+            query={slashPickerTrigger.query}
+            sourceStatuses={slashPickerEntries.sourceStatuses}
+            onActiveEntryChange={setSlashPickerActiveEntryId}
+            onDismiss={handleSlashPickerDismiss}
+            onSelect={handleSlashPickerSelect}
+            onToggleFavorite={handleSlashPickerFavoriteToggle}
+            favoriteToggleDisabled={!slashPickerFavorites.isLoaded}
+          />
+        </Popover>
       </div>
       </div>
 
