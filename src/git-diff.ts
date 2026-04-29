@@ -40,7 +40,7 @@ interface GitStatusEntry {
 }
 
 async function execGit(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
-  return execFileAsync('git', args, { cwd, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
+  return execFileAsync('git', args, { cwd, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024, timeout: 5_000, killSignal: 'SIGKILL' });
 }
 
 async function execGitBuffer(args: string[], cwd: string): Promise<Buffer> {

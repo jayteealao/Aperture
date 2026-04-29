@@ -1,7 +1,7 @@
 import { GitBranch } from 'lucide-react'
 
 interface GitBranchLabelProps {
-  branch: string | null | undefined
+  branch: string | null
 }
 
 export function GitBranchLabel({ branch }: GitBranchLabelProps) {
@@ -15,10 +15,15 @@ export function GitBranchLabel({ branch }: GitBranchLabelProps) {
     )
   }
 
+  const isSha = /^[0-9a-f]{7,}$/.test(branch)
+  const label = isSha
+    ? `Detached HEAD (${branch})`
+    : `Branch: ${branch}`
+
   return (
     <span
       className="flex min-w-0 items-center gap-1"
-      aria-label={`Git branch: ${branch}`}
+      aria-label={label}
     >
       <GitBranch size={12} className="shrink-0 text-muted-foreground" />
       <span className="font-mono text-2xs text-muted-foreground text-ellipsis overflow-hidden whitespace-nowrap">

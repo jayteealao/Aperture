@@ -63,7 +63,7 @@ export interface SessionStatus {
   isResumable?: boolean
   workingDirectory?: string
   thinkingLevel?: string
-  gitBranch?: string | null
+  gitBranch: string | null
 }
 
 export interface Session {

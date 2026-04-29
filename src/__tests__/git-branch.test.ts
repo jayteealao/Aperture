@@ -86,4 +86,49 @@ describe('getCurrentBranch', () => {
       await rm(dir, { recursive: true, force: true })
     }
   })
+
+  // GB-3: Unicode branch names
+  it('returns branch names with unicode characters', async () => {
+    const dir = await makeTempDir()
+    try {
+      await initGitRepo(dir)
+      await makeCommit(dir)
+      await exec('git', ['checkout', '-b', 'feature/über-alles'], { cwd: dir })
+      const branch = await getCurrentBranch(dir)
+      expect(branch).toBe('feature/über-alles')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  // GB-4: Branch name output sanitization (newlines)
+  it('returns clean branch name without embedded whitespace', async () => {
+    const dir = await makeTempDir()
+    try {
+      await initGitRepo(dir)
+      await makeCommit(dir)
+      await exec('git', ['checkout', '-b', 'release/v1.0.0'], { cwd: dir })
+      const branch = await getCurrentBranch(dir)
+      expect(branch).toBe('release/v1.0.0')
+      expect(branch).not.toMatch(/\s/)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  // GB-5: Very long branch names
+  it('handles very long branch names', async () => {
+    const dir = await makeTempDir()
+    try {
+      await initGitRepo(dir)
+      await makeCommit(dir)
+      const longName = 'feature/' + 'a'.repeat(100)
+      await exec('git', ['checkout', '-b', longName], { cwd: dir })
+      const branch = await getCurrentBranch(dir)
+      expect(branch).toBe(longName)
+      expect(branch!.length).toBeGreaterThan(100)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
 })

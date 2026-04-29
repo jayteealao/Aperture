@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session, ConnectionState } from '@/api/types'
 import { handleJsonRpcMessage } from './sessions/jsonrpc-message-handler'
+import { handleSdkWebSocketMessage } from './sessions/sdk-message-handler'
 
 vi.mock('idb-keyval', () => ({
   get: vi.fn(),
@@ -1068,5 +1069,140 @@ describe('useSessionsStore cleanup', () => {
     expect(state.piThinkingLevel).toEqual({})
     expect(state.piLoading).toEqual({})
     expect(state.piErrors).toEqual({})
+  })
+})
+
+// GB-1: git_branch JSON-RPC handler
+describe('git_branch JSON-RPC handler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    useSessionsStore.setState(initialState, true)
+  })
+
+  it('stores branch name via setGitBranch', () => {
+    const sessionId = 'git-branch-jsonrpc-1'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: { update: { sessionUpdate: 'git_branch', gitBranch: 'feature/my-branch' } },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().gitBranch[sessionId]).toBe('feature/my-branch')
+  })
+
+  it('stores null when gitBranch is not a string', () => {
+    const sessionId = 'git-branch-jsonrpc-2'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    handleJsonRpcMessage(
+      sessionId,
+      {
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: { update: { sessionUpdate: 'git_branch', gitBranch: null } },
+      },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().gitBranch[sessionId]).toBeNull()
+  })
+})
+
+// GB-2: git_branch SDK message handler
+describe('git_branch SDK message handler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    useSessionsStore.setState(initialState, true)
+  })
+
+  it('stores branch name via setGitBranch', () => {
+    const sessionId = 'git-branch-sdk-1'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    handleSdkWebSocketMessage(
+      sessionId,
+      { type: 'git_branch', payload: { gitBranch: 'main' } },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().gitBranch[sessionId]).toBe('main')
+  })
+
+  it('stores null when gitBranch is null', () => {
+    const sessionId = 'git-branch-sdk-2'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    handleSdkWebSocketMessage(
+      sessionId,
+      { type: 'git_branch', payload: { gitBranch: null } },
+      storeGet,
+      storeSet,
+    )
+
+    expect(useSessionsStore.getState().gitBranch[sessionId]).toBeNull()
+  })
+})
+
+// GB-6: setGitBranch direct action
+describe('setGitBranch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    useSessionsStore.setState(initialState, true)
+  })
+
+  it('stores branch per session', () => {
+    const sessionId = 'git-branch-action-1'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(sessionId, 'claude_sdk')],
+      connections: { [sessionId]: makeConnection() },
+    }))
+
+    useSessionsStore.getState().setGitBranch(sessionId, 'main')
+    expect(useSessionsStore.getState().gitBranch[sessionId]).toBe('main')
+
+    useSessionsStore.getState().setGitBranch(sessionId, null)
+    expect(useSessionsStore.getState().gitBranch[sessionId]).toBeNull()
+  })
+
+  it('does not affect other sessions', () => {
+    const s1 = 'git-branch-s1'
+    const s2 = 'git-branch-s2'
+    useSessionsStore.setState((state) => ({
+      ...state,
+      sessions: [makeSession(s1, 'claude_sdk'), makeSession(s2, 'claude_sdk')],
+      connections: { [s1]: makeConnection(), [s2]: makeConnection() },
+    }))
+
+    useSessionsStore.getState().setGitBranch(s1, 'feature/a')
+    expect(useSessionsStore.getState().gitBranch[s2]).toBeUndefined()
   })
 })

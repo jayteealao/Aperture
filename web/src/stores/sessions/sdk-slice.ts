@@ -296,9 +296,10 @@ export const createSdkSlice: StateCreator<SessionsStore, [], [], SdkSlice> = (se
   },
 
   setGitBranch: (sessionId, branch) => {
-    set((state) => ({
-      gitBranch: { ...state.gitBranch, [sessionId]: branch },
-    }))
+    set((state) => {
+      if (state.gitBranch[sessionId] === branch) return state
+      return { gitBranch: { ...state.gitBranch, [sessionId]: branch } }
+    })
   },
 
   cleanupSdkState: (sessionId) => {

@@ -20,7 +20,7 @@ import type {
   PiForkableEntry,
   PiSessionEntry,
 } from './agents/pi-types.js';
-import { getCurrentBranch } from './git-diff.js';
+import { GitBranchTracker } from './session-git-branch.js';
 
 // Re-export PiWsMessage for use in routes.ts
 export type { PiWsMessage } from './agents/pi-types.js';
@@ -55,7 +55,7 @@ export class PiSession extends EventEmitter {
   // Cached session info
   private cachedModels: PiModelInfo[] | null = null;
   private cachedStats: PiSessionStats | null = null;
-  private _lastGitBranch: string | null = null;
+  private readonly _gitBranchTracker = new GitBranchTracker();
   private currentModel: PiModelConfig | null = null;
   private currentThinkingLevel: PiThinkingLevel = 'off';
   private isCurrentlyStreaming = false;
@@ -207,7 +207,7 @@ export class PiSession extends EventEmitter {
     };
     this.emit('message', initMessage);
 
-    void this.emitGitBranchUpdate();
+    this.emitGitBranchUpdate();
 
     console.log(`[PiSession] Started session ${this.id} with Pi SDK`);
   }
@@ -242,7 +242,7 @@ export class PiSession extends EventEmitter {
         if (event.usage) {
           this.updateStats(event.usage);
         }
-        void this.emitGitBranchUpdate();
+        this.emitGitBranchUpdate();
         break;
     }
   }
@@ -260,15 +260,10 @@ export class PiSession extends EventEmitter {
     });
   }
 
-  private async emitGitBranchUpdate(): Promise<void> {
-    if (!this.workingDir) return;
-    try {
-      const gitBranch = await getCurrentBranch(this.workingDir);
-      this._lastGitBranch = gitBranch ?? null;
-      this.emitSessionUpdate('git_branch', { gitBranch: this._lastGitBranch });
-    } catch {
-      // Non-critical — branch info is best-effort
-    }
+  private emitGitBranchUpdate(): void {
+    this._gitBranchTracker.refresh(this.workingDir, this.emitSessionUpdate.bind(this)).catch(() => {
+      // Non-critical defense-in-depth
+    })
   }
 
   /**
@@ -602,7 +597,7 @@ export class PiSession extends EventEmitter {
       thinkingLevel: this.currentThinkingLevel,
       currentModel: this.currentModel || undefined,
       isStreaming: this.agentSession?.isStreaming || false,
-      gitBranch: this._lastGitBranch,
+      gitBranch: this._gitBranchTracker.current,
     };
   }
 

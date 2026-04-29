@@ -43,8 +43,11 @@ export function handleSdkWebSocketMessage(
       break
     }
 
+    // Pi sessions route git_branch through the JSON-RPC path (jsonrpc-message-handler.ts)
+    // This SDK handler covers SDK sessions only.
     case 'git_branch': {
-      const branch = (payload as { gitBranch?: string | null }).gitBranch ?? null
+      const raw = (payload as { gitBranch?: string | null }).gitBranch
+      const branch = typeof raw === 'string' ? raw : null
       get().setGitBranch(sessionId, branch)
       break
     }

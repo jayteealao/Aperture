@@ -50,9 +50,9 @@ import {
   captureRepoBaselineSnapshot,
   computeCompletedTurnDiff,
   disposeRepoBaselineSnapshot,
-  getCurrentBranch,
   type RepoBaselineSnapshot,
 } from './git-diff.js';
+import { GitBranchTracker } from './session-git-branch.js';
 
 // Pending permission request from SDK
 interface PendingPermission {
@@ -200,7 +200,7 @@ export class SdkSession extends EventEmitter {
   // Result tracking
   private permissionDenials: PermissionDenial[] = [];
   private lastResult: SessionResult | null = null;
-  private _lastGitBranch: string | null = null;
+  private readonly _gitBranchTracker = new GitBranchTracker();
   private messageUuids: Map<string, string> = new Map();
   private checkpointMessageIds: string[] = [];
   private checkpointMessageIdSet: Set<string> = new Set();
@@ -345,7 +345,7 @@ export class SdkSession extends EventEmitter {
     this.emit('message', initMessage);
     this.emit('session_update', initMessage.params);
 
-    void this.emitGitBranchUpdate();
+    this.emitGitBranchUpdate();
 
     // Run warmup in background — don't block session start, but pre-fetch
     // models/commands/accountInfo so they're available before the first prompt
@@ -1615,7 +1615,7 @@ export class SdkSession extends EventEmitter {
 
       // Also emit legacy format
       this.emitSessionUpdate('prompt_complete', payload);
-      void this.emitGitBranchUpdate();
+      this.emitGitBranchUpdate();
       void this.persistTurnDiffSummary(false);
 
       // Generate AI title on first successful prompt completion.
@@ -1669,15 +1669,10 @@ export class SdkSession extends EventEmitter {
     this.logEvent(`session_update:${updateType}`, data);
   }
 
-  private async emitGitBranchUpdate(): Promise<void> {
-    if (!this.workingDir) return;
-    try {
-      const gitBranch = await getCurrentBranch(this.workingDir);
-      this._lastGitBranch = gitBranch ?? null;
-      this.emitSessionUpdate('git_branch', { gitBranch: this._lastGitBranch });
-    } catch {
-      // Non-critical — branch info is best-effort
-    }
+  private emitGitBranchUpdate(): void {
+    this._gitBranchTracker.refresh(this.workingDir, this.emitSessionUpdate.bind(this)).catch(() => {
+      // Non-critical defense-in-depth
+    })
   }
 
   /**
@@ -2363,7 +2358,7 @@ export class SdkSession extends EventEmitter {
       config: this.sdkConfig,
       lastResult: this.lastResult,
       workingDirectory: this.workingDir,
-      gitBranch: this._lastGitBranch,
+      gitBranch: this._gitBranchTracker.current,
     };
   }
 

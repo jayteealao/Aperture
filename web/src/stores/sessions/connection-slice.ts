@@ -100,6 +100,10 @@ export const createConnectionSlice: StateCreator<SessionsStore, [], [], Connecti
         console.log(`[Sessions] Restored SDK session ${sessionId}`)
       }
       get().updateSessionStatus(sessionId, response.status)
+      // Sync gitBranch from server status to sdk-slice on (re)connect
+      if ('gitBranch' in response.status) {
+        get().setGitBranch(sessionId, response.status.gitBranch ?? null)
+      }
       if (response.workspaceId) {
         const session = get().sessions.find((item) => item.id === sessionId)
         if (session && session.workspaceId !== response.workspaceId) {
