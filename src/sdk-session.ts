@@ -50,6 +50,7 @@ import {
   captureRepoBaselineSnapshot,
   computeCompletedTurnDiff,
   disposeRepoBaselineSnapshot,
+  getCurrentBranch,
   type RepoBaselineSnapshot,
 } from './git-diff.js';
 
@@ -199,6 +200,7 @@ export class SdkSession extends EventEmitter {
   // Result tracking
   private permissionDenials: PermissionDenial[] = [];
   private lastResult: SessionResult | null = null;
+  private _lastGitBranch: string | null = null;
   private messageUuids: Map<string, string> = new Map();
   private checkpointMessageIds: string[] = [];
   private checkpointMessageIdSet: Set<string> = new Set();
@@ -342,6 +344,8 @@ export class SdkSession extends EventEmitter {
     };
     this.emit('message', initMessage);
     this.emit('session_update', initMessage.params);
+
+    void this.emitGitBranchUpdate();
 
     // Run warmup in background — don't block session start, but pre-fetch
     // models/commands/accountInfo so they're available before the first prompt
@@ -1611,6 +1615,7 @@ export class SdkSession extends EventEmitter {
 
       // Also emit legacy format
       this.emitSessionUpdate('prompt_complete', payload);
+      void this.emitGitBranchUpdate();
       void this.persistTurnDiffSummary(false);
 
       // Generate AI title on first successful prompt completion.
@@ -1662,6 +1667,17 @@ export class SdkSession extends EventEmitter {
       params,
     });
     this.logEvent(`session_update:${updateType}`, data);
+  }
+
+  private async emitGitBranchUpdate(): Promise<void> {
+    if (!this.workingDir) return;
+    try {
+      const gitBranch = await getCurrentBranch(this.workingDir);
+      this._lastGitBranch = gitBranch ?? null;
+      this.emitSessionUpdate('git_branch', { gitBranch: this._lastGitBranch });
+    } catch {
+      // Non-critical — branch info is best-effort
+    }
   }
 
   /**
@@ -2329,6 +2345,7 @@ export class SdkSession extends EventEmitter {
     config: SdkSessionConfig;
     lastResult: SessionResult | null;
     workingDirectory: string | undefined;
+    gitBranch: string | null;
   } {
     const effectiveSdkSessionId = this.sdkSessionId || this.sdkConfig.resume || null;
 
@@ -2346,6 +2363,7 @@ export class SdkSession extends EventEmitter {
       config: this.sdkConfig,
       lastResult: this.lastResult,
       workingDirectory: this.workingDir,
+      gitBranch: this._lastGitBranch,
     };
   }
 

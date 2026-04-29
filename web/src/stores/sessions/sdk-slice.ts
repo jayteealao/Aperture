@@ -70,6 +70,7 @@ export interface SdkSlice {
   sdkLoading: Record<string, SdkLoadingState>
   sdkErrors: Record<string, SdkErrorState>
   sdkRewindResult: Record<string, RewindFilesResult | null>
+  gitBranch: Record<string, string | null>
 
   // Actions
   setSdkConfig: (sessionId: string, config: SdkSessionConfig) => void
@@ -93,6 +94,7 @@ export interface SdkSlice {
   setSdkLoading: (sessionId: string, loading: Partial<SdkLoadingState>) => void
   setSdkErrors: (sessionId: string, errors: Partial<SdkErrorState>) => void
   setSdkRewindResult: (sessionId: string, result: RewindFilesResult | null) => void
+  setGitBranch: (sessionId: string, branch: string | null) => void
 
   // Cleanup (called by removeSession)
   cleanupSdkState: (sessionId: string) => void
@@ -114,6 +116,7 @@ export const sdkSliceInitialState = {
   sdkLoading: {} as Record<string, SdkLoadingState>,
   sdkErrors: {} as Record<string, SdkErrorState>,
   sdkRewindResult: {} as Record<string, RewindFilesResult | null>,
+  gitBranch: {} as Record<string, string | null>,
 }
 
 export const createSdkSlice: StateCreator<SessionsStore, [], [], SdkSlice> = (set, get) => ({
@@ -289,6 +292,12 @@ export const createSdkSlice: StateCreator<SessionsStore, [], [], SdkSlice> = (se
   setSdkRewindResult: (sessionId, result) => {
     set((state) => ({
       sdkRewindResult: { ...state.sdkRewindResult, [sessionId]: result },
+    }))
+  },
+
+  setGitBranch: (sessionId, branch) => {
+    set((state) => ({
+      gitBranch: { ...state.gitBranch, [sessionId]: branch },
     }))
   },
 

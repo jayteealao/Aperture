@@ -403,6 +403,7 @@ export interface PiSessionStatus {
   thinkingLevel?: PiThinkingLevel;
   currentModel?: PiModelConfig;
   isStreaming: boolean;
+  gitBranch: string | null;
 }
 
 // =============================================================================

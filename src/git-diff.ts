@@ -75,6 +75,25 @@ async function getHeadSha(repoRoot: string): Promise<string | null> {
   }
 }
 
+export async function getCurrentBranch(cwd: string): Promise<string | null> {
+  try {
+    const { stdout } = await execGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
+    const branch = stdout.trim();
+    if (!branch) return null;
+    if (branch === 'HEAD') {
+      try {
+        const { stdout: shortSha } = await execGit(['rev-parse', '--short', 'HEAD'], cwd);
+        return shortSha.trim() || null;
+      } catch {
+        return null;
+      }
+    }
+    return branch;
+  } catch {
+    return null;
+  }
+}
+
 function parseStatusPorcelain(stdout: Buffer): GitStatusEntry[] {
   const tokens = stdout.toString('utf8').split('\0').filter(Boolean);
   const entries: GitStatusEntry[] = [];

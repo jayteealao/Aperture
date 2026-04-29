@@ -43,6 +43,12 @@ export function handleSdkWebSocketMessage(
       break
     }
 
+    case 'git_branch': {
+      const branch = (payload as { gitBranch?: string | null }).gitBranch ?? null
+      get().setGitBranch(sessionId, branch)
+      break
+    }
+
     default:
       break
   }

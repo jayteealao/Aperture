@@ -215,6 +215,9 @@ function handleSessionUpdate(
     if (updateType === 'task_notification' && sessionId !== activeSessionId) {
       get().incrementUnread(sessionId)
     }
+  } else if (updateType === 'git_branch') {
+    const gitBranch = typeof update.gitBranch === 'string' ? update.gitBranch : null
+    get().setGitBranch(sessionId, gitBranch)
   } else if (
     updateType === 'user_message' ||
     updateType === 'tool_call' ||
