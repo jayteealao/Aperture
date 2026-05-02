@@ -1,21 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import { cn } from '@/utils/cn'
 import { formatNumber } from '@/utils/format'
-import { ClaudeMascotIcon } from '@/components/icons/ClaudeMascotIcon'
+import { AnimatedClawdMascot } from './AnimatedClawdMascot'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import type { SessionResult } from '@/api/types'
+import type { SessionResult, SessionVisualState } from '@/api/types'
 
 const STALE_THRESHOLD_MS = 5 * 60 * 1000
 const POLL_INTERVAL_MS = 30 * 1000
 
 interface SessionContextBarProps {
   usage: SessionResult | null
-  isActive: boolean
+  sessionState: SessionVisualState
   sdkSidebarOpen?: boolean
   onClickSidebar: () => void
   lastActivityTime?: number
@@ -58,7 +58,7 @@ function getFillColor(percent: number) {
 
 export function SessionContextBar({
   usage,
-  isActive,
+  sessionState,
   sdkSidebarOpen,
   onClickSidebar,
   lastActivityTime,
@@ -105,17 +105,15 @@ export function SessionContextBar({
             onClick={onClickSidebar}
             aria-label={buttonLabel}
           >
-            {/* Active-state mascot color is the primary activity signal for SDK desktop
-                sessions (WorkspaceChatPane suppresses the shimmer text label there). */}
-            <ClaudeMascotIcon
+            {/* The animated mascot's per-state animation (idle bobbing, working
+                variants, awaiting alert, disconnected slump) is the primary
+                activity signal for SDK desktop sessions — WorkspaceChatPane
+                suppresses the shimmer text label for the continuous active
+                states. */}
+            <AnimatedClawdMascot
+              sessionState={sessionState}
               size={20}
               aria-hidden="true"
-              className={cn(
-                isActive
-                  ? 'text-[var(--primary)]'
-                  : 'text-muted-foreground',
-                'transition-colors duration-300',
-              )}
             />
             {contextData && (
               <div

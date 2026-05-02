@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { AgentType, ConnectionState, SessionResult } from '@/api/types'
+import type { AgentType, ConnectionState, SessionResult, SessionVisualState } from '@/api/types'
 import { cn } from '@/utils/cn'
 import { Badge } from '@/components/ui/badge'
 import { ConnectionStatus } from '@/components/chat'
@@ -11,12 +11,28 @@ export interface AgentHeaderSlots {
   metadataSlot: ReactNode
 }
 
+// Derives the visual-state union used by AnimatedClawdMascot from raw chat
+// status, pending permissions, and connection state. Priority order matters:
+// disconnected > awaiting > active > starting > idle.
+export function deriveSessionVisualState(
+  status: string,
+  pendingPermissionCount: number,
+  connection: ConnectionState | null,
+): SessionVisualState {
+  if (connection && connection.status !== 'connected') return 'disconnected'
+  if (pendingPermissionCount > 0) return 'awaiting'
+  if (status === 'streaming') return 'active'
+  if (status === 'submitted') return 'starting'
+  return 'idle'
+}
+
 export function getAgentHeaderSlots(params: {
   agent: AgentType
   connection: ConnectionState | null
   sdkUsage: SessionResult | null
   gitBranch: string | null
-  isActive: boolean
+  status: string
+  pendingPermissionCount: number
   sdkSidebarOpen: boolean
   isDataStale: boolean
   onToggleSidebar: () => void
@@ -25,11 +41,16 @@ export function getAgentHeaderSlots(params: {
   agentVariant: 'accent' | 'secondary'
 }): AgentHeaderSlots {
   if (params.agent === 'claude_sdk') {
+    const sessionState = deriveSessionVisualState(
+      params.status,
+      params.pendingPermissionCount,
+      params.connection,
+    )
     return {
       identitySlot: (
         <SessionContextBar
           usage={params.sdkUsage}
-          isActive={params.isActive}
+          sessionState={sessionState}
           sdkSidebarOpen={params.sdkSidebarOpen}
           onClickSidebar={params.onToggleSidebar}
           lastActivityTime={params.lastActivityTime}

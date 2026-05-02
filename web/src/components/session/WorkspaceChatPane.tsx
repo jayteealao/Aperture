@@ -350,14 +350,15 @@ function WorkspaceChatPaneReady({
     connection,
     sdkUsage,
     gitBranch,
-    isActive: status === 'streaming' || status === 'submitted',
+    status,
+    pendingPermissionCount: pendingPermissions.length,
     sdkSidebarOpen,
     isDataStale,
     onToggleSidebar: () => setSdkSidebarOpen((v) => !v),
     lastActivityTime: session.status.lastActivityTime,
     agentLabel,
     agentVariant,
-  }), [session.agent, connection, sdkUsage, gitBranch, status, sdkSidebarOpen, isDataStale, session.status.lastActivityTime, agentLabel, agentVariant])
+  }), [session.agent, connection, sdkUsage, gitBranch, status, pendingPermissions.length, sdkSidebarOpen, isDataStale, session.status.lastActivityTime, agentLabel, agentVariant])
 
   // ── Collapsible input state ──────────────────────────────────────────────
   const [isInputExpanded, setIsInputExpanded] = useState(true)

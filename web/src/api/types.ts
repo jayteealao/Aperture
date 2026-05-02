@@ -382,6 +382,16 @@ export interface ConnectionState {
   lastActivity: number
 }
 
+// UI-derived visual state for the session mascot. Mirrors the live observable
+// state of an SDK session: idle, starting (submitted, no permission), active
+// (streaming, no permission), awaiting (permission pending), or disconnected.
+export type SessionVisualState =
+  | 'idle'
+  | 'starting'
+  | 'active'
+  | 'awaiting'
+  | 'disconnected'
+
 // Workspace types
 export interface WorkspaceRecord {
   id: string
