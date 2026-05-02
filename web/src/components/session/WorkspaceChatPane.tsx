@@ -317,6 +317,9 @@ function WorkspaceChatPaneReady({
       : status === 'submitted'
         ? 'Starting'
         : null
+  // Desktop-only: Claude SDK sessions communicate active state via the mascot's
+  // mono → brand color transition, so the shimmer label is redundant there.
+  const desktopActivityLabel = session.agent === 'claude_sdk' ? null : activityLabel
   const agentLabel = session.agent === 'claude_sdk' ? 'SDK' : 'Pi'
   const agentVariant = (session.agent === 'claude_sdk' ? 'accent' : 'secondary') as 'accent' | 'secondary'
   const [isDataStale, setIsDataStale] = useState(false)
@@ -600,10 +603,10 @@ function WorkspaceChatPaneReady({
             />
           </span>
           {agentSlots.metadataSlot}
-          {activityLabel && (
+          {desktopActivityLabel && (
             <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
               <span className="size-2 shrink-0 rounded-full bg-accent animate-pulse" />
-              <Shimmer>{activityLabel}</Shimmer>
+              <Shimmer>{desktopActivityLabel}</Shimmer>
             </div>
           )}
         </div>
