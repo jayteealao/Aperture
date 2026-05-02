@@ -317,11 +317,17 @@ function WorkspaceChatPaneReady({
       : status === 'submitted'
         ? 'Starting'
         : null
-  // Desktop-only: Claude SDK sessions communicate active state via the mascot's
-  // mono → brand color transition, so the shimmer label is redundant there.
-  const desktopActivityLabel = session.agent === 'claude_sdk' ? null : activityLabel
-  const agentLabel = session.agent === 'claude_sdk' ? 'SDK' : 'Pi'
-  const agentVariant = (session.agent === 'claude_sdk' ? 'accent' : 'secondary') as 'accent' | 'secondary'
+  // Desktop SDK sessions communicate active state via the mascot's mono → brand
+  // color transition, so the shimmer text is suppressed for the continuous
+  // "Starting" / "Agent active" states. The pulsing dot is retained as a
+  // non-color shape/motion cue (WCAG 1.4.1). "Awaiting approval" is kept for
+  // SDK because it is an actionable cue requiring user response (WCAG 4.1.3).
+  const desktopActivityVisible = activityLabel !== null
+  const desktopActivityLabel = isClaudeSdk
+    ? (hasPendingPermission ? 'Awaiting approval' : null)
+    : activityLabel
+  const agentLabel = isClaudeSdk ? 'SDK' : 'Pi'
+  const agentVariant = (isClaudeSdk ? 'accent' : 'secondary') as 'accent' | 'secondary'
   const [isDataStale, setIsDataStale] = useState(false)
   useEffect(() => {
     const check = () => {
@@ -603,10 +609,10 @@ function WorkspaceChatPaneReady({
             />
           </span>
           {agentSlots.metadataSlot}
-          {desktopActivityLabel && (
+          {desktopActivityVisible && (
             <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
               <span className="size-2 shrink-0 rounded-full bg-accent animate-pulse" />
-              <Shimmer>{desktopActivityLabel}</Shimmer>
+              {desktopActivityLabel && <Shimmer>{desktopActivityLabel}</Shimmer>}
             </div>
           )}
         </div>

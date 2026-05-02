@@ -105,6 +105,8 @@ export function SessionContextBar({
             onClick={onClickSidebar}
             aria-label={buttonLabel}
           >
+            {/* Active-state mascot color is the primary activity signal for SDK desktop
+                sessions (WorkspaceChatPane suppresses the shimmer text label there). */}
             <ClaudeMascotIcon
               size={20}
               aria-hidden="true"
