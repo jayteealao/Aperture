@@ -66,8 +66,7 @@ import type { ConnectionState, Session, SlashPickerEntry, TurnDiffSummary } from
 import { IMAGE_LIMITS } from '@/api/types'
 import { SdkComposerControls, SdkControlPanel, SdkOverflowMenu } from '@/components/sdk'
 import { cn } from '@/utils/cn'
-import { SessionContextBar } from './SessionContextBar'
-import { GitBranchLabel } from './GitBranchLabel'
+import { getAgentHeaderSlots } from './SessionHeaderSlot'
 import { SlashPicker, getSlashPickerEntryDomId } from './SlashPicker'
 import {
   buildSlashInsertion,
@@ -337,6 +336,19 @@ function WorkspaceChatPaneReady({
   const [showInfo, setShowInfo] = useState(false)
   const [mobileHeaderCollapsed, setMobileHeaderCollapsed] = useState(true)
   const [sdkSidebarOpen, setSdkSidebarOpen] = useState(false)
+  const agentSlots = useMemo(() => getAgentHeaderSlots({
+    agent: session.agent,
+    connection,
+    sdkUsage,
+    gitBranch,
+    isActive: status === 'streaming' || status === 'submitted',
+    sdkSidebarOpen,
+    isDataStale,
+    onToggleSidebar: () => setSdkSidebarOpen((v) => !v),
+    lastActivityTime: session.status.lastActivityTime,
+    agentLabel,
+    agentVariant,
+  }), [session.agent, connection, sdkUsage, gitBranch, status, sdkSidebarOpen, isDataStale, session.status.lastActivityTime, agentLabel, agentVariant])
 
   // ── Collapsible input state ──────────────────────────────────────────────
   const [isInputExpanded, setIsInputExpanded] = useState(true)
@@ -579,17 +591,7 @@ function WorkspaceChatPaneReady({
       {/* Compact pane header */}
       <div className="hidden shrink-0 items-center justify-between border-b border-border px-3 py-2 sm:flex">
         <div className="flex items-center gap-2 min-w-0">
-          {isClaudeSdk ? (
-            <SessionContextBar
-              usage={sdkUsage}
-              isActive={status === 'streaming' || status === 'submitted'}
-              sdkSidebarOpen={sdkSidebarOpen}
-              onClickSidebar={() => setSdkSidebarOpen((v) => !v)}
-              lastActivityTime={session.status.lastActivityTime}
-            />
-          ) : (
-            <ConnectionStatus status={connection?.status ?? 'disconnected'} />
-          )}
+          {agentSlots.identitySlot}
           <span className="flex-1 min-w-[80px]">
             <EditableTitle
               title={session.title}
@@ -597,13 +599,7 @@ function WorkspaceChatPaneReady({
               onRename={handleRename}
             />
           </span>
-          {isClaudeSdk ? (
-            <span className={cn('shrink min-w-0 transition-opacity duration-300', isDataStale && 'opacity-50')}>
-              <GitBranchLabel branch={gitBranch} />
-            </span>
-          ) : (
-            <Badge variant={agentVariant} size="sm">{agentLabel}</Badge>
-          )}
+          {agentSlots.metadataSlot}
           {activityLabel && (
             <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
               <span className="size-2 shrink-0 rounded-full bg-accent animate-pulse" />
