@@ -9,6 +9,7 @@ import type {
   McpServerConfig,
   AgentType,
   ImageAttachment,
+  SlashCommand,
 } from './agents/index.js';
 import { IMAGE_LIMITS } from './agents/types.js';
 import type { CredentialStore } from './credentials.js';
@@ -19,6 +20,7 @@ import { checkReadiness } from './claudeInstaller.js';
 import { registerCredentialRoutes } from './routes/credentials.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.js';
 import { registerDiscoveryRoutes } from './routes/discovery.js';
+import { discoverSlashPickerEntries } from './slash-picker-discovery.js';
 
 /**
  * Type guard to check if a session is a Pi SDK session
@@ -855,6 +857,34 @@ export async function registerRoutes(
       } catch (err) {
         return reply.code(400).send({ error: (err as Error).message });
       }
+    }
+  );
+
+  // Get normalized slash picker entries (Claude SDK only)
+  fastify.get<{ Params: { id: string } }>(
+    '/v1/sessions/:id/slash-picker-entries',
+    async (request, reply) => {
+      const session = sessionManager.getSession(request.params.id);
+      if (!session) {
+        return reply.code(404).send({ error: 'Session not found' });
+      }
+      if (!isSdkSession(session)) {
+        return reply.code(400).send({ error: 'This endpoint is only available for Claude SDK sessions' });
+      }
+
+      let sdkCommands: SlashCommand[] | undefined;
+      let sdkError: string | undefined;
+      try {
+        sdkCommands = await session.getSupportedCommands();
+      } catch (err) {
+        sdkError = (err as Error).message;
+      }
+
+      return discoverSlashPickerEntries({
+        workspaceDir: session.getWorkingDirectory(),
+        sdkCommands,
+        sdkError,
+      });
     }
   );
 

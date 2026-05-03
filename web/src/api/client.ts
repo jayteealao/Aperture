@@ -16,6 +16,7 @@ import type {
   TurnDiffSummariesResponse,
   TurnDiffSummary,
   TurnDiffPatchResponse,
+  SlashPickerEntriesResponse,
   JsonRpcMessage,
   CreateWorkspaceRequest,
   WorkspaceRecord,
@@ -144,6 +145,12 @@ class ApertureClient {
   async getSessionCheckpoints(sessionId: string): Promise<SessionCheckpointsResponse> {
     return this.request<SessionCheckpointsResponse>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/checkpoints`
+    )
+  }
+
+  async getSlashPickerEntries(sessionId: string): Promise<SlashPickerEntriesResponse> {
+    return this.request<SlashPickerEntriesResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/slash-picker-entries`
     )
   }
 

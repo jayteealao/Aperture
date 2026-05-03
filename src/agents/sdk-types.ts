@@ -268,6 +268,40 @@ export interface SlashCommand {
   argumentHint: string;
 }
 
+export type SlashPickerEntryType = 'command' | 'skill';
+export type SlashPickerEntrySource = 'sdk' | 'project' | 'global';
+export type SlashPickerSourceStatusValue = 'ready' | 'empty' | 'partial' | 'failed' | 'unavailable';
+
+export interface SlashPickerEntryOrigin {
+  path?: string;
+  pluginId?: string;
+  pluginName?: string;
+}
+
+export interface SlashPickerEntry {
+  id: string;
+  token: string;
+  name: string;
+  type: SlashPickerEntryType;
+  source: SlashPickerEntrySource;
+  sourceLabel: string;
+  description?: string;
+  argumentHint?: string;
+  namespace?: string;
+  origin?: SlashPickerEntryOrigin;
+}
+
+export interface SlashPickerSourceStatus {
+  source: SlashPickerEntrySource;
+  status: SlashPickerSourceStatusValue;
+  message?: string;
+}
+
+export interface SlashPickerEntriesResponse {
+  entries: SlashPickerEntry[];
+  sourceStatuses: SlashPickerSourceStatus[];
+}
+
 export interface ModelInfo {
   value: string;
   displayName: string;

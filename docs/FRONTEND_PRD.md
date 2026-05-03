@@ -449,12 +449,15 @@ type PermissionMode =
 | `/v1/sessions/:id/account` | GET | Account info |
 | `/v1/sessions/:id/models` | GET | Available models |
 | `/v1/sessions/:id/commands` | GET | Slash commands |
+| `/v1/sessions/:id/slash-picker-entries` | GET | Normalized slash picker commands and skills |
 | `/v1/sessions/:id/permission-mode` | POST | Set permission mode |
 | `/v1/sessions/:id/model` | POST | Change model |
 | `/v1/sessions/:id/thinking-tokens` | POST | Set thinking budget |
 | `/v1/sessions/:id/result` | GET | Session result/usage |
 | `/v1/sessions/:id/permission-denials` | GET | Denied tools |
 | `/v1/sessions/:id/interrupt` | POST | Interrupt execution |
+
+Slash picker user behavior is documented in [Slash Picker](./SLASH_PICKER.md). The backend source contract is documented in [Slash Picker Source Contract](./internal/slash-picker-source-contract.md).
 
 ### 6.4 WebSocket Commands (Claude SDK)
 
