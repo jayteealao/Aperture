@@ -85,7 +85,8 @@ const ClawdDisconnectedInner = ({
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="-10 -20 50 40"
+      viewBox="-3 1 22 22"
+      overflow="visible"
       role={decorative ? 'presentation' : 'img'}
       aria-label={decorative ? undefined : 'Claude Code'}
       aria-hidden={ariaHidden}

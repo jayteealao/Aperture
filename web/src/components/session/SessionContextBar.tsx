@@ -112,12 +112,12 @@ export function SessionContextBar({
                 states. */}
             <AnimatedClawdMascot
               sessionState={sessionState}
-              size={20}
+              size={32}
               aria-hidden="true"
             />
             {contextData && (
               <div
-                className="h-[2px] w-5 rounded-full bg-secondary"
+                className="h-[2px] w-8 rounded-full bg-secondary"
                 role="progressbar"
                 aria-valuenow={percent}
                 aria-valuemin={0}
