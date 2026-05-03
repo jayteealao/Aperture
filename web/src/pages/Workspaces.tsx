@@ -53,7 +53,7 @@ export default function Workspaces() {
       const workspacesWithData = await Promise.all(
         workspaceList.map(async (workspace) => {
           try {
-            const checkoutsData = await api.listWorkspaceRepositories(workspace.id)
+            const checkoutsData = await api.listWorkspaceCheckouts(workspace.id)
 
             return {
               ...workspace,
