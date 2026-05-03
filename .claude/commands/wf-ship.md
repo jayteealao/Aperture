@@ -1,9 +1,16 @@
 ---
 name: wf-ship
-description: Assess release readiness, ask mandatory rollout questions, and define rollout plus rollback.
-argument-hint: <slug> [target-or-slice]
+description: Assess release readiness, ask mandatory rollout questions, and define rollout plus rollback. Operates at the workflow level — reads 08-handoff.md, the PR, and the branch. No slice argument needed.
+argument-hint: <slug> [environment]
 disable-model-invocation: true
 ---
+
+# External Output Boundary (MANDATORY)
+Workflow artifacts and command internals are private implementation context. Never expose them in external-facing outputs.
+- Internal context includes workflow artifact paths (`.ai/workflows/...`, `.claude/...`, `.ai/dep-updates/...`), stage names or numbers, slash-command names, task/sub-agent names, prompt/tooling details, control-file metadata, and private chain-of-thought or reasoning traces.
+- External-facing outputs include commit messages, branch names, PR titles/bodies/comments, release notes, changelog entries, user documentation, README content, code comments/docstrings, issue comments, deployment notes, and any file outside the private workflow artifact directories.
+- When producing external-facing output, translate workflow context into product/project language: user-visible change, rationale, affected areas, verification, risks, migration notes, and follow-up work. Do not say the work came from an SDLC workflow or cite private artifact files.
+- Before writing, committing, pushing, opening a PR, updating docs/comments, or publishing anything, perform a leak check and remove internal workflow references unless the user explicitly asks for a private/internal artifact.
 
 You are running `wf-ship`, **stage 9 of 10** in the SDLC lifecycle.
 
@@ -25,22 +32,72 @@ You are a **workflow orchestrator**, not a problem solver.
 - If you catch yourself about to start fixing code or deploying beyond the merge, STOP and return to the next unfinished workflow step.
 
 # Step 0 — Orient (MANDATORY — do this before all other steps)
-1. **Resolve the slug** from `$ARGUMENTS` (first argument). Second argument, if present, is the **target or slice selector**. If no slug is given, infer the most recent active workflow from `.ai/workflows/*/00-index.md`. If ambiguous, ask the user.
-2. **Read `00-index.md`** at `.ai/workflows/<slug>/00-index.md`. Parse the YAML frontmatter for `current-stage`, `status`, `selected-slice`, `open-questions`.
-3. **Check prerequisites:**
-   - At minimum `05-implement.md` must exist. `08-handoff.md` is strongly recommended. If neither exists → STOP. Tell the user which command to run first.
-   - If `08-handoff.md` shows `Status: Awaiting input` → STOP. Tell the user to resolve it first.
+1. **Resolve the slug** from `$ARGUMENTS` (first argument). If no slug is given, infer the most recent active workflow from `.ai/workflows/*/00-index.md`. If ambiguous, ask the user.
+2. **Resolve optional environment override**: If a second argument was passed (e.g., `staging`, `production`, `eu-west`), record it as `environment`. If omitted, derive the target environment from the deployment platform details in `08-handoff.md` or ask the user during the rollout questions.
+3. **Read `00-index.md`** — parse `current-stage`, `status`, `open-questions`, `branch-strategy`, `branch`, `base-branch`, `pr-url`, `pr-number`.
+4. **Check prerequisites:**
+   - `08-handoff.md` must exist with `status: complete`. If missing → STOP: "Run `/wf-handoff <slug>` first — ship requires a completed handoff with PR details."
+   - If `08-handoff.md` shows any unresolved blocker findings → STOP. Tell the user to resolve via `/wf-implement <slug> <slice> reviews` first.
    - If `current-stage` in the index is already past ship → WARN: "Stage 9 (ship) has already been completed. Running it again will overwrite `09-ship.md`. Proceed?"
-4. **Read** `08-handoff.md` (if exists), `05-implement.md`, `07-review.md` (if exists), and `po-answers.md`.
-5. **Resolve the slice/target**: If a second argument was passed, use it. If not, use `selected-slice-or-focus` from the index.
+5. **Read** `08-handoff.md`, `07-review.md` (if exists), and `po-answers.md`.
 6. **Carry forward** `open-questions` from the index.
 
-# Parallel research (use sub-agents when supported)
-Ship decisions often need current external information. Launch parallel sub-agents:
-- **Web research sub-agent 1:** Check deployment target for current advisories, outages, version requirements, or breaking changes.
-- **Web research sub-agent 2:** Check external dependencies for new security advisories or known issues since the plan was written.
-- **Explore sub-agent:** Scan the repo's CI/CD config, deployment scripts, and release infrastructure to confirm the rollout plan is feasible.
-- Do not spin up sub-agents for simple internal deployments.
+# Parallel research
+Ship decisions often need current external information. Launch parallel sub-agents. Do not spin up sub-agents for simple internal deployments with no external dependencies.
+
+### Web research sub-agent 1 — Deployment Target & Platform Status
+
+Prompt the agent with ALL of the following:
+
+**Platform health:**
+- Web search for current status/outage pages of the deployment target (AWS status, Vercel status, npm registry status, PyPI status, etc.)
+- Check for scheduled maintenance windows that overlap with the planned release window
+- Search for recent incidents or degradations that could affect deployment
+
+**Platform version requirements:**
+- Check if the deployment target has updated runtime requirements (Node.js version, Python version, OS version)
+- Web search for deprecation notices on the deployment platform that affect this project
+- Verify that the project's runtime version is still supported by the target platform
+
+**Breaking changes & migration requirements:**
+- Web search for recent platform changelog entries that affect the deployment method or configuration
+- Check if CI/CD pipeline plugins or actions have new required versions
+- Look for new security requirements (e.g., new signing requirements, token format changes, MFA enforcement)
+
+### Web research sub-agent 2 — Dependency Security & Advisories
+
+Prompt the agent with ALL of the following:
+
+**Security advisories since implementation:**
+- Web search for CVEs published since the implementation was written (`05-implement-<slice>.md` `created-at`) affecting project dependencies
+- Check GitHub Security Advisories for the dependency repositories
+- Search for npm/pip/cargo audit findings: `npm audit`, `pip-audit`, `cargo audit`
+
+**Known issues affecting release:**
+- Check GitHub issues on key dependency repos for bugs that could manifest in production but not in tests
+- Search for regression reports in the dependency versions the project uses
+- Look for community reports of deployment failures with the same dependency stack
+
+### Explore sub-agent 3 — CI/CD & Release Infrastructure
+
+Prompt the agent with ALL of the following:
+
+**CI/CD configuration:**
+- Read CI config files (`.github/workflows/*.yml`, `.gitlab-ci.yml`, `Jenkinsfile`, `.circleci/config.yml`, `Dockerfile`, `docker-compose*.yml`)
+- Identify the deployment pipeline: build → test → deploy stages, required checks, approval gates
+- Check if the CI config has changed since the implementation was committed
+
+**Release infrastructure:**
+- Identify release scripts (`scripts/deploy*`, `scripts/release*`, `Makefile` targets, `package.json` scripts)
+- Check for feature flag configuration files or services the rollout plan depends on
+- Verify that environment variable requirements for deployment are documented and available
+
+**Rollback capability:**
+- Identify the rollback mechanism: git revert, deployment rollback command, blue-green switch, feature flag toggle
+- Estimate rollback time based on the deployment method
+- Check if database migrations are reversible (look for `down` migrations, rollback scripts)
+
+Merge all sub-agent findings into `## Release Readiness`, `## Key Release Risks`, and `## Freshness Research`.
 
 # Purpose
 Assess release readiness, ask mandatory rollout questions, and define rollout plus rollback.
@@ -48,6 +105,7 @@ Assess release readiness, ask mandatory rollout questions, and define rollout pl
 # Workflow rules
 - Store artifacts under `.ai/workflows/<slug>/`. Maintain `00-index.md` as the control file. Never leave the canonical result only in chat — write the stage file first.
 - **Every artifact file MUST have YAML frontmatter** (between `---` markers) as the first thing in the file. All machine-readable state goes in frontmatter. The markdown body is for human-readable narrative only.
+- **Timestamps must be real:** For `created-at` and `updated-at`, run `date -u +"%Y-%m-%dT%H:%M:%SZ"` via Bash to get the actual current time. Never guess or use `T00:00:00Z`.
 - If the stage cannot finish, set `status: awaiting-input` in frontmatter and list unanswered questions.
 - Keep `po-answers.md` as cumulative product-owner log. Keep the slug stable after intake.
 - `00-index.md` must always have: title, slug, current-stage, stage-status, updated-at, selected-slice-or-focus, open-questions, recommended-next-stage, recommended-next-command, recommended-next-invocation, workflow-files.
@@ -66,7 +124,7 @@ After writing files, return ONLY:
 
 Do this in order:
 1. **Read branch strategy** from `00-index.md` frontmatter: `branch-strategy`, `branch`, `base-branch`, `pr-url`, `pr-number`.
-2. **Create task list.** Use TaskCreate for the ship sequence. All metadata: `{ slug, stage: "ship", slice: "<slice-slug>" }`.
+2. **Create task list.** Use TaskCreate for the ship sequence. All metadata: `{ slug, stage: "ship", environment: "<environment or 'default'>" }`.
    - T1: `subject: "Ask rollout questions"`, `activeForm: "Asking rollout questions"`.
    - T2: `subject: "Run freshness research"`, `activeForm: "Researching release readiness"`, `addBlockedBy: ["T1"]`.
    - T3: `subject: "Write release readiness assessment"`, `activeForm: "Writing readiness assessment"`, `addBlockedBy: ["T2"]`.
@@ -165,9 +223,6 @@ Use when: Ship assessment found that verification evidence is stale or insuffici
 **Option D: Blocked — re-run ship** → `/wf-ship <slug>`
 Use when: Required rollout answers are still missing, OR merge was declined and needs to be retried later. Mark `Status: Awaiting input`.
 
-**Option E: Next slice** → `/wf-plan <slug> <next-slice>` or `/wf-implement <slug> <next-slice>`
-Use when: This slice shipped but there are more slices. Retro can wait until all slices ship.
-
 Write ALL viable options (not just the default) into `## Recommended Next Stage` so the user can choose.
 
 Write `09-ship.md` with this structure:
@@ -177,11 +232,11 @@ Write `09-ship.md` with this structure:
 schema: sdlc/v1
 type: ship
 slug: <slug>
-slice-slug: <slice-slug>
 status: complete
 stage-number: 9
 created-at: "<iso-8601>"
 updated-at: "<iso-8601>"
+environment: "<production|staging|custom — from second argument or rollout questions>"
 go-nogo: <go|no-go|conditional-go>
 rollout-strategy: <immediate|staged|canary|feature-flag|maintenance-window>
 merge-strategy: <rebase|squash|merge|none>
@@ -237,5 +292,6 @@ next-invocation: "/wf-retro <slug>"
 
 ## Recommended Next Stage
 - **Option A (default):** `/wf-retro <slug>` — Go [reason]
-- **Option B:** `/wf-implement <slug> <slice>` — fix blockers [reason, if applicable]
-- **Option C:** `/wf-ship <slug>` — blocked, re-run when answers available [reason, if applicable]
+- **Option B:** `/wf-implement <slug> <slice>` — fix blockers or resolve rebase conflicts [reason, if applicable]
+- **Option C:** `/wf-verify <slug> <slice>` — re-verify if evidence was stale [reason, if applicable]
+- **Option D:** `/wf-ship <slug>` — blocked, re-run when answers available [reason, if applicable]

@@ -18,10 +18,10 @@
       "Bash(npx tsc:*)",
       "Bash(npm test:*)",
       "Bash(cargo clippy:*)",
-      "Skill(agent-browser)"
+      "Skill(agent-browser)",
+      "Bash(npx zai-cli *)"
     ]
   },
-  "outputStyle": "Explanatory",
   "hooks": {
     "Notification": [
       {
@@ -43,5 +43,6 @@
         ]
       }
     ]
-  }
+  },
+  "outputStyle": "Explanatory"
 }

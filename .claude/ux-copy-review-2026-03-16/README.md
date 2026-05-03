@@ -1,2 +1,0 @@
-- [UX Copy Review](reviews/review-ux-copy-2026-03-16.md)
-- [UX Copy Review 2026-03-17](reviews/review-ux-copy-2026-03-17.md)

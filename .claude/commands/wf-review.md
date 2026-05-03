@@ -5,6 +5,13 @@ argument-hint: <slug> [slice | triage]
 disable-model-invocation: true
 ---
 
+# External Output Boundary (MANDATORY)
+Workflow artifacts and command internals are private implementation context. Never expose them in external-facing outputs.
+- Internal context includes workflow artifact paths (`.ai/workflows/...`, `.claude/...`, `.ai/dep-updates/...`), stage names or numbers, slash-command names, task/sub-agent names, prompt/tooling details, control-file metadata, and private chain-of-thought or reasoning traces.
+- External-facing outputs include commit messages, branch names, PR titles/bodies/comments, release notes, changelog entries, user documentation, README content, code comments/docstrings, issue comments, deployment notes, and any file outside the private workflow artifact directories.
+- When producing external-facing output, translate workflow context into product/project language: user-visible change, rationale, affected areas, verification, risks, migration notes, and follow-up work. Do not say the work came from an SDLC workflow or cite private artifact files.
+- Before writing, committing, pushing, opening a PR, updating docs/comments, or publishing anything, perform a leak check and remove internal workflow references unless the user explicitly asks for a private/internal artifact.
+
 You are running `wf-review`, **stage 7 of 10** in the SDLC lifecycle.
 
 # Pipeline
@@ -14,7 +21,7 @@ You are running `wf-review`, **stage 7 of 10** in the SDLC lifecycle.
 |---|---|
 | Requires | `02-shape.md`, `03-slice-<slice-slug>.md`, `04-plan-<slice-slug>.md`, `05-implement-<slice-slug>.md`, `06-verify-<slice-slug>.md` (recommended) |
 | Produces | `07-review.md` + `07-review-<command>.md` per selected command |
-| Next | `/wf-handoff <slug> <selected-slice>` (if approved) or `/wf-implement <slug> <selected-slice>` (if changes needed) |
+| Next | `/wf-handoff <slug>` (if approved + all slices complete), `/wf-implement <slug> <slice>` (if bugs to fix), `/wf-plan <slug> <next-slice>` (if more slices remain), `/wf-amend <slug> from-review` (if spec was wrong), or `/wf-extend <slug> from-review` (if new scope needed) |
 
 # CRITICAL — execution discipline
 You are a **review dispatch orchestrator**, not a problem solver.
@@ -66,6 +73,7 @@ Intelligent review dispatch. Analyse the change set, select which of the 30 revi
 # Workflow rules
 - Store artifacts under `.ai/workflows/<slug>/`. Maintain `00-index.md` as the control file. Never leave the canonical result only in chat — write the stage file first.
 - **Every artifact file MUST have YAML frontmatter** (between `---` markers) as the first thing in the file. All machine-readable state goes in frontmatter. The markdown body is for human-readable narrative only.
+- **Timestamps must be real:** For `created-at` and `updated-at`, run `date -u +"%Y-%m-%dT%H:%M:%SZ"` via Bash to get the actual current time. Never guess or use `T00:00:00Z`.
 - If the stage cannot finish, set `status: awaiting-input` in frontmatter and list unanswered questions.
 - Keep `po-answers.md` as cumulative product-owner log. Keep the slug stable after intake.
 - `00-index.md` must always have: title, slug, current-stage, stage-status, updated-at, selected-slice-or-focus, open-questions, recommended-next-stage, recommended-next-command, recommended-next-invocation, workflow-files.
@@ -121,92 +129,95 @@ Extract:
 
 # Step 2: Select Review Commands
 
-Each command maps to `${CLAUDE_PLUGIN_ROOT}/commands/review/<name>.md`.
+Each command maps to `./review/<name>.md`.
+
+**Selection philosophy:** Use the shape, slice, and implementation artifacts — not just raw diff patterns — to reason about what this change *is* and what reviews matter. A feature that adds async data fetching needs `backend-concurrency` even if the diff doesn't contain the word "mutex". Lean toward inclusion: a missed relevant review is worse than a redundant one. The max exists to prevent sprawl, not to cap thorough coverage.
 
 ### Core (always include for any code change)
 - `correctness` — logic, invariants, edge cases
 - `security` — vulnerabilities, insecure defaults
 - `code-simplification` — missed reuse, unnecessary complexity, inefficiencies
 
-### By File Type
+### Always include for any backend source change
+(`.ts`, `.js`, `.mjs`, `.py`, `.go`, `.java`, `.cs`, `.rb`, `.php`, `.rs`, `.kt`, `.swift`, `.scala`, `.ex`, `.exs`)
+- `testing` — always: new code needs test coverage assessment regardless of whether test files appear in the diff
+- `maintainability` — always: new or changed functions need readability and coupling review
+- `reliability` — always: error handling, retry logic, graceful degradation, fault tolerance
 
-**Backend source** (`.ts`, `.js`, `.mjs`, `.py`, `.go`, `.java`, `.cs`, `.rb`, `.php`, `.rs`, `.kt`, `.swift`, `.scala`, `.ex`, `.exs`):
-- `testing` — if test files are absent or coverage looks thin
-- `maintainability` — if any function is long or complex
-
-**Backend with concurrency signals** (async/await, goroutines, threads, mutex, locks, Promise, channels, `@Async`, `CompletableFuture`, `select`, `sync.`, `atomic`):
-- `backend-concurrency`
-
-**Refactor signals** (large deletion-to-addition ratio, PR mentions "refactor"/"restructure"/"rename"/"extract"/"move"):
-- `refactor-safety`
-- `maintainability`
-
-**Architecture signals** (new directories, new top-level modules, new service files, changed import graphs, new `index.*` files):
-- `architecture`
-- `overengineering` — if new abstractions or generic patterns appear
-
-**Performance signals** (SQL queries, ORM calls, loops over collections, `ORDER BY`/`GROUP BY`, caching, algorithms, `reduce`/`map`/`filter` over large arrays):
-- `performance`
-
-**Scalability signals** (queue consumers, background jobs, batch operations, fan-out, multi-tenant, horizontal scaling):
-- `scalability`
-
-**API/contract signals** (route definitions, OpenAPI/Swagger, REST handlers, GraphQL schemas, gRPC proto, SDK entry points, versioned paths `/v1/`):
-- `api-contracts`
-
-**Data persistence signals** (DB queries, ORM models, schema definitions, `INSERT`/`UPDATE`/`DELETE`, transactions):
-- `data-integrity`
-
-**Migration files** (`migrations/`, `db/migrate/`, `alembic/versions/`, `flyway/`, `*_migration.*`):
-- `migrations`
-- `data-integrity` (if not already selected)
-
-**Privacy/PII signals** (user profiles, auth code, personal data fields, payment processing, GDPR, logging in auth/payment paths):
-- `privacy`
-
-**Supply chain signals** (`package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, lockfiles, new external imports):
-- `supply-chain`
-
-**Infrastructure signals** (Dockerfile, `docker-compose.*`, Terraform `*.tf`, Pulumi, Helm, CloudFormation, K8s YAML, Ansible):
-- `infra`
-- `infra-security`
-
-**CI/CD signals** (`.github/workflows/*.yml`, `.gitlab-ci.yml`, Jenkinsfile, Makefile deploy targets):
-- `ci`
-
-**Release signals** (CHANGELOG.md, version fields, git tags, release configs):
-- `release`
-
-**Logging signals** (log statements, logger config, structured logging):
-- `logging`
-
-**Observability signals** (metrics, OpenTelemetry, Prometheus, alerting rules, health checks):
-- `observability`
-
-**Cost signals** (cloud SDK calls, paid API integrations, storage operations, AI/ML inference):
-- `cost`
-
-**Frontend source** (`.tsx`, `.jsx`, `.vue`, `.svelte`, `.html`, `.css`, `.scss`):
+### Always include for any frontend source change
+(`.tsx`, `.jsx`, `.vue`, `.svelte`, `.html`, `.css`, `.scss`)
 - `accessibility`
 - `frontend-accessibility`
 - `frontend-performance`
 - `ux-copy`
 
-**Documentation signals** (`*.md`, `*.mdx`, `*.rst`, `docs/`, docstrings):
+### Include based on what the feature does (reason from shape + slice, not just diff patterns)
+
+**The feature adds or modifies async, concurrent, or parallel behaviour** (async/await, goroutines, threads, Promise chains, event loops, message queues, workers, `@Async`, `CompletableFuture`, `select`, `sync.`, `atomic`, streaming, SSE, WebSocket):
+- `backend-concurrency`
+
+**The feature is a refactor, restructure, rename, or extraction** (large deletion-to-addition ratio, shape/slice describes "refactor"/"restructure"/"rename"/"extract"/"move"):
+- `refactor-safety`
+
+**The feature introduces new modules, services, packages, or architectural layers** (new directories, new top-level modules, new service files, changed import graphs, new `index.*` files, new `*Service`/`*Repository`/`*Controller` classes):
+- `architecture`
+- `overengineering` — if the shape describes generic/reusable abstractions or the diff introduces new base classes, generic utilities, or factory patterns
+
+**The feature touches data reads or writes, queries, or caching**:
+- `performance` — any DB query, ORM call, loop over a collection, sort/filter/aggregate, cache interaction, or algorithm over variable-size data
+- `data-integrity` — any DB write, ORM mutation, transaction, schema change, or data validation
+
+**The feature involves DB migrations** (`migrations/`, `db/migrate/`, `alembic/versions/`, `flyway/`, `*_migration.*`):
+- `migrations`
+- `data-integrity` (if not already selected)
+
+**The feature handles user data, authentication, or anything privacy-sensitive** (user profiles, auth flows, personal data fields, payment processing, GDPR/CCPA scope, session management, logging in auth/payment paths):
+- `privacy`
+
+**The feature adds or changes API surface** (route definitions, OpenAPI/Swagger, REST handlers, GraphQL schemas, gRPC proto, SDK entry points, versioned paths `/v1/`, webhook handlers):
+- `api-contracts`
+
+**The feature could affect throughput, queuing, or multi-tenancy at scale** (queue consumers, background jobs, batch operations, fan-out patterns, multi-tenant data isolation, horizontal scaling assumptions):
+- `scalability`
+
+**The feature adds or changes dependencies** (`package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, lockfiles, new external imports):
+- `supply-chain`
+
+**The feature touches infrastructure** (Dockerfile, `docker-compose.*`, Terraform `*.tf`, Pulumi, Helm, CloudFormation, K8s YAML, Ansible):
+- `infra`
+- `infra-security`
+
+**The feature modifies CI/CD pipelines** (`.github/workflows/*.yml`, `.gitlab-ci.yml`, Jenkinsfile, Makefile deploy targets):
+- `ci`
+
+**The feature involves a release, version bump, or changelog** (CHANGELOG.md, version fields, git tags, release configs):
+- `release`
+
+**The feature adds or changes logging behaviour** (log statements, logger config, structured logging setup):
+- `logging`
+
+**The feature adds or changes observability** (metrics, OpenTelemetry, Prometheus, alerting rules, health checks):
+- `observability`
+
+**The feature makes cloud/API calls that cost money** (cloud SDK calls, paid API integrations, storage operations, AI/ML inference):
+- `cost`
+
+**The feature touches documentation** (`*.md`, `*.mdx`, `*.rst`, `docs/`, docstrings):
 - `docs`
 
-**Style signals** (any code change with naming convention inconsistencies):
-- `style-consistency` — only if inconsistency is apparent
+**Style inconsistencies are visible in the diff** (mixed naming conventions, inconsistent patterns within the same file or module):
+- `style-consistency`
 
-**DX signals** (scripts, Makefile, README, CONTRIBUTING, dev tooling config):
-- `dx` — only if developer-facing tooling is affected
+**The feature changes developer-facing tooling** (scripts, Makefile, README, CONTRIBUTING, dev environment config):
+- `dx`
 
 ### Selection Constraints
 - **Minimum**: 3 commands (always `correctness` + `security` + `code-simplification`)
-- **Maximum**: 12 — prefer depth over breadth for focused changes
-- **User focus override**: if the user specified a focus ("check security"), include those + `correctness`, drop unrelated
-- **Config/docs-only**: drop `correctness`/`backend-concurrency`/`testing`/`code-simplification`; keep `security`, `docs`, relevant infra/release
+- **Maximum**: 15 — raise this limit only if the change genuinely spans many domains; do not artificially cap a thorough review
+- **User focus override**: if the user specified a focus ("check security"), always include those + `correctness`; suppress unrelated commands
+- **Config/docs-only changes**: drop `correctness`/`backend-concurrency`/`testing`/`code-simplification`; keep `security`, `docs`, relevant infra/release
 - **Test-only changes**: keep `testing`, `correctness`, `code-simplification`; drop most others
+- **When in doubt, include**: a false positive from an extra review command costs one sub-agent; a missed issue costs a production incident
 
 ### Output the Selection (before dispatching)
 
@@ -234,7 +245,7 @@ For EACH selected command, spawn a **sonnet** sub-agent. All agents run in paral
 **Each sub-agent receives this prompt:**
 
 ```
-Execute the review command at `${CLAUDE_PLUGIN_ROOT}/commands/review/{command-name}.md`.
+Execute the review command at `./review/{command-name}.md`.
 
 Scope: git diff HEAD (or the specific files from the implementation)
 Workflow slug: {slug}
@@ -449,10 +460,12 @@ next-invocation: "<based on verdict>"
 {List}
 
 ## Recommended Next Stage
-- **Option A:** `/wf-handoff <slug> <slice>` — approved [reason]
+- **Option A:** `/wf-handoff <slug>` — all slices complete, approved, ready for PR [reason]
 - **Option B:** `/wf-implement <slug> <slice>` — fix blocking issues [list what needs fixing]
-- **Option C:** `/wf-ship <slug> <slice>` — skip handoff [reason, if applicable]
-- **Option D:** `/wf-plan <slug> <next-slice>` — next slice [reason, if applicable]
+- **Option C:** `/wf-ship <slug>` — skip handoff [reason, if applicable]
+- **Option D:** `/wf-plan <slug> <next-slice>` or `/wf-implement <slug> <next-slice>` — more slices to implement before handoff [reason, if applicable]
+- **Option E:** `/wf-extend <slug> from-review` — add new slices from findings [reason, if applicable]
+- **Option F:** `/wf-amend <slug> from-review` — correct the spec/approach of an existing slice [reason, if applicable]
 
 ---
 
@@ -469,18 +482,25 @@ next-invocation: "<based on verdict>"
 # Adaptive routing — evaluate what's actually next
 After completing the review, evaluate the findings and present the user with ALL viable options:
 
-**Option A: Handoff** → `/wf-handoff <slug> <selected-slice>`
-Use when: No blocking issues. Approved (possibly with minor notes).
+**Option A: Handoff** → `/wf-handoff <slug>`
+Use when: No blocking issues AND all intended slices on this branch are complete. Handoff aggregates all complete slices automatically.
+**If more slices remain** on this branch before handoff: use Option D (next slice) — implement remaining slices first, then run `/wf-handoff <slug>` once for the full PR.
 
 **Option B: Fix and re-implement** → `/wf-implement <slug> <selected-slice>`
 Use when: There are blocking issues. List what needs changing.
 **Compact recommended before proceeding** — review dispatch chatter (sub-agent outputs, aggregation, triage) is noise for fixing. Tell the user: "Consider running `/compact` before `/wf-implement` — the PreCompact hook will preserve workflow state and triage decisions are in `07-review.md`."
 
-**Option C: Skip handoff, go to Ship** → `/wf-ship <slug> <selected-slice>`
-Use when: No team to hand off to, no PR description needed.
+**Option C: Skip handoff, go to Ship** → `/wf-ship <slug>`
+Use when: No team to hand off to, no PR description needed, CI/CD handles the rest.
 
 **Option D: Next slice** → `/wf-plan <slug> <next-slice>` or `/wf-implement <slug> <next-slice>`
 Use when: This slice is approved AND more slices remain. Check `03-slice.md`.
 **Compact recommended** — previous slice's full lifecycle (implement + verify + review) is noise for the next slice.
+
+**Option E: Extend scope** → `/wf-extend <slug> from-review`
+Use when: Review findings reveal **missing capability** rather than broken implementation — scope that was never built, not code that is wrong. Signal: findings describe "X should also do Y" or "there is no handler for Z" rather than "X does Y incorrectly". Use this over wf-implement when the work required is net-new rather than corrective.
+
+**Option F: Amend spec** → `/wf-amend <slug> from-review`
+Use when: Review findings reveal that the **slice definition or acceptance criteria were themselves wrong** — the implementation did what it was told, but what it was told to do was incorrect. Signal: multiple findings stem from the same incorrect assumption in the spec, or a finding says the approach is fundamentally wrong rather than buggy.
 
 Write ALL viable options into `## Recommended Next Stage`.

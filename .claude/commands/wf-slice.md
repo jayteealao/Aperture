@@ -5,6 +5,13 @@ argument-hint: <slug> [focus area]
 disable-model-invocation: true
 ---
 
+# External Output Boundary (MANDATORY)
+Workflow artifacts and command internals are private implementation context. Never expose them in external-facing outputs.
+- Internal context includes workflow artifact paths (`.ai/workflows/...`, `.claude/...`, `.ai/dep-updates/...`), stage names or numbers, slash-command names, task/sub-agent names, prompt/tooling details, control-file metadata, and private chain-of-thought or reasoning traces.
+- External-facing outputs include commit messages, branch names, PR titles/bodies/comments, release notes, changelog entries, user documentation, README content, code comments/docstrings, issue comments, deployment notes, and any file outside the private workflow artifact directories.
+- When producing external-facing output, translate workflow context into product/project language: user-visible change, rationale, affected areas, verification, risks, migration notes, and follow-up work. Do not say the work came from an SDLC workflow or cite private artifact files.
+- Before writing, committing, pushing, opening a PR, updating docs/comments, or publishing anything, perform a leak check and remove internal workflow references unless the user explicitly asks for a private/internal artifact.
+
 You are running `wf-slice`, **stage 3 of 10** in the SDLC lifecycle.
 
 # Pipeline
@@ -41,12 +48,13 @@ Break a shaped work item into thin, independently verifiable vertical slices. Wr
 # Workflow rules
 - Store artifacts under `.ai/workflows/<slug>/`. Maintain `00-index.md` as the control file. Never leave the canonical result only in chat — write the stage file first.
 - **Every artifact file MUST have YAML frontmatter** (between `---` markers) as the first thing in the file. All machine-readable state goes in frontmatter. The markdown body is for human-readable narrative only.
+- **Timestamps must be real:** For `created-at` and `updated-at`, run `date -u +"%Y-%m-%dT%H:%M:%SZ"` via Bash to get the actual current time. Never guess or use `T00:00:00Z`.
 - If the stage cannot finish, set `status: awaiting-input` in frontmatter and list unanswered questions.
 - Keep `po-answers.md` as cumulative product-owner log. Keep the slug stable after intake.
 - `00-index.md` must always have: title, slug, current-stage, stage-status, updated-at, selected-slice-or-focus, open-questions, recommended-next-stage, recommended-next-command, recommended-next-invocation, workflow-files.
 - **Use AskUserQuestion** for multiple-choice PO questions (structured decisions, confirmations). Use freeform chat for open-ended questions. Append every answer to `po-answers.md` with timestamp and stage.
 - Run a freshness pass (web search → official docs) before finalizing any stage where external knowledge matters. Record under `## Freshness Research` with source, relevance, takeaway.
-- Use parallel Explore/subagents for multi-domain research when supported. Do not spin up subagents for trivial work.
+- Use parallel Explore/subagents for multi-domain research. Do not spin up subagents for trivial work.
 - Reuse earlier workflow files. Do not silently broaden scope. Do not collapse stages unless the user asks.
 
 # Chat return contract
@@ -62,7 +70,22 @@ Every slice gets its own file: `03-slice-<slice-slug>.md`. The slice-slug is a l
 The master `03-slice.md` is an **index** that links to each per-slice file and contains cross-cutting information.
 
 Do this in order:
-1. If slice boundaries depend on a business decision or rollout preference, ask the product owner a small set of questions before finalizing.
+1. **Discovery phase — ask about slicing strategy before cutting.**
+   Interview the user with 4–8 questions in 1–2 rounds using AskUserQuestion before finalizing slice boundaries.
+
+   **Rules:**
+   - Every question must be about *how to decompose this specific feature* — reference concrete parts of the shaped spec, not abstract slicing theory.
+   - Questions must be impartial — present genuinely different decomposition strategies without favoring one.
+   - Skip questions already answered in the shape or intake artifacts.
+
+   **What to ask about:**
+   - **Delivery order preferences** — Does the user want the riskiest part first or the most visible part first? Is there a demo date, milestone, or dependency that should drive which slice ships earliest?
+   - **Slice granularity** — Should slices be as thin as possible (more PRs, faster feedback) or chunked into larger coherent units (fewer context switches, less integration overhead)? What's the team's review capacity?
+   - **Rollout coupling** — Can slices ship independently to production, or do some need to land together? Are there feature flags, migrations, or API contracts that force certain things to be in the same slice?
+   - **Scope cuts** — Are there parts of the shaped spec the user would consider deferring entirely? Which acceptance criteria are must-have-now vs. nice-to-have-later?
+
+   Append every answer to `po-answers.md` with timestamp and `stage: slice`.
+
 2. Run freshness research only where external constraints affect slicing or order.
 3. Break the work into small vertical slices that can be implemented and verified independently.
 4. Assign each slice a **slice-slug** (lowercase kebab-case).

@@ -5,6 +5,13 @@ argument-hint: <slug> [slice-slug|reviews]
 disable-model-invocation: true
 ---
 
+# External Output Boundary (MANDATORY)
+Workflow artifacts and command internals are private implementation context. Never expose them in external-facing outputs.
+- Internal context includes workflow artifact paths (`.ai/workflows/...`, `.claude/...`, `.ai/dep-updates/...`), stage names or numbers, slash-command names, task/sub-agent names, prompt/tooling details, control-file metadata, and private chain-of-thought or reasoning traces.
+- External-facing outputs include commit messages, branch names, PR titles/bodies/comments, release notes, changelog entries, user documentation, README content, code comments/docstrings, issue comments, deployment notes, and any file outside the private workflow artifact directories.
+- When producing external-facing output, translate workflow context into product/project language: user-visible change, rationale, affected areas, verification, risks, migration notes, and follow-up work. Do not say the work came from an SDLC workflow or cite private artifact files.
+- Before writing, committing, pushing, opening a PR, updating docs/comments, or publishing anything, perform a leak check and remove internal workflow references unless the user explicitly asks for a private/internal artifact.
+
 You are running `wf-implement`, **stage 5 of 10** in the SDLC lifecycle.
 
 # Pipeline
@@ -55,11 +62,42 @@ You are a **workflow orchestrator** running the implementation stage.
    - If `branch-strategy` is `shared` → note that commits go to the current branch (do not create or switch branches).
    - If `branch-strategy` is `none` → skip all branch management.
 
-# Parallel research (use sub-agents when supported)
-Before implementing, if the plan touches multiple distinct areas:
-- **Explore sub-agent 1:** Re-check the current state of the files listed in the plan. Confirm they haven't changed since planning (especially if sibling slices were implemented between plan and now).
-- **Explore sub-agent 2:** If external APIs or dependencies are involved, run a quick freshness check.
-- Merge findings. If the codebase has diverged (e.g., a sibling slice changed shared files), note this and adapt.
+# Parallel research
+Before implementing, launch parallel sub-agents to verify the plan is still accurate. Do not spin up sub-agents for trivial single-file changes.
+
+### Explore sub-agent 1 — Pre-Implementation Codebase Verification
+
+Prompt the agent with ALL of the following. It must report findings for each section:
+
+**Plan drift detection:**
+- For each file listed in `04-plan-<slice-slug>.md` → `## Likely Files / Areas to Touch`, read the current version and compare against the plan's assumptions
+- Check `git log --oneline --since="<plan-created-at>"` on each affected file — has it been modified since the plan was written?
+- If sibling slices were implemented between plan and now, read their `05-implement-<other>.md` to understand what changed
+- Flag any file that has moved, been renamed, deleted, or significantly refactored since planning
+
+**Current state of the implementation target:**
+- Read each file that will be modified. Report: current line count, key functions/classes, any TODO/FIXME/HACK comments in the affected area
+- Check for merge conflicts or uncommitted changes in the affected files (`git status`, `git diff` on those paths)
+- Verify that imports, types, and interfaces the plan depends on still exist and have the same signatures
+
+**Convention verification:**
+- Read 2–3 recently modified files in the same module/directory to confirm the coding conventions the plan assumed (naming, error handling, logging patterns) haven't changed
+- Check for new linting rules, config changes, or dependency updates that affect the implementation approach
+
+### Explore sub-agent 2 — Dependency & API Freshness (only if external dependencies are involved)
+
+Launch ONLY if the plan involves external APIs, third-party libraries, or cross-service communication. Prompt with:
+
+**Dependency state:**
+- Check if any dependency versions in the manifest changed since planning
+- Web search for breaking changes, deprecations, or security advisories published since the plan was written
+- Verify that API endpoints, SDK methods, or library functions the plan references still exist and have the same signatures in the project's version
+
+**Cross-service state:**
+- If the slice communicates with another service (API, queue, database), check that service's current schema/contract hasn't changed
+- Check for new environment variables, config keys, or feature flags that affect the integration
+
+Merge findings. If the codebase has diverged significantly, note specific deviations in the implementation record and adapt the plan steps before implementing.
 
 # Purpose
 Implement one selected planned slice with the smallest coherent diff that fits the repo and current best practices. Write a per-slice implementation record with cross-links.
@@ -67,6 +105,7 @@ Implement one selected planned slice with the smallest coherent diff that fits t
 # Workflow rules
 - Store artifacts under `.ai/workflows/<slug>/`. Maintain `00-index.md` as the control file. Never leave the canonical result only in chat — write the stage file first.
 - **Every artifact file MUST have YAML frontmatter** (between `---` markers) as the first thing in the file. All machine-readable state goes in frontmatter. The markdown body is for human-readable narrative only.
+- **Timestamps must be real:** For `created-at` and `updated-at`, run `date -u +"%Y-%m-%dT%H:%M:%SZ"` via Bash to get the actual current time. Never guess or use `T00:00:00Z`.
 - If the stage cannot finish, set `status: awaiting-input` in frontmatter and list unanswered questions.
 - Keep `po-answers.md` as cumulative product-owner log. Keep the slug stable after intake.
 - `00-index.md` must always have: title, slug, current-stage, stage-status, updated-at, selected-slice-or-focus, open-questions, recommended-next-stage, recommended-next-command, recommended-next-invocation, workflow-files.
