@@ -3,7 +3,6 @@ import { Agentation } from 'agentation'
 import { Routes, Route, Navigate, useLocation } from 'react-router'
 import { useAppStore } from './stores/app'
 import { Shell } from './components/layout/Shell'
-import { Spinner } from './components/ui/Spinner'
 import { Aperture } from 'lucide-react'
 import { getSingletonHighlighter } from './lib/shiki.bundle'
 

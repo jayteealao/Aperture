@@ -4,7 +4,6 @@ import { useAppStore } from '@/stores/app'
 import { api } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { InputField } from '@/components/ui/input-field'
-import { Card, CardContent } from '@/components/ui/card'
 import { Check, X, Aperture, Globe, Shield } from 'lucide-react'
 
 type ConnectionStep = 'idle' | 'testing' | 'success' | 'error'
