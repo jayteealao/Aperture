@@ -23,3 +23,6 @@ docs/internal/
 
 # Local screenshots
 screenshots/
+
+# Local plugin install cache (not source)
+.agents/
