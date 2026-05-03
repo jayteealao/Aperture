@@ -17,3 +17,9 @@ coverage/
 # Workflow artifacts and internal docs
 .ai/
 docs/internal/
+
+# Local MCP server config (may contain credentials)
+.mcp.json
+
+# Local screenshots
+screenshots/
