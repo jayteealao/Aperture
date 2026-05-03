@@ -599,7 +599,7 @@ function WorkspaceChatPaneReady({
     <div className="flex h-full min-h-0 max-w-full flex-1 overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       {/* Compact pane header */}
-      <div className="hidden shrink-0 items-center justify-between border-b border-border px-3 py-2 sm:flex">
+      <div className="hidden h-10 shrink-0 items-center justify-between border-b border-border px-3 sm:flex">
         <div className="flex items-center gap-2 min-w-0">
           {agentSlots.identitySlot}
           <span className="flex-1 min-w-[80px]">
