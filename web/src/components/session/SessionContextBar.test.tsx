@@ -40,7 +40,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={null}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
       />,
     )
@@ -55,7 +55,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={usage}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
       />,
     )
@@ -73,7 +73,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={usage}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
       />,
     )
@@ -91,7 +91,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={usage}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
       />,
     )
@@ -113,7 +113,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={usage}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
       />,
     )
@@ -132,7 +132,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={usage}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
       />,
     )
@@ -151,7 +151,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={usage}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
       />,
     )
@@ -170,7 +170,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={usage}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
       />,
     )
@@ -197,7 +197,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={usage}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
       />,
     )
@@ -215,7 +215,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={usage}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={onClick}
       />,
     )
@@ -233,7 +233,7 @@ describe('SessionContextBar', () => {
       render(
         <SessionContextBar
           usage={usage}
-          isActive={false}
+          sessionState="idle"
           onClickSidebar={vi.fn()}
           lastActivityTime={fiveMinutesAgo}
         />,
@@ -253,7 +253,7 @@ describe('SessionContextBar', () => {
       render(
         <SessionContextBar
           usage={usage}
-          isActive={false}
+          sessionState="idle"
           onClickSidebar={vi.fn()}
           lastActivityTime={recentTime}
         />,
@@ -264,43 +264,49 @@ describe('SessionContextBar', () => {
     expect(button.classList.contains('opacity-100')).toBe(true)
   })
 
-  it('applies primary color to mascot when active', () => {
+  it('renders a working mascot variant when sessionState is active', () => {
     const usage = sessionResult({
       'claude-sonnet': modelUsage({ inputTokens: 5000 }),
     })
     render(
       <SessionContextBar
         usage={usage}
-        isActive={true}
+        sessionState="active"
         onClickSidebar={vi.fn()}
       />,
     )
 
-    const svg = screen.getByLabelText('Open SDK sidebar').querySelector('svg')
-    expect(svg?.classList.contains('text-[var(--primary)]')).toBe(true)
+    const svg = screen
+      .getByLabelText('Open SDK sidebar')
+      .querySelector('svg[data-variant]')
+    expect(svg?.getAttribute('data-variant')).toMatch(
+      /^(typing|building|thinking|juggling|conducting|debugger|sweeping|wizard|overheated|beacon|carrying|confused|pushing)$/,
+    )
   })
 
-  it('applies muted-foreground to mascot when inactive', () => {
+  it('renders the idle mascot variant when sessionState is idle', () => {
     const usage = sessionResult({
       'claude-sonnet': modelUsage({ inputTokens: 5000 }),
     })
     render(
       <SessionContextBar
         usage={usage}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
       />,
     )
 
-    const svg = screen.getByLabelText('Open SDK sidebar').querySelector('svg')
-    expect(svg?.classList.contains('text-muted-foreground')).toBe(true)
+    const svg = screen
+      .getByLabelText('Open SDK sidebar')
+      .querySelector('svg[data-variant]')
+    expect(svg?.getAttribute('data-variant')).toBe('idle-living')
   })
 
   it('passes className through to the button wrapper', () => {
     render(
       <SessionContextBar
         usage={null}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
         className="my-custom-class"
       />,
@@ -326,7 +332,7 @@ describe('SessionContextBar', () => {
       render(
         <SessionContextBar
           usage={usage}
-          isActive={false}
+          sessionState="idle"
           onClickSidebar={vi.fn()}
           lastActivityTime={recentTime}
         />,
@@ -352,7 +358,7 @@ describe('SessionContextBar', () => {
       const { unmount } = render(
         <SessionContextBar
           usage={usage}
-          isActive={false}
+          sessionState="idle"
           onClickSidebar={vi.fn()}
           lastActivityTime={recentTime}
         />,
@@ -374,7 +380,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={usage}
-        isActive={false}
+        sessionState="idle"
         onClickSidebar={vi.fn()}
       />,
     )
@@ -387,7 +393,7 @@ describe('SessionContextBar', () => {
     render(
       <SessionContextBar
         usage={null}
-        isActive={false}
+        sessionState="idle"
         sdkSidebarOpen={true}
         onClickSidebar={vi.fn()}
       />,

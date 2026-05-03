@@ -118,6 +118,14 @@ const AnimatedClawdMascotInner = ({
       // new count, forcing remount + fade-in.
       variantKey = `working-${counter.count}-${counter.idx}`
       break
+    default:
+      // Defensive fallback for any unrecognized sessionState (test fixtures
+      // bypassing the union, future API extensions, malformed payloads).
+      // Renders idle so the SDK header degrades gracefully instead of
+      // crashing the surrounding region with an invalid-element error.
+      Variant = ClawdIdleLiving
+      variantKey = 'idle-fallback'
+      break
   }
 
   return (
